@@ -54,10 +54,13 @@ public class PromptGenerator {
                     new SystemMessage(GENERATOR_SYSTEM),
                     new UserMessage(GENERATOR_USER.formatted(strategyDesc, clientRole, roleDesc, agentDesc))
             ));
-            return generatorClient
+            String answer = generatorClient
                     .prompt(prompt)
                     .call()
                     .content();
+            // 临时测试使用
+//            log.info("文本: {}", answer);
+            return answer;
         } catch (Exception e) {
             log.error("【提示词生成】生成补充文本错误", e);
             return "暂无补充";

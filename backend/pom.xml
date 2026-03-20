@@ -24,21 +24,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <developers>
-        <developer>
-            <name>dasi</name>
-            <email>1740929297@qq.com</email>
-            <organization>dasi</organization>
-            <organizationUrl>https://github.com/dasi0227</organizationUrl>
-        </developer>
-    </developers>
-
-    <licenses>
-        <license>
-            <name>Apache License, Version 2.0</name>
-            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
-        </license>
-    </licenses>
 
     <parent>
         <groupId>org.springframework.boot</groupId>

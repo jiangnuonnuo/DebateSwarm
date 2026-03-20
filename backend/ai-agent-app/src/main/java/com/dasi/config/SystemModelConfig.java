@@ -20,7 +20,8 @@ public class SystemModelConfig {
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
-                .completionsPath("v1/chat/completions")
+                .embeddingsPath("v1/embeddings")
+                .completionsPath("/v1/chat/completions")
                 .build();
 
         OpenAiChatOptions openAiChatOptions = OpenAiChatOptions.builder()
