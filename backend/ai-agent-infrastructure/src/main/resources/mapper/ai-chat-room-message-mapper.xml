@@ -32,7 +32,7 @@
         SELECT sender_name, message_role, content, sender_type
         FROM ai_chat_room_message
         WHERE room_id = #{roomId} AND is_deleted = 0
-        ORDER BY create_time ASC
+        ORDER BY create_time DESC
         LIMIT #{limit}
     </select>
 
