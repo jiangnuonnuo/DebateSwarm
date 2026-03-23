@@ -180,7 +180,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
     const auth = getStoredAuth();
     const isAdminRoute = to.path.startsWith('/admin');
-    document.title = isAdminRoute ? 'Dasi MiniAgent 后台管理' : 'Dasi MiniAgent';
+    document.title = isAdminRoute ? 'Xerina 管理中心' : 'Xerina 智能助手';
 
     // Global auth gate: if not logged in, allow only the login pages.
     if (!auth.token) {

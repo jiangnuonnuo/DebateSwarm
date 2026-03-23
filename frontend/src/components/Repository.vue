@@ -24,7 +24,7 @@ const sectionOpen = reactive({
     favor: false
 });
 
-const resolveAgentName = (item) => item?.name || item?.agentName || item?.templateName || '未命名 MiniAgent';
+const resolveAgentName = (item) => item?.name || item?.agentName || item?.templateName || '未命名智能体';
 const resolveAgentDesc = (item) => item?.desc || item?.agentDesc || item?.templateDesc || '暂无描述';
 const resolveAgentType = (item) => (item?.agentType || 'react').toUpperCase();
 
@@ -47,19 +47,19 @@ const sections = computed(() => [
         key: 'mine',
         title: '我创建的',
         items: mineAgents.value,
-        emptyText: '暂无已创建的 MiniAgent'
+        emptyText: '暂无已创建的智能体'
     },
     {
         key: 'added',
         title: '我添加的',
         items: addedAgents.value,
-        emptyText: '暂无已添加的 MiniAgent'
+        emptyText: '暂无已添加的智能体'
     },
     {
         key: 'favor',
         title: '我收藏的',
         items: favorAgents.value,
-        emptyText: '暂无已收藏的 MiniAgent'
+        emptyText: '暂无已收藏的智能体'
     }
 ]);
 
@@ -141,7 +141,7 @@ onMounted(loadRepository);
         <div class="overflow-y-auto py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
             <div class="mx-auto max-w-[1100px] space-y-[16px]">
                 <header class="flex items-center justify-between gap-[12px]">
-                    <h1 class="text-[24px] font-bold text-[var(--text-primary)]">MiniAgent Repository</h1>
+                    <h1 class="text-[24px] font-bold text-[var(--text-primary)]">Xerina 个人仓库</h1>
                 </header>
 
                 <div

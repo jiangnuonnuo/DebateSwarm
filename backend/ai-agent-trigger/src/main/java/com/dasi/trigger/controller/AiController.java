@@ -83,6 +83,9 @@ public class AiController implements IAiApi {
         String agentId = aiWorkDTO.getAgentId();
         String agentDesc = aiWorkDTO.getAgentDesc();
 
+        /**
+         * todo:优化检查方式，不应该每次取出agent列表去查询是否存在，可以通过数据库直接查看userId 和 agent 的配对存在关系
+         * */
         try {
             if (isInactiveWorkAgent(agentId)) {
                 try {
@@ -110,7 +113,10 @@ public class AiController implements IAiApi {
                 }
                 return sseEmitter;
             }
-
+            /**
+             * 匹配度分析
+             * todo:让耗费能力小的AI 进行匹配度分析，返回匹配度而不是直接返回 result
+             * */
             if (!matchChecker.isTaskMatched(agentDesc, userMessage)) {
                 try {
                     sseEmitter.send(SseEmitter.event()

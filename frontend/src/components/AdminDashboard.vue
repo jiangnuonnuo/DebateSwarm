@@ -65,20 +65,20 @@ const handleRefresh = async () => {
 const statCardRows = computed(() => {
     const countInfo = dashboard.value?.countInfo || {};
     const cards = {
-        agent: { key: 'agent', label: 'Agent', value: countInfo.agentCount ?? 0, path: '/admin/agent' },
-        client: { key: 'client', label: 'CLIENT', value: countInfo.clientCount ?? 0, path: '/admin/client' },
-        flow: { key: 'flow', label: 'FLOW', value: countInfo.flowCount ?? 0, path: '/admin/flow' },
-        config: { key: 'config', label: 'CONFIG', value: countInfo.configCount ?? 0, path: '/admin/config' },
-        task: { key: 'task', label: 'TASK', value: countInfo.taskCount ?? 0, path: '/admin/task' },
-        session: { key: 'session', label: 'SESSION', value: countInfo.sessionCount ?? 0, path: '/admin/session' },
+        agent: { key: 'agent', label: '智能体', value: countInfo.agentCount ?? 0, path: '/admin/agent' },
+        client: { key: 'client', label: '执行节点', value: countInfo.clientCount ?? 0, path: '/admin/client' },
+        flow: { key: 'flow', label: '流程配置', value: countInfo.flowCount ?? 0, path: '/admin/flow' },
+        config: { key: 'config', label: '节点配置', value: countInfo.configCount ?? 0, path: '/admin/config' },
+        task: { key: 'task', label: '定时任务', value: countInfo.taskCount ?? 0, path: '/admin/task' },
+        session: { key: 'session', label: '会话审计', value: countInfo.sessionCount ?? 0, path: '/admin/session' },
 
-        model: { key: 'model', label: 'MODEL', value: countInfo.modelCount ?? 0, path: '/admin/model' },
-        api: { key: 'api', label: 'API', value: countInfo.apiCount ?? 0, path: '/admin/api' },
-        mcp: { key: 'mcp', label: 'MCP', value: countInfo.mcpCount ?? 0, path: '/admin/mcp' },
-        prompt: { key: 'prompt', label: 'PROMPT', value: countInfo.promptCount ?? 0, path: '/admin/prompt' },
-        advisor: { key: 'advisor', label: 'ADVISOR', value: countInfo.advisorCount ?? 0, path: '/admin/advisor' },
+        model: { key: 'model', label: '模型定义', value: countInfo.modelCount ?? 0, path: '/admin/model' },
+        api: { key: 'api', label: '接口定义', value: countInfo.apiCount ?? 0, path: '/admin/api' },
+        mcp: { key: 'mcp', label: '工具定义', value: countInfo.mcpCount ?? 0, path: '/admin/mcp' },
+        prompt: { key: 'prompt', label: '提示词库', value: countInfo.promptCount ?? 0, path: '/admin/prompt' },
+        advisor: { key: 'advisor', label: '顾问定义', value: countInfo.advisorCount ?? 0, path: '/admin/advisor' },
 
-        user: { key: 'user', label: 'USER', value: countInfo.userCount ?? 0, path: '/admin/user' }
+        user: { key: 'user', label: '用户列表', value: countInfo.userCount ?? 0, path: '/admin/user' }
     };
 
     return [
@@ -153,8 +153,8 @@ const getSessionPie = () => {
     const graphInfo = dashboard.value?.graphInfo || {};
     const pie = graphInfo.sessionWorkVsChat || {};
     return [
-        { name: 'chat', value: pie.chatCount ?? 0 },
-        { name: 'work', value: pie.workCount ?? 0 }
+        { name: '在线对话', value: pie.chatCount ?? 0 },
+        { name: '任务执行', value: pie.workCount ?? 0 }
     ];
 };
 
@@ -371,7 +371,7 @@ onBeforeUnmount(() => {
         <AdminSidebar :groups="menuGroups" :current="currentKey" @select="handleSelectModule" />
         <div class="flex min-w-0 flex-1 flex-col">
             <header class="flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--surface-1)] px-6 py-4 shadow-[var(--shadow-soft)]">
-                <div class="text-[18px] font-semibold">DASHBOARD</div>
+                <div class="text-[18px] font-semibold">运行概览</div>
                 <button
                     class="admin-icon-btn h-[34px] w-[34px] rounded-[10px] disabled:cursor-not-allowed disabled:opacity-70"
                     type="button"
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
 
             <div class="flex-1 overflow-auto p-6">
                 <div class="mb-6 flex items-center justify-center text-center">
-                    <div class="text-[34px] font-extrabold tracking-[0.03em] text-[var(--text-primary)]">Dasi MiniAgent</div>
+                    <div class="text-[34px] font-extrabold tracking-[0.03em] text-[var(--text-primary)]">Xerina控制面板</div>
                 </div>
 
                 <div class="space-y-4">
@@ -457,7 +457,7 @@ onBeforeUnmount(() => {
                                     type="button"
                                     @click="usageModeSummary = 'work'"
                                 >
-                                    WORK
+                                    任务执行
                                 </button>
                                 <button
                                     class="rounded-full border px-3 py-1 text-[12px] font-medium transition"
@@ -465,17 +465,25 @@ onBeforeUnmount(() => {
                                     type="button"
                                     @click="usageModeSummary = 'chat'"
                                 >
-                                    CHAT
+                                    在线对话
                                 </button>
                             </div>
                         </div>
                         <div ref="barChartRef" class="h-[280px] w-full"></div>
                     </div>
 
-                    <div class="rounded-[16px] border border-[var(--border-color)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-soft)]">
+                    <div class="rounded-[16px] border border(--border-color)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-soft)]">
                         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                             <div class="text-[14px] font-semibold text-[var(--text-primary)]">
-                                TOP 10 - {{ usageKey.toUpperCase() }}
+                                TOP 10 排名 - {{ 
+                                    usageKey === 'api' ? '接口' :
+                                    usageKey === 'model' ? '模型' :
+                                    usageKey === 'client' ? '节点' :
+                                    usageKey === 'agent' ? '智能体' :
+                                    usageKey === 'prompt' ? '提示词' :
+                                    usageKey === 'advisor' ? '顾问' :
+                                    usageKey === 'mcp' ? '工具' : usageKey.toUpperCase()
+                                }}
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button
@@ -484,7 +492,7 @@ onBeforeUnmount(() => {
                                     type="button"
                                     @click="usageModeTop = 'work'"
                                 >
-                                    WORK
+                                    任务执行
                                 </button>
                                 <button
                                     class="rounded-full border px-3 py-1 text-[12px] font-medium transition"
@@ -492,7 +500,7 @@ onBeforeUnmount(() => {
                                     type="button"
                                     @click="usageModeTop = 'chat'"
                                 >
-                                    CHAT
+                                    在线对话
                                 </button>
                             </div>
                         </div>
@@ -504,14 +512,22 @@ onBeforeUnmount(() => {
 
                         <div class="mt-4 flex flex-wrap items-center gap-2">
                             <button
-                                v-for="key in ['api', 'model', 'client', 'agent', 'prompt', 'advisor', 'mcp']"
-                                :key="key"
+                                v-for="item in [
+                                    { key: 'api', label: '接口' },
+                                    { key: 'model', label: '模型' },
+                                    { key: 'client', label: '节点' },
+                                    { key: 'agent', label: '智能体' },
+                                    { key: 'prompt', label: '提示词' },
+                                    { key: 'advisor', label: '顾问' },
+                                    { key: 'mcp', label: '工具' }
+                                ]"
+                                :key="item.key"
                                 class="rounded-full border px-3 py-1 text-[12px] font-medium transition"
-                                :class="usageKey === key ? 'border-[var(--accent-color)] bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
+                                :class="usageKey === item.key ? 'border-[var(--accent-color)] bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
                                 type="button"
-                                @click="usageKey = key"
+                                @click="usageKey = item.key"
                             >
-                                {{ key.toUpperCase() }}
+                                {{ item.label }}
                             </button>
                         </div>
                     </div>

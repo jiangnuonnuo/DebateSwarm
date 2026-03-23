@@ -343,14 +343,14 @@ onBeforeUnmount(() => {
         <div class="overflow-y-auto py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
             <div class="mx-auto max-w-[1100px] space-y-[16px]">
                 <div class="flex items-center justify-between gap-[12px]">
-                    <h1 class="text-[24px] font-bold">MiniAgent Plaza</h1>
+                    <h1 class="text-[24px] font-bold">Xerina 灵感广场</h1>
                 </div>
 
                 <div class="flex w-full max-w-[560px] items-center gap-[8px]">
                     <input
                         v-model="searchText"
                         class="min-w-0 flex-1 rounded-[999px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] text-[14px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
-                        placeholder="搜索 MiniAgent（标题 / 描述 / 作者 / 类型）"
+                        placeholder="搜索智能体（标题 / 描述 / 作者 / 类别）"
                         @keydown.enter.prevent="applySearch"
                     />
                     <button
@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
                                 class="min-h-[38px] w-full overflow-hidden text-left text-[13px] leading-[1.45] text-[var(--text-secondary)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
                                 @click="openDetail(item)"
                             >
-                                {{ item.plazaDesc || '这个 MiniAgent 还没有补充描述，点进详情查看能力与评论。' }}
+                                {{ item.plazaDesc || '该智能体暂无详细描述，点击进入详情查看能力与评论。' }}
                             </button>
                             <div class="text-[12px] text-[var(--text-secondary)]">
                                 作者：{{ displayAuthor(item) }}
@@ -514,7 +514,7 @@ onBeforeUnmount(() => {
                                             <path d="M8.2 7.8L10.3 15.1" />
                                             <path d="M15.8 7.8L13.7 15.1" />
                                         </svg>
-                                        <span>Fork</span>
+                                        <span>复刻</span>
                                     </button>
                                 </div>
                             </div>

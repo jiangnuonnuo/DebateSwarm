@@ -44,6 +44,8 @@ const settingsStore = useSettingsStore();
 
 const isLogin = computed(() => authStore.isLogin);
 const currentUser = computed(() => authStore.user || { username: '访客', role: 'guest' });
+const isAdmin = computed(() => currentUser.value?.role === 'admin');
+const goToAdmin = () => router.push('/admin');
 const currentUserAvatarUrl = computed(() => {
     const raw = currentUser.value?.avatarUrl || currentUser.value?.userAvatar || '';
     return typeof raw === 'string' ? raw.trim() : '';
@@ -969,8 +971,34 @@ const loadProfileResources = async () => {
                     <img :src="logoImg" alt="Logo" class="h-full w-full object-cover block" />
                 </div>
                 <div class="flex min-w-0 flex-col gap-[4px]">
-                    <div class="text-[26px] font-bold leading-[1.1] transition-colors duration-200 group-hover:text-[#9ed7ff]">
-                        MiniAgent
+                    <div class="flex items-center gap-[8px]">
+                        <div class="text-[26px] font-bold leading-[1.1] transition-colors duration-200 group-hover:text-[#9ed7ff]">
+                            Xerina
+                        </div>
+                        <button
+                            v-if="isAdmin"
+                            class="group/admin relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[8px] bg-[rgba(123,200,255,0.12)] transition-all duration-300 hover:scale-110 hover:bg-[rgba(123,200,255,0.25)] hover:shadow-[0_0_15px_rgba(123,200,255,0.3)]"
+                            type="button"
+                            title="管理后台"
+                            @click.stop="goToAdmin"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                class="h-[14px] w-[14px] text-[#7bc8ff] transition-colors duration-300 group-hover/admin:text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            </svg>
+                            <span
+                                class="pointer-events-none absolute -bottom-[32px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[6px] border border-[rgba(255,255,255,0.1)] bg-[#0f172a] px-[8px] py-[4px] text-[10px] font-bold tracking-wider text-white opacity-0 shadow-xl transition-all duration-200 group-hover/admin:opacity-100"
+                            >
+                                管理中心
+                            </span>
+                        </button>
                     </div>
                     <div class="whitespace-nowrap text-[14px] tracking-[0.02em] text-[rgba(231,236,244,0.7)]">RAG · MCP · OPENAI</div>
                 </div>
@@ -988,7 +1016,7 @@ const loadProfileResources = async () => {
                     @click="goRoute('/studio')"
                 >
                     <img :src="studioIcon" alt="" class="h-[18px] w-[18px] shrink-0 opacity-95" aria-hidden="true" />
-                    <span>Studio</span>
+                    <span>创作中心</span>
                 </button>
                 <button
                     class="group flex h-[52px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-[18px] font-bold transition-all duration-200"
@@ -997,7 +1025,7 @@ const loadProfileResources = async () => {
                     @click="goRoute('/plaza')"
                 >
                     <img :src="plazaIcon" alt="" class="h-[18px] w-[18px] shrink-0 opacity-95" aria-hidden="true" />
-                    <span>Plaza</span>
+                    <span>灵感广场</span>
                 </button>
                 <button
                     class="group flex h-[52px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-[18px] font-bold transition-all duration-200"
@@ -1006,7 +1034,7 @@ const loadProfileResources = async () => {
                     @click="goRoute('/repository')"
                 >
                     <img :src="repositoryIcon" alt="" class="h-[18px] w-[18px] shrink-0 opacity-95" aria-hidden="true" />
-                    <span>Repository</span>
+                    <span>我的仓库</span>
                 </button>
                 <button
                     class="group flex h-[52px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-[18px] font-bold transition-all duration-200"
@@ -1034,7 +1062,7 @@ const loadProfileResources = async () => {
                         :class="showChatList ? 'rotate-90' : ''"
                         aria-hidden="true"
                     />
-                    <span class="inline-flex items-center">Chat 会话</span>
+                    <span class="inline-flex items-center">对话记录</span>
                 </button>
                 <div
                     :class="getCollapseClasses(showChatList)"
@@ -1117,7 +1145,7 @@ const loadProfileResources = async () => {
                         :class="showAgentList ? 'rotate-90' : ''"
                         aria-hidden="true"
                     />
-                    <span class="inline-flex items-center">Work 会话</span>
+                    <span class="inline-flex items-center">任务流水</span>
                 </button>
                 <div
                     :class="getCollapseClasses(showAgentList)"

@@ -91,7 +91,7 @@ public class DispatchService implements IDispatchService {
 
         threadPoolExecutor.execute(() -> {
             try {
-                log.info("========================================================================================");
+                log.info("智能体任务--work工作启动执行----> agentID:{}", executeRequestEntity.getAgentId());
                 executeStrategy.execute(executeRequestEntity, sseEmitter);
             } catch (Exception e) {
                 try {

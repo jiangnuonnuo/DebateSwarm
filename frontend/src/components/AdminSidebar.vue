@@ -91,6 +91,7 @@ const toggle = (name) => {
 
 const handleSelect = (key) => emit('select', key);
 const goDashboard = () => router.push('/admin/dashboard');
+const goApp = () => router.push('/');
 const handleLogout = () => authStore.logout('/admin/login');
 const toggleTheme = () => settingsStore.updateSettings({ theme: isDarkTheme.value ? 'light' : 'dark' });
 const handleSidebarScroll = () => {
@@ -113,7 +114,34 @@ onBeforeUnmount(() => {
 <template>
     <aside class="admin-font flex h-full w-[240px] shrink-0 flex-col border-r border-[#e2e8f0] bg-[#f4f6fb] shadow-sm">
         <div class="flex items-center justify-between px-4 py-4 text-[24px] font-semibold text-[#0f172a]">
-            <button class="bg-transparent text-left" type="button" @click="goDashboard">管理后台</button>
+            <div class="flex items-center gap-2">
+                <button class="bg-transparent text-left" type="button" @click="goDashboard">Xerina 管理中心</button>
+                <button
+                    class="group/back relative flex h-[28px] w-[28px] items-center justify-center rounded-[8px] bg-[#e0e7ff] text-[#1d4ed8] transition-all duration-300 hover:scale-110 hover:bg-[#1d4ed8] hover:text-white hover:shadow-lg"
+                    type="button"
+                    title="返回应用"
+                    @click="goApp"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        class="h-[16px] w-[16px]"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                        <polyline points="10 17 15 12 10 7" />
+                        <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                    <span
+                        class="pointer-events-none absolute -bottom-[34px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[6px] border border-[rgba(0,0,0,0.05)] bg-[#1e293b] px-[8px] py-[4px] text-[10px] font-bold tracking-wider text-white opacity-0 shadow-xl transition-all duration-200 group-hover/back:opacity-100"
+                    >
+                        返回应用
+                    </span>
+                </button>
+            </div>
             <button
                 class="admin-icon-btn h-[30px] w-[30px] rounded-[10px]"
                 type="button"
@@ -142,7 +170,7 @@ onBeforeUnmount(() => {
                     @click="goDashboard"
                 >
                     <span class="h-[6px] w-[6px] rounded-full" :class="current === 'dashboard' ? 'bg-[#1d4ed8]' : 'bg-[#cbd5e1]'" />
-                    <span>DASHBOARD</span>
+                    <span>运行概览</span>
                 </button>
             </div>
             <div v-for="group in groups" :key="group.name" class="border-t border-[#e2e8f0]">

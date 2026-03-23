@@ -143,7 +143,7 @@ const themeVars = computed(() => ({
 }));
 
 const resolvedAgentType = computed(() => (detail.value?.agentType || '--').toString().toUpperCase());
-const resolvedAgentName = computed(() => detail.value?.agentName || 'MiniAgent');
+const resolvedAgentName = computed(() => detail.value?.agentName || '智能体');
 
 const resolvedCreateTime = computed(() => {
     const raw = detail.value?.createTime;
@@ -641,7 +641,7 @@ const openPromptEdit = (row, mode) => {
         return;
     }
     promptModal.mode = mode;
-    promptModal.title = `${row?.roleName || '--'} · ${mode === 'system' ? 'SYSTEM PROMPT' : 'USER PROMPT'}`;
+    promptModal.title = `${row?.roleName || '--'} · ${mode === 'system' ? '系统预设' : '用户指令'}`;
     promptModal.value = mode === 'system' ? row?.systemPrompt || '' : row?.flowPrompt || '';
     promptModal.promptId = row?.promptId || '';
     promptModal.flowId = row?.flowId ?? null;
@@ -796,10 +796,10 @@ onMounted(async () => {
 
                         <div class="detail-section-panel flex h-full flex-col space-y-[8px]">
                             <div class="flex items-center gap-[8px]">
-                                <h2 class="detail-section-title text-[18px] font-semibold text-[var(--text-primary)]">MCP 信息</h2>
+                                <h2 class="detail-section-title text-[18px] font-semibold text-[var(--text-primary)]">工具配置 (MCP)</h2>
                                 <button
                                     class="detail-edit-icon-btn detail-edit-icon-btn--sm"
-                                    title="编辑 MCP"
+                                    title="编辑工具"
                                     @click="openMcpEdit"
                                 >
                                     <svg viewBox="0 0 24 24" class="detail-edit-icon-svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -826,12 +826,12 @@ onMounted(async () => {
                     </section>
 
                     <section class="detail-section-panel space-y-[10px]">
-                        <h2 class="detail-section-title text-[18px] font-semibold text-[var(--text-primary)]">角色流程</h2>
+                        <h2 class="detail-section-title text-[18px] font-semibold text-[var(--text-primary)]">节点执行流程</h2>
                         <div class="grid grid-cols-[40px_minmax(0,1fr)_40px_minmax(0,1fr)_40px_minmax(0,1fr)_40px_minmax(0,1fr)] items-stretch gap-[8px]">
                             <template v-for="row in orderedRoleRows" :key="row.roleKey">
                                 <button
                                     class="inline-flex min-w-0 items-center justify-center rounded-[10px] border border-[var(--detail-divider)] text-[var(--text-secondary)] transition hover:border-[var(--detail-focus)] hover:text-[var(--text-primary)]"
-                                    :title="`编辑第 ${row.flowIndex} 步 User Prompt`"
+                                    :title="`编辑第 ${row.flowIndex} 步用户指令`"
                                     @click="openPromptEdit(row, 'user')"
                                 >
                                     <span class="text-[24px] font-bold leading-none">{{ row.flowIndex }}</span>
@@ -986,7 +986,7 @@ onMounted(async () => {
         <div v-if="modelItemModal.open" class="detail-modal-wrap" @click.self="closeModelItemEdit">
             <div class="detail-modal-box h-[460px] w-[760px]">
                 <div class="detail-modal-header">
-                    <h3 class="detail-section-title text-[16px] font-semibold text-[var(--text-primary)]">编辑 MODEL</h3>
+                    <h3 class="detail-section-title text-[16px] font-semibold text-[var(--text-primary)]">编辑模型配置</h3>
                     <button class="text-[20px] text-[var(--text-secondary)]" @click="closeModelItemEdit">×</button>
                 </div>
                 <div class="detail-modal-body space-y-[10px] overflow-y-auto">
@@ -1022,7 +1022,7 @@ onMounted(async () => {
         <div v-if="mcpItemModal.open" class="detail-modal-wrap" @click.self="closeMcpItemEdit">
             <div class="detail-modal-box h-[560px] w-[820px]">
                 <div class="detail-modal-header">
-                    <h3 class="detail-section-title text-[16px] font-semibold text-[var(--text-primary)]">编辑 MCP</h3>
+                    <h3 class="detail-section-title text-[16px] font-semibold text-[var(--text-primary)]">编辑工具配置</h3>
                     <button class="text-[20px] text-[var(--text-secondary)]" @click="closeMcpItemEdit">×</button>
                 </div>
                 <div class="detail-modal-body space-y-[10px] overflow-y-auto">

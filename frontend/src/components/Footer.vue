@@ -65,8 +65,8 @@ const innerByLayout = computed(() => {
                 <img :src="beianIcon" alt="备案图标" class="h-[14px] w-[14px] shrink-0" />
                 <span class="truncate">粤公网安备44010602015173号</span>
             </a>
-            <span class="min-w-0 truncate text-center" :title="`Copyright © ${currentYear} Dasi. All Rights Reserved.`">
-                Copyright © {{ currentYear }} Dasi. All Rights Reserved.
+            <span class="min-w-0 truncate text-center" :title="`Copyright © ${currentYear} Xerina. All Rights Reserved.`">
+                Copyright © {{ currentYear }} Xerina. All Rights Reserved.
             </span>
             <span class="min-w-0 truncate text-right" title="本网站内容由 AI 生成，仅供参考，请注意甄别。">
                 本网站内容由 AI 生成，仅供参考，请注意甄别。
