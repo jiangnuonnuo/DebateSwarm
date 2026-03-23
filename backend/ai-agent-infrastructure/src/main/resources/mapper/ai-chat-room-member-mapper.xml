@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+ @Autor：xerina
+ @description：聊天室成员表映射配置
+-->
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiChatRoomMemberDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiChatRoomMember">
+        <id column="id" property="id"/>
+        <result column="room_id" property="roomId"/>
+        <result column="member_id" property="memberId"/>
+        <result column="member_type" property="memberType"/>
+        <result column="member_name" property="memberName"/>
+        <result column="agent_session_id" property="agentSessionId"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoomMember">
+        INSERT INTO ai_chat_room_member (room_id, member_id, member_type, member_name, agent_session_id)
+        VALUES (#{roomId}, #{memberId}, #{memberType}, #{memberName}, #{agentSessionId})
+        ON DUPLICATE KEY UPDATE 
+            member_name = VALUES(member_name),
+            agent_session_id = VALUES(agent_session_id),
+            is_deleted = 0
+    </insert>
+
+    <select id="queryMemberByRoomId" resultMap="dataMap">
+        SELECT member_id, member_type, member_name, agent_session_id
+        FROM ai_chat_room_member
+        WHERE room_id = #{roomId} AND is_deleted = 0
+    </select>
+
+    <select id="queryAgentMemberByRoomId" resultMap="dataMap">
+        SELECT member_id, member_type, member_name, agent_session_id
+        FROM ai_chat_room_member
+        WHERE room_id = #{roomId} AND member_type = 'AGENT' AND is_deleted = 0
+    </select>
+
+    <select id="queryMemberByRoomIdAndMemberId" resultMap="dataMap">
+        SELECT member_id, member_type, member_name, agent_session_id
+        FROM ai_chat_room_member
+        WHERE room_id = #{roomId} AND member_id = #{memberId} AND is_deleted = 0
+    </select>
+
+    <update id="deleteMember">
+        UPDATE ai_chat_room_member SET is_deleted = 1
+        WHERE room_id = #{roomId} AND member_id = #{memberId}
+    </update>
+</mapper>

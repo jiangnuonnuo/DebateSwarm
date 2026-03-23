@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+ @Autor：xerina
+ @description：聊天室状态表映射配置
+-->
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiChatRoomStateDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiChatRoomState">
+        <id column="id" property="id"/>
+        <result column="room_id" property="roomId"/>
+        <result column="current_stage" property="currentStage"/>
+        <result column="active_member_id" property="activeMemberId"/>
+        <result column="action_deadline" property="actionDeadline"/>
+        <result column="public_data" property="publicData"/>
+        <result column="private_data" property="privateData"/>
+        <result column="round_number" property="roundNumber"/>
+        <result column="last_action_msg_id" property="lastActionMsgId"/>
+        <result column="version" property="version"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoomState">
+        INSERT INTO ai_chat_room_state (room_id, current_stage, active_member_id, action_deadline, public_data, private_data, round_number, version)
+        VALUES (#{roomId}, #{currentStage}, #{activeMemberId}, #{actionDeadline}, #{publicData}, #{privateData}, #{roundNumber}, #{version})
+    </insert>
+
+    <select id="queryByRoomId" resultMap="dataMap">
+        SELECT current_stage, active_member_id, public_data, private_data, version
+        FROM ai_chat_room_state
+        WHERE room_id = #{roomId} AND is_deleted = 0
+    </select>
+
+    <update id="updateStateWithLock" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoomState">
+        UPDATE ai_chat_room_state
+        <set>
+            <if test="currentStage != null">current_stage = #{currentStage},</if>
+            <if test="activeMemberId != null">active_member_id = #{activeMemberId},</if>
+            <if test="actionDeadline != null">action_deadline = #{actionDeadline},</if>
+            <if test="publicData != null">public_data = #{publicData},</if>
+            <if test="privateData != null">private_data = #{privateData},</if>
+            <if test="roundNumber != null">round_number = #{roundNumber},</if>
+            <if test="lastActionMsgId != null">last_action_msg_id = #{lastActionMsgId},</if>
+            version = version + 1
+        </set>
+        WHERE room_id = #{roomId} AND version = #{version} AND is_deleted = 0
+    </update>
+
+    <update id="deleteByRoomId">
+        UPDATE ai_chat_room_state SET is_deleted = 1
+        WHERE room_id = #{roomId}
+    </update>
+</mapper>

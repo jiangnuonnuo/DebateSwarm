@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+ @Autor：xerina
+ @description：聊天室主表映射配置
+-->
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiChatRoomDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiChatRoom">
+        <id column="id" property="id"/>
+        <result column="room_id" property="roomId"/>
+        <result column="room_name" property="roomName"/>
+        <result column="room_desc" property="roomDesc"/>
+        <result column="owner_id" property="ownerId"/>
+        <result column="room_type" property="roomType"/>
+        <result column="ext_config" property="extConfig"/>
+        <result column="status" property="status"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoom">
+        INSERT INTO ai_chat_room (room_id, room_name, room_desc, owner_id, room_type, ext_config)
+        VALUES (#{roomId}, #{roomName}, #{roomDesc}, #{ownerId}, #{roomType}, #{extConfig})
+    </insert>
+
+    <select id="queryRoomByRoomId" resultMap="dataMap">
+        SELECT id, room_id, room_name, room_type, ext_config, status
+        FROM ai_chat_room
+        WHERE room_id = #{roomId} AND is_deleted = 0
+    </select>
+
+    <select id="queryRoomListByOwnerId" resultMap="dataMap">
+        SELECT room_id, room_name, room_type, status, create_time
+        FROM ai_chat_room
+        WHERE owner_id = #{ownerId} AND is_deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <update id="updateRoomInfo" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoom">
+        UPDATE ai_chat_room
+        <set>
+            <if test="roomName != null">room_name = #{roomName},</if>
+            <if test="roomDesc != null">room_desc = #{roomDesc},</if>
+            <if test="extConfig != null">ext_config = #{extConfig},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        WHERE room_id = #{roomId} AND is_deleted = 0
+    </update>
+
+    <update id="deleteByRoomId">
+        UPDATE ai_chat_room SET is_deleted = 1
+        WHERE room_id = #{roomId}
+    </update>
+</mapper>

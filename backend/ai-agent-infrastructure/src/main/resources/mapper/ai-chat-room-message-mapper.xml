@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+ @Autor：xerina
+ @description：群聊消息表映射配置
+-->
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiChatRoomMessageDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiChatRoomMessage">
+        <id column="id" property="id"/>
+        <result column="room_id" property="roomId"/>
+        <result column="message_id" property="messageId"/>
+        <result column="sender_id" property="senderId"/>
+        <result column="sender_name" property="senderName"/>
+        <result column="sender_type" property="senderType"/>
+        <result column="message_role" property="messageRole"/>
+        <result column="content" property="content"/>
+        <result column="at_member_id" property="atMemberId"/>
+        <result column="quote_msg_id" property="quoteMsgId"/>
+        <result column="is_preempted" property="isPreempted"/>
+        <result column="ext_data" property="extData"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoomMessage">
+        INSERT INTO ai_chat_room_message (room_id, message_id, sender_id, sender_name, sender_type, message_role, content, at_member_id, quote_msg_id, is_preempted, ext_data)
+        VALUES (#{roomId}, #{messageId}, #{senderId}, #{senderName}, #{senderType}, #{messageRole}, #{content}, #{atMemberId}, #{quoteMsgId}, #{isPreempted}, #{extData})
+    </insert>
+
+    <select id="queryContextMessages" resultMap="dataMap">
+        SELECT sender_name, message_role, content, sender_type
+        FROM ai_chat_room_message
+        WHERE room_id = #{roomId} AND is_deleted = 0
+        ORDER BY create_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="queryMessagesBySender" resultMap="dataMap">
+        SELECT room_id, message_id, content, create_time
+        FROM ai_chat_room_message
+        WHERE sender_id = #{senderId} AND is_deleted = 0
+        ORDER BY create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="queryMessageByMsgId" resultMap="dataMap">
+        SELECT room_id, message_id, sender_id, sender_name, content, sender_type, is_deleted
+        FROM ai_chat_room_message
+        WHERE message_id = #{messageId} AND is_deleted = 0
+    </select>
+
+    <update id="deleteByMessageId">
+        UPDATE ai_chat_room_message SET is_deleted = 1
+        WHERE message_id = #{messageId}
+    </update>
+</mapper>
