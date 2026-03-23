@@ -22,6 +22,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class WebSocketEvent<T> {
+    
+    /**
+     * 事件类型定义
+     */
+    public interface EventType {
+        /** 用户发言 (上行/下行) */
+        String USER_MSG = "USER_MSG";
+        /** 智能体流式输出 (下行) */
+        String AGENT_STREAM = "AGENT_STREAM";
+        /** 智能体回答结束 (下行) */
+        String AGENT_MSG_END = "AGENT_MSG_END";
+        /** 场景/系统通知 (下行) */
+        String SYSTEM_NOTICE = "SYSTEM_NOTICE";
+        /** 错误提醒 */
+        String ERROR = "ERROR";
+    }
+
     /** 房间ID (必填，前端路由依据) */
     private String roomId;
 

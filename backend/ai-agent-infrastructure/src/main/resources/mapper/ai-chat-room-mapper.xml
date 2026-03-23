@@ -38,6 +38,12 @@
         ORDER BY create_time DESC
     </select>
 
+
+    <select id="queryExtConfigByRoomId" resultType="java.lang.String">
+        SELECT ext_config FROM ai_chat_room
+        WHERE roomid = #{roomId}
+    </select>
+
     <update id="updateRoomInfo" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoom">
         UPDATE ai_chat_room
         <set>

@@ -50,6 +50,7 @@
         WHERE message_id = #{messageId} AND is_deleted = 0
     </select>
 
+
     <update id="deleteByMessageId">
         UPDATE ai_chat_room_message SET is_deleted = 1
         WHERE message_id = #{messageId}

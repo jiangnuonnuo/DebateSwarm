@@ -117,6 +117,11 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-websocket</artifactId>
+                <version>3.5.4</version>
+            </dependency>
 
             <!-- 扳手工程 -->
             <dependency>

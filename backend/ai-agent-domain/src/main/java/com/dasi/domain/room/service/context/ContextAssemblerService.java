@@ -64,4 +64,16 @@ public class ContextAssemblerService implements IContextAssemblerService {
         log.info("【上下文装配】房间={}，Agent={}，装配条数={}", roomId, currentMemberName, messages.size());
         return List.of(new SystemMessage(contextBuilder.toString()));
     }
+
+    @Override
+    public void recordMessage(AiChatRoomMessageEntity messageEntity) {
+        log.info("【消息持久化】房间={}，发送者={}，内容长度={}", 
+                messageEntity.getRoomId(), messageEntity.getSenderName(), 
+                messageEntity.getContent() != null ? messageEntity.getContent().length() : 0);
+        chatRoomRepository.saveMessage(messageEntity);
+    }
+
+    public String queryRoomExtConfig(String roomId ) {
+        return chatRoomRepository.queryExtConfigByRoomId(roomId);
+    }
 }

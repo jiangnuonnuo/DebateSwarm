@@ -37,4 +37,9 @@ public interface IAiChatRoomDao {
      * 逻辑删除房间
      */
     void deleteByRoomId(@Param("roomId") String roomId);
+
+    /**
+     * 查询房间的配置信息通过房间ID
+     */
+    String queryExtConfigByRoomId(@Param("roomId") String roomId);
 }

@@ -39,4 +39,5 @@ public interface IAiChatRoomMessageDao {
      * 逻辑删除消息
      */
     void deleteByMessageId(@Param("messageId") String messageId);
+
 }

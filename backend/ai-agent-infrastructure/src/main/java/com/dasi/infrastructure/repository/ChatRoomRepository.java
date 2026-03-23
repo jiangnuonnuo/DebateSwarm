@@ -1,6 +1,8 @@
 package com.dasi.infrastructure.repository;
 
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
+import com.dasi.domain.room.model.entity.AiChatRoomEntity;
+import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomDao;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomMemberDao;
@@ -35,6 +37,122 @@ public class ChatRoomRepository implements IChatRoomRepository {
     private IAiChatRoomMessageDao aiChatRoomMessageDao;
 
     @Override
+    public void saveRoom(AiChatRoomEntity roomEntity) {
+        // 1. 领域对象转换为持久化对象 PO
+        AiChatRoom po = AiChatRoom.builder()
+                .roomId(roomEntity.getRoomId())
+                .roomName(roomEntity.getRoomName())
+                .roomDesc(roomEntity.getRoomDesc())
+                .ownerId(roomEntity.getOwnerId())
+                .roomType(roomEntity.getRoomType())
+                .extConfig(roomEntity.getExtConfig())
+                .status(roomEntity.getStatus())
+                .build();
+
+        // 2. 判断是插入还是更新
+        AiChatRoom existing = aiChatRoomDao.queryRoomByRoomId(roomEntity.getRoomId());
+        if (existing == null) {
+            aiChatRoomDao.insert(po);
+        } else {
+            aiChatRoomDao.updateRoomInfo(po);
+        }
+    }
+
+    @Override
+    public void deleteRoom(String roomId) {
+        aiChatRoomDao.deleteByRoomId(roomId);
+    }
+
+    @Override
+    public AiChatRoomEntity queryRoomById(String roomId) {
+        AiChatRoom po = aiChatRoomDao.queryRoomByRoomId(roomId);
+        if (po == null) {
+            return null;
+        }
+        return AiChatRoomEntity.builder()
+                .roomId(po.getRoomId())
+                .roomName(po.getRoomName())
+                .roomDesc(po.getRoomDesc())
+                .ownerId(po.getOwnerId())
+                .roomType(po.getRoomType())
+                .extConfig(po.getExtConfig())
+                .status(po.getStatus())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build();
+    }
+
+    @Override
+    public List<AiChatRoomEntity> queryRoomsByOwnerId(Long ownerId) {
+        List<AiChatRoom> pos = aiChatRoomDao.queryRoomListByOwnerId(ownerId);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return pos.stream().map(po -> AiChatRoomEntity.builder()
+                .roomId(po.getRoomId())
+                .roomName(po.getRoomName())
+                .roomDesc(po.getRoomDesc())
+                .ownerId(po.getOwnerId())
+                .roomType(po.getRoomType())
+                .extConfig(po.getExtConfig())
+                .status(po.getStatus())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public void saveMember(AiChatRoomMemberEntity memberEntity) {
+        AiChatRoomMember po = AiChatRoomMember.builder()
+                .roomId(memberEntity.getRoomId())
+                .memberId(memberEntity.getMemberId())
+                .memberType(memberEntity.getMemberType())
+                .memberName(memberEntity.getMemberName())
+                .agentSessionId(memberEntity.getAgentSessionId())
+                .build();
+        aiChatRoomMemberDao.insert(po);
+    }
+
+    @Override
+    public void deleteMember(String roomId, String memberId) {
+        aiChatRoomMemberDao.deleteMember(roomId, memberId);
+    }
+
+    @Override
+    public List<AiChatRoomMemberEntity> queryMembersByRoomId(String roomId) {
+        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryMemberByRoomId(roomId);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return pos.stream().map(po -> AiChatRoomMemberEntity.builder()
+                .roomId(po.getRoomId())
+                .memberId(po.getMemberId())
+                .memberType(po.getMemberType())
+                .memberName(po.getMemberName())
+                .agentSessionId(po.getAgentSessionId())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AiChatRoomMemberEntity> queryAgentsByRoomId(String roomId) {
+        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryAgentMemberByRoomId(roomId);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return pos.stream().map(po -> AiChatRoomMemberEntity.builder()
+                .roomId(po.getRoomId())
+                .memberId(po.getMemberId())
+                .memberType(po.getMemberType())
+                .memberName(po.getMemberName())
+                .agentSessionId(po.getAgentSessionId())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
     public String queryMemberName(String roomId, String memberId) {
         AiChatRoomMember member = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
         return member != null ? member.getMemberName() : "未知成员";
@@ -44,6 +162,22 @@ public class ChatRoomRepository implements IChatRoomRepository {
     public String queryRoomName(String roomId) {
         AiChatRoom room = aiChatRoomDao.queryRoomByRoomId(roomId);
         return room != null ? room.getRoomName() : "未知聊天室";
+    }
+
+    @Override
+    public void saveMessage(AiChatRoomMessageEntity messageEntity) {
+        // 手动映射 Entity 到 PO
+        AiChatRoomMessage po = AiChatRoomMessage.builder()
+                .roomId(messageEntity.getRoomId())
+                .messageId(messageEntity.getMessageId())
+                .senderId(messageEntity.getSenderId())
+                .senderName(messageEntity.getSenderName())
+                .senderType(messageEntity.getSenderType())
+                .messageRole(messageEntity.getMessageRole())
+                .content(messageEntity.getContent())
+                .isPreempted(messageEntity.getIsPreempted())
+                .build();
+        aiChatRoomMessageDao.insert(po);
     }
 
     @Override
@@ -66,5 +200,10 @@ public class ChatRoomRepository implements IChatRoomRepository {
                 .isPreempted(po.getIsPreempted())
                 .createTime(po.getCreateTime())
                 .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public String queryExtConfigByRoomId(String roomId) {
+        return aiChatRoomDao.queryExtConfigByRoomId(roomId) ;
     }
 }
