@@ -1,0 +1,1 @@
+package com.dasi.domain.room.model.entity;
