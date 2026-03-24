@@ -57,7 +57,7 @@ public class ChatRoomController implements IChatRoomService {
             // 创建者默认加入房间
             roomAdminService.joinRoom(AiChatRoomMemberEntity.builder()
                     .roomId(roomId)
-                    .memberId(String.valueOf(userId))
+                    .memberId(userContext.getUserName())
                     .memberType("USER")
                     .memberName(userContext.getUserName())
                     .build());
@@ -132,8 +132,8 @@ public class ChatRoomController implements IChatRoomService {
     @GetMapping("/list")
     public Result<List<ChatRoomDTO>> queryRoomList() {
         try {
-            String userId = String.valueOf(userContext.getUserId());
-            List<AiChatRoomEntity> rooms = roomAdminService.queryRoomsByMemberId(userId);
+            String userName = userContext.getUserName();
+            List<AiChatRoomEntity> rooms = roomAdminService.queryRoomsByMemberId(userName);
             
             List<ChatRoomDTO> vos = rooms.stream().map(entity -> ChatRoomDTO.builder()
                     .roomId(entity.getRoomId())

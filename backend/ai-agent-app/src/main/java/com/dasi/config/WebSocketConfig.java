@@ -35,7 +35,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
         // 使用 Interceptor 提前解析路径参数
         registry.addHandler(chatRoomSocketHandler, "/ws/room/*/*")
                 .addInterceptors(roomHandshakeInterceptor())
-                .setAllowedOrigins("*");
+                .setAllowedOriginPatterns("*");
     }
 
     @Bean
@@ -44,12 +44,13 @@ public class WebSocketConfig implements WebSocketConfigurer {
             @Override
             public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, 
                                          WebSocketHandler wsHandler, Map<String, Object> attributes) {
-                // 路径格式: /ws/room/{roomId}/{userId}
+                // 路径格式: .../ws/room/{roomId}/{userId}
                 String path = request.getURI().getPath();
                 String[] parts = path.split("/");
-                if (parts.length >= 5) {
-                    attributes.put("roomId", parts[3]);
-                    attributes.put("userId", parts[4]);
+                // 倒数第一个是 username，倒数第二个是 roomId
+                if (parts.length >= 2) {
+                    attributes.put("username", parts[parts.length - 1]);
+                    attributes.put("roomId", parts[parts.length - 2]);
                     return true;
                 }
                 return false;

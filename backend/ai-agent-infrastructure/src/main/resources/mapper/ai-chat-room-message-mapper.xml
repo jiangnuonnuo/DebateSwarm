@@ -29,7 +29,7 @@
     </insert>
 
     <select id="queryContextMessages" resultMap="dataMap">
-        SELECT sender_name, message_role, content, sender_type
+        SELECT sender_id, sender_name, message_role, content, sender_type
         FROM ai_chat_room_message
         WHERE room_id = #{roomId} AND is_deleted = 0
         ORDER BY create_time DESC
@@ -37,7 +37,7 @@
     </select>
 
     <select id="queryMessagesBySender" resultMap="dataMap">
-        SELECT room_id, message_id, content, create_time
+        SELECT room_id, message_id, sender_id, sender_name, content, create_time
         FROM ai_chat_room_message
         WHERE sender_id = #{senderId} AND is_deleted = 0
         ORDER BY create_time DESC

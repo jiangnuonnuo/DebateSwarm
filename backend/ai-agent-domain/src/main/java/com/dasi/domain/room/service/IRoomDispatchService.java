@@ -12,17 +12,17 @@ public interface IRoomDispatchService {
     /**
      * 处理连接建立
      */
-    void onOpen(String roomId, String userId, Object session);
+    void onOpen(String roomId, String username, Object session);
 
     /**
      * 处理收到的原始消息
      */
-    void onMessage(String roomId, String userId, String payload);
+    void onMessage(String roomId, String username, String payload);
 
     /**
      * 处理连接关闭
      */
-    void onClose(String roomId, String userId);
+    void onClose(String roomId, String username);
 
     /**
      * 调度下一个发言者 (A2A 核心决策)

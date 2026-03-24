@@ -25,7 +25,8 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private static final Set<String> WHITE_LIST = Set.of(
             "/miniagent/api/v1/user/auth/login",
-            "/miniagent/api/v1/user/auth/register"
+            "/miniagent/api/v1/user/auth/register",
+            "/miniagent/api/v1/ws/"
     );
 
     @Resource

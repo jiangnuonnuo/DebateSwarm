@@ -56,28 +56,28 @@ public class RoomDispatchService implements IRoomDispatchService {
     private static final double RESPONSE_PROBABILITY = 0.5;
 
     @Override
-    public void onOpen(String roomId, String userId, Object session) {
-        log.info("【调度服务】接纳新连接：roomId={}, userId={}", roomId, userId);
+    public void onOpen(String roomId, String username, Object session) {
+        log.info("【调度服务】接纳新连接：roomId={}, username={}", roomId, username);
         
         // 将 metadata 存入 Session 属性，方便后续消息识别
         if (session instanceof WebSocketSession) {
             WebSocketSession wsSession = (WebSocketSession) session;
             wsSession.getAttributes().put("roomId", roomId);
-            wsSession.getAttributes().put("userId", userId);
+            wsSession.getAttributes().put("username", username);
         }
         
-        sessionPort.addSession(roomId, userId, session);
+        sessionPort.addSession(roomId, username, session);
     }
 
     @Override
-    public void onMessage(String roomId, String userId, String payload) {
-        log.debug("【调度服务】收到原始消息：roomId={}, userId={}, payload={}", roomId, userId, payload);
+    public void onMessage(String roomId, String username, String payload) {
+        log.debug("【调度服务】收到原始消息：roomId={}, username={}, payload={}", roomId, username, payload);
         try {
             JSONObject json = JSON.parseObject(payload);
             // 转化为领域对象请求
             RoomChatRequest request = RoomChatRequest.builder()
                     .roomId(roomId)
-                    .userId(userId)
+                    .userId(username)
                     .content(json.getString("content"))
                     .traceId(json.getString("traceId"))
                     .build();
@@ -92,9 +92,9 @@ public class RoomDispatchService implements IRoomDispatchService {
     }
 
     @Override
-    public void onClose(String roomId, String userId) {
-        log.info("【调度服务】清理连接：roomId={}, userId={}", roomId, userId);
-        sessionPort.removeSession(roomId, userId);
+    public void onClose(String roomId, String username) {
+        log.info("【调度服务】清理连接：roomId={}, username={}", roomId, username);
+        sessionPort.removeSession(roomId, username);
     }
 
     @Override

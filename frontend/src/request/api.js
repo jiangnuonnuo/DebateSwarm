@@ -111,6 +111,15 @@ const USER_TASK_UPDATE_PATH = `${USER_TASK_BASE_PATH}/update`;
 const USER_TASK_DELETE_PATH = `${USER_TASK_BASE_PATH}/delete`;
 const USER_TASK_TOGGLE_PATH = `${USER_TASK_BASE_PATH}/toggle`;
 
+const CHAT_ROOM_BASE_PATH = '/api/v1/chat-room';
+const CHAT_ROOM_CREATE_PATH = `${CHAT_ROOM_BASE_PATH}/create`;
+const CHAT_ROOM_DELETE_PATH = `${CHAT_ROOM_BASE_PATH}/delete`;
+const CHAT_ROOM_MEMBER_ADD_PATH = `${CHAT_ROOM_BASE_PATH}/member/add`;
+const CHAT_ROOM_MEMBER_REMOVE_PATH = `${CHAT_ROOM_BASE_PATH}/member/remove`;
+const CHAT_ROOM_MEMBER_LIST_PATH = `${CHAT_ROOM_BASE_PATH}/member/list`;
+const CHAT_ROOM_LIST_PATH = `${CHAT_ROOM_BASE_PATH}/list`;
+const CHAT_ROOM_MESSAGE_CURSOR_PATH = `${CHAT_ROOM_BASE_PATH}/message/cursor`;
+
 const WORKSPACE_BASE_PATH = '/api/v1/workspace';
 const PLAZA_BASE_PATH = `${WORKSPACE_BASE_PATH}/plaza`;
 const PLAZA_PAGE_PATH = `${PLAZA_BASE_PATH}/page`;
@@ -788,6 +797,28 @@ export const userTaskUpdate = async (payload = {}) => http.post(USER_TASK_UPDATE
 export const userTaskDelete = async (taskId) => http.post(USER_TASK_DELETE_PATH, null, { params: { taskId } });
 export const userTaskToggle = async (taskId, taskStatus) =>
     http.post(USER_TASK_TOGGLE_PATH, null, { params: { taskId, taskStatus } });
+
+// -------------------- Chat Room --------------------
+export const chatRoomCreate = async (payload = {}) =>
+    http.post(CHAT_ROOM_CREATE_PATH, trimStrings(payload));
+
+export const chatRoomDelete = async (roomId) =>
+    http.delete(CHAT_ROOM_DELETE_PATH, { params: { roomId } });
+
+export const chatRoomMemberAdd = async (payload = {}) =>
+    http.post(CHAT_ROOM_MEMBER_ADD_PATH, trimStrings(payload));
+
+export const chatRoomMemberRemove = async (payload = {}) =>
+    http.post(CHAT_ROOM_MEMBER_REMOVE_PATH, trimStrings(payload));
+
+export const chatRoomMemberList = async (roomId) =>
+    http.get(CHAT_ROOM_MEMBER_LIST_PATH, { params: { roomId: roomId?.trim() }, toast: false });
+
+export const chatRoomList = async () =>
+    http.get(CHAT_ROOM_LIST_PATH, { toast: false });
+
+export const chatRoomMessageCursor = async (payload = {}) =>
+    http.post(CHAT_ROOM_MESSAGE_CURSOR_PATH, payload, { toast: false });
 
 // 以下接口后端当前未实现，保留函数供调用方降级处理
 // -------------------- Studio / Workspace Agent --------------------

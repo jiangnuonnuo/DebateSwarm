@@ -48,6 +48,13 @@ const featureCards = [
         route: '/plaza'
     },
     {
+        key: 'room',
+        title: '群聊空间',
+        description: '进入多智能体协同空间，体验 A2A 闭环对话。',
+        cta: '立即进入',
+        route: '/room/lobby' // 默认跳转到一个大厅或者第一个房间
+    },
+    {
         key: 'studio',
         title: '进入 Studio',
         description: '配置策略与工具组合，创建专属 MiniAgent。',

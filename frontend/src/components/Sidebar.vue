@@ -13,8 +13,11 @@ import plazaIcon from '../assets/plaza.svg';
 import repositoryIcon from '../assets/repository.svg';
 import addIcon from '../assets/add.svg';
 import rightIcon from '../assets/right.svg';
-import { useAgentStore, useAuthStore, useChatStore, useSettingsStore } from '../router/pinia';
+import { useAgentStore, useAuthStore, useChatStore, useSettingsStore, useRoomStore } from '../router/pinia';
 import {
+    chatRoomCreate,
+    chatRoomDelete,
+    chatRoomList,
     deleteSession,
     fetchProfile,
     insertSession,
@@ -33,6 +36,7 @@ import {
 import { parseAuthPayload } from '../request/auth';
 import { normalizeError, notifyAppError } from '../request/request';
 import { COLLAPSE_INNER_CLASS, getCollapseClasses } from '../utils/CollapseUtil';
+import toast from '../utils/toast';
 
 const router = useRouter();
 const route = useRoute();
@@ -41,6 +45,7 @@ const chatStore = useChatStore();
 const agentStore = useAgentStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
+const roomStore = useRoomStore();
 
 const isLogin = computed(() => authStore.isLogin);
 const currentUser = computed(() => authStore.user || { username: '访客', role: 'guest' });
@@ -96,9 +101,11 @@ const isWelcomeRoute = computed(() => route.path.startsWith('/welcome'));
 const isStudioRoute = computed(() => route.path.startsWith('/studio'));
 const isPlazaRoute = computed(() => route.path.startsWith('/plaza'));
 const isRepositoryRoute = computed(() => route.path.startsWith('/repository'));
+const isRoomRoute = computed(() => route.path.startsWith('/room'));
 
 const showChatList = ref(true);
 const showAgentList = ref(true);
+const showRoomList = ref(true);
 
 const editingChatId = ref(null);
 const editChatTitle = ref('');
@@ -110,6 +117,13 @@ const agentTitleInputRefs = ref({});
 const showDeleteConfirm = ref(false);
 const deleteTarget = ref({ type: 'chat', id: '' });
 const showNewSessionPicker = ref(false);
+const showCreateRoomModal = ref(false);
+const newRoomForm = reactive({
+    roomName: '',
+    roomDesc: ''
+});
+const rooms = computed(() => roomStore.rooms);
+const currentRoomId = computed(() => roomStore.currentRoomId);
 const showProfile = ref(false);
 const showLogoutConfirm = ref(false);
 const profileSaving = ref(false);
@@ -448,9 +462,57 @@ const loadSessions = async () => {
     }
 };
 
+const loadRooms = async () => {
+    try {
+        const res = await chatRoomList();
+        if (res.code === 200) {
+            roomStore.setRooms(res.data || []);
+            // 如果当前在房间页面，确保选中态正确
+            if (isRoomRoute.value) {
+                const pathParts = route.path.split('/');
+                const roomIdFromPath = pathParts[pathParts.length - 1];
+                if (roomIdFromPath && roomIdFromPath !== 'lobby') {
+                    roomStore.setCurrentRoomId(roomIdFromPath);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load rooms:', e);
+    }
+};
+
+const handleCreateRoom = async () => {
+    if (!newRoomForm.roomName.trim()) return;
+    try {
+        const res = await chatRoomCreate(newRoomForm);
+        if (res.code === 200) {
+            const newRoomId = res.data;
+            showCreateRoomModal.value = false;
+            newRoomForm.roomName = '';
+            newRoomForm.roomDesc = '';
+            await loadRooms();
+            toast.show('创建房间成功');
+            // 自动跳转到新创建的房间
+            if (newRoomId) {
+                openRoom(newRoomId);
+            }
+        }
+    } catch (e) {
+        toast.show('创建失败');
+    }
+};
+
+const openRoom = (roomId) => {
+    if (route.path !== `/room/${roomId}`) {
+        router.push(`/room/${roomId}`);
+    }
+    roomStore.setCurrentRoomId(roomId);
+};
+
 onMounted(() => {
     if (isLogin.value) {
         loadSessions();
+        loadRooms();
     }
 });
 
@@ -463,12 +525,14 @@ watch(
     (loggedIn) => {
         if (loggedIn) {
             loadSessions();
+            loadRooms();
             return;
         }
         chatStore.setChats([]);
         agentStore.setSessions([]);
+        roomStore.setRooms([]);
     },
-    { immediate: false }
+    { immediate: true }
 );
 
 watch(
@@ -612,23 +676,26 @@ const handleDelete = async () => {
         return;
     }
     try {
-        const target =
-            deleteTarget.value.type === 'agent'
-                ? agentStore.sessions.find((item) => item.sessionId === deleteTarget.value.id)
-                : chatStore.chats.find((item) => item.sessionId === deleteTarget.value.id);
-        if (!target) {
-            throw new Error('会话不存在');
-        }
-        await deleteSession({ sessionId: target.sessionId });
-        if (deleteTarget.value.type === 'agent') {
-            agentStore.removeSession(deleteTarget.value.id);
-        } else {
-            chatStore.removeChat(deleteTarget.value.id);
+        const { type, id } = deleteTarget.value;
+        if (type === 'agent') {
+            const target = agentStore.sessions.find((item) => item.sessionId === id);
+            if (!target) throw new Error('会话不存在');
+            await deleteSession({ sessionId: target.sessionId });
+            agentStore.removeSession(id);
+        } else if (type === 'chat') {
+            const target = chatStore.chats.find((item) => item.sessionId === id);
+            if (!target) throw new Error('会话不存在');
+            await deleteSession({ sessionId: target.sessionId });
+            chatStore.removeChat(id);
+        } else if (type === 'room') {
+            await chatRoomDelete(id);
+            roomStore.removeRoom(id);
         }
         redirectWelcomeIfNoSession();
         sessionError.value = '';
+        toast.show('删除成功');
     } catch (error) {
-        notifyAppError(error, '删除会话失败');
+        notifyAppError(error, '删除失败');
     }
     showDeleteConfirm.value = false;
     deleteTarget.value = { type: 'chat', id: '' };
@@ -1046,6 +1113,51 @@ const loadProfileResources = async () => {
                     <span>新建会话</span>
                 </button>
             </div>
+
+            <div class="flex flex-col gap-[2px]" v-if="isLogin">
+                <div class="flex items-center justify-between group h-[52px] w-full rounded-[10px] px-[10px] transition-all duration-200"
+                     :class="isRoomRoute ? sidebarNavItemActiveClass : sidebarNavItemBaseClass">
+                    <button class="flex items-center flex-1 gap-[10px] text-[18px] font-bold text-left h-full"
+                            type="button"
+                            @click="showRoomList = !showRoomList">
+                        <img :src="rightIcon" alt="" class="h-[18px] w-[18px] shrink-0 opacity-95 transition-transform duration-200"
+                             :class="showRoomList ? 'rotate-90' : ''" aria-hidden="true" />
+                        <span>群聊空间</span>
+                    </button>
+                    <button class="flex h-6 w-6 items-center justify-center rounded-md border border-[rgba(255,255,255,0.2)] hover:border-[#7bc8ff] hover:bg-[rgba(123,200,255,0.1)] transition-all"
+                            title="创建房间"
+                            @click.stop="showCreateRoomModal = true">
+                        <span class="text-lg font-light leading-none">+</span>
+                    </button>
+                </div>
+                
+                <div :class="getCollapseClasses(showRoomList)" :aria-hidden="!showRoomList">
+                    <div :class="[COLLAPSE_INNER_CLASS, 'flex flex-col gap-[8px]']">
+                        <div v-for="room in rooms" :key="room.roomId"
+                             :class="[
+                                'w-full rounded-[12px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.04)] px-[12px] py-[10px] transition-all duration-200 hover:border-[#7bc8ff] hover:bg-[rgba(255,255,255,0.07)] cursor-pointer',
+                                room.roomId === currentRoomId ? 'border-[#7bc8ff] bg-[linear-gradient(135deg,rgba(111,125,255,0.2),rgba(83,197,255,0.05))] shadow-lg' : ''
+                             ]"
+                             @click="openRoom(room.roomId)">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="min-w-0 flex flex-col">
+                                    <div class="font-semibold truncate text-[#e7ecf4]">{{ room.roomName }}</div>
+                                    <div class="text-[11px] text-[rgba(231,236,244,0.5)] truncate">{{ room.roomDesc || '无描述' }}</div>
+                                </div>
+                                <button class="grid h-[28px] w-[28px] shrink-0 place-items-center rounded-full border border-[rgba(255,255,255,0.15)] text-[12px] text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-all"
+                                        title="删除房间"
+                                        @click.stop="openDeleteConfirm('room', room.roomId)">
+                                    🗑
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="rooms.length === 0" class="mt-[4px] pl-[38px] text-[13px] text-[rgba(231,236,244,0.7)]">
+                            暂无房间
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="sessionLoading" class="text-[12px] text-[rgba(231,236,244,0.7)]">会话加载中...</div>
 
             <div class="flex flex-col gap-[2px]">
@@ -1299,7 +1411,7 @@ const loadProfileResources = async () => {
                 class="w-full max-w-[420px] rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f172a] text-[#e7ecf4] shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
             >
                 <div class="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-[16px] py-[14px]">
-                    <div class="text-[16px] font-bold">删除会话</div>
+                    <div class="text-[16px] font-bold">确认删除</div>
                     <button
                         class="text-[20px] text-[#e7ecf4]"
                         type="button"
@@ -1309,9 +1421,9 @@ const loadProfileResources = async () => {
                     </button>
                 </div>
                 <div class="px-[16px] py-[14px]">
-                    <div class="text-[14px]">确认删除当前会话吗？</div>
+                    <div class="text-[14px]">确认删除该{{ deleteTarget.type === 'room' ? '房间' : '会话' }}吗？</div>
                 </div>
-                <div class="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-[16px] py-[14px]">
+                <div class="flex items-center justify-end gap-3 border-t border-[rgba(255,255,255,0.08)] px-[16px] py-[14px]">
                     <button
                         class="flex items-center justify-center rounded-[12px] border border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.08)] px-[14px] py-[10px] font-semibold text-[#e7ecf4] transition-all duration-200 hover:bg-[rgba(255,255,255,0.16)]"
                         type="button"
@@ -1320,11 +1432,44 @@ const loadProfileResources = async () => {
                         取消
                     </button>
                     <button
-                        class="flex items-center justify-center rounded-[12px] border border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.08)] px-[14px] py-[10px] font-semibold text-[#e7ecf4] transition-all duration-200 hover:bg-[rgba(255,255,255,0.16)]"
+                        class="flex items-center justify-center rounded-[12px] border border-[#ef4444] bg-[#ef4444] px-[14px] py-[10px] font-semibold text-white transition-all duration-200 hover:bg-[#dc2626]"
                         type="button"
                         @click="handleDelete"
                     >
                         确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 创建房间弹窗 -->
+        <div v-if="showCreateRoomModal" class="fixed inset-0 z-[20] grid place-items-center bg-[rgba(0,0,0,0.35)] backdrop-blur-sm p-[20px]" @click.self="showCreateRoomModal = false">
+            <div class="w-full max-w-[420px] rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f172a] text-[#e7ecf4] shadow-2xl">
+                <div class="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] px-[16px] py-[14px]">
+                    <div class="text-[16px] font-bold text-[#7bc8ff]">创建新房间</div>
+                    <button class="text-[20px] text-[#e7ecf4] hover:text-[#7bc8ff]" type="button" @click="showCreateRoomModal = false">×</button>
+                </div>
+                <div class="px-[16px] py-[20px] flex flex-col gap-4">
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-[rgba(231,236,244,0.7)]">房间名称</label>
+                        <input v-model="newRoomForm.roomName" 
+                               class="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] px-4 py-2 text-white focus:border-[#7bc8ff] focus:outline-none transition-all"
+                               placeholder="给房间起个响亮的名字..." />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-[rgba(231,236,244,0.7)]">房间描述</label>
+                        <textarea v-model="newRoomForm.roomDesc" 
+                                  rows="3"
+                                  class="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] px-4 py-2 text-white focus:border-[#7bc8ff] focus:outline-none transition-all resize-none"
+                                  placeholder="简短描述一下这个房间的用途吧..."></textarea>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-3 border-t border-[rgba(255,255,255,0.08)] px-[16px] py-[14px]">
+                    <button class="px-4 py-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-all" @click="showCreateRoomModal = false">取消</button>
+                    <button class="px-6 py-2 rounded-lg bg-[#7bc8ff] text-[#0f172a] font-bold hover:bg-[#5db8ff] transition-all disabled:opacity-50"
+                            :disabled="!newRoomForm.roomName.trim()"
+                            @click="handleCreateRoom">
+                        立即创建
                     </button>
                 </div>
             </div>

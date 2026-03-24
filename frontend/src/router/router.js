@@ -17,6 +17,7 @@ import AdminCanvas from '../components/AdminCanvas.vue';
 import AdminSession from '../components/AdminSession.vue';
 import AdminDashboard from '../components/AdminDashboard.vue';
 import NotFound from '../components/NotFound.vue';
+import RoomChat from '../components/RoomChat.vue';
 import { getStoredAuth } from './pinia';
 
 const routes = [
@@ -28,6 +29,11 @@ const routes = [
         path: '/chat',
         name: 'chat',
         component: Chat
+    },
+    {
+        path: '/room/:roomId',
+        name: 'room',
+        component: RoomChat
     },
     {
         path: '/welcome',

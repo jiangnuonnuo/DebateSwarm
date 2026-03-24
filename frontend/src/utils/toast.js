@@ -127,3 +127,9 @@ export const dismissErrorToast = dismissToast;
 
 export const adminToasts = computed(() => toasts.filter((item) => item.scope === 'admin'));
 export const appErrorToasts = computed(() => toasts.filter((item) => item.scope === 'app'));
+
+export default {
+    show: (message, options) => pushToast(message, options),
+    success: (message, options) => pushAppSuccessToast(message, options),
+    error: (message, options) => pushAppErrorToast(message, options)
+};

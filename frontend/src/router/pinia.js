@@ -693,3 +693,63 @@ export const useWelcomeLaunchStore = defineStore('welcomeLaunch', {
         }
     }
 });
+
+export const useRoomStore = defineStore('room', {
+    state: () => ({
+        rooms: [],
+        currentRoomId: null,
+        messages: [],
+        members: [],
+        loadingHistory: false
+    }),
+    getters: {
+        currentRoom(state) {
+            return state.rooms.find((r) => r.roomId === state.currentRoomId) || null;
+        }
+    },
+    actions: {
+        setRooms(rooms) {
+            this.rooms = Array.isArray(rooms) ? rooms : [];
+        },
+        setCurrentRoomId(roomId) {
+            this.currentRoomId = roomId || null;
+            this.messages = [];
+            this.members = [];
+        },
+        addRoom(room) {
+            if (!room) return;
+            const idx = this.rooms.findIndex((r) => r.roomId === room.roomId);
+            if (idx === -1) {
+                this.rooms.unshift(room);
+            } else {
+                this.rooms[idx] = { ...this.rooms[idx], ...room };
+            }
+        },
+        removeRoom(roomId) {
+            this.rooms = this.rooms.filter((r) => r.roomId !== roomId);
+            if (this.currentRoomId === roomId) {
+                this.currentRoomId = this.rooms[0]?.roomId || null;
+            }
+        },
+        setMessages(messages) {
+            this.messages = Array.isArray(messages) ? messages : [];
+        },
+        prependMessages(oldMessages) {
+            if (Array.isArray(oldMessages)) {
+                this.messages = [...oldMessages, ...this.messages];
+            }
+        },
+        pushMessage(message) {
+            if (!message || !message.messageId) return;
+            if (!this.messages.find((m) => m.messageId === message.messageId)) {
+                this.messages.push(message);
+            }
+        },
+        setMembers(members) {
+            this.members = Array.isArray(members) ? members : [];
+        },
+        setLoadingHistory(flag) {
+            this.loadingHistory = flag;
+        }
+    }
+});
