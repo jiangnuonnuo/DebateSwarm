@@ -36,6 +36,11 @@ public interface IChatRoomRepository {
     List<AiChatRoomEntity> queryRoomsByOwnerId(Long ownerId);
 
     /**
+     * 查询成员参与的所有房间
+     */
+    List<AiChatRoomEntity> queryRoomsByMemberId(String memberId);
+
+    /**
      * 加入/更新房间成员
      */
     void saveMember(AiChatRoomMemberEntity memberEntity);
@@ -74,6 +79,11 @@ public interface IChatRoomRepository {
      * 查询构建上下文所需的最新消息流 (返回领域对象 Entity)
      */
     List<AiChatRoomMessageEntity> queryContextMessages(String roomId, Integer limit);
+
+    /**
+     * 游标查询聊天记录
+     */
+    List<AiChatRoomMessageEntity> queryMessagesByCursor(String roomId, Long cursorTime, Integer limit);
 
     String queryExtConfigByRoomId(String roomId);
 }

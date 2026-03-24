@@ -36,6 +36,11 @@ public interface IAiChatRoomMessageDao {
     AiChatRoomMessage queryMessageByMsgId(@Param("messageId") String messageId);
 
     /**
+     * 游标查询聊天消息记录
+     */
+    List<AiChatRoomMessage> queryMessagesByCursor(@Param("roomId") String roomId, @Param("cursorTime") Long cursorTime, @Param("limit") Integer limit);
+
+    /**
      * 逻辑删除消息
      */
     void deleteByMessageId(@Param("messageId") String messageId);

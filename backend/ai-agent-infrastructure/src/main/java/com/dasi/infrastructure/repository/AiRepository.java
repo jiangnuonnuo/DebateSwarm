@@ -95,6 +95,20 @@ public class AiRepository implements IAiRepository {
     }
 
     @Override
+    public AiClientVO queryAiClientVO(String clientId) {
+        AiClient aiClient = aiClientDao.queryByClientId(clientId);
+        if (aiClient == null) return null;
+        return AiClientVO.builder()
+                .clientId(aiClient.getClientId())
+                .clientName(aiClient.getClientName())
+                .clientType(aiClient.getClientType())
+                .clientRole(aiClient.getClientRole())
+                .modelId(aiClient.getModelId())
+                .modelName(aiClient.getModelName())
+                .build();
+    }
+
+    @Override
     @Cacheable(cachePrefix = AI_MODEL_VO_PREFIX, cacheClass = AiModelVO.class, cacheType = CacheType.SET)
     public Set<AiModelVO> queryAiModelVOSetByClientIdSet(Set<String> clientIdSet) {
         if (clientIdSet == null || clientIdSet.isEmpty()) {

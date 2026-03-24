@@ -102,6 +102,25 @@ public class ChatRoomRepository implements IChatRoomRepository {
     }
 
     @Override
+    public List<AiChatRoomEntity> queryRoomsByMemberId(String memberId) {
+        List<AiChatRoom> pos = aiChatRoomDao.queryRoomListByMemberId(memberId);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return pos.stream().map(po -> AiChatRoomEntity.builder()
+                .roomId(po.getRoomId())
+                .roomName(po.getRoomName())
+                .roomDesc(po.getRoomDesc())
+                .ownerId(po.getOwnerId())
+                .roomType(po.getRoomType())
+                .extConfig(po.getExtConfig())
+                .status(po.getStatus())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
     public void saveMember(AiChatRoomMemberEntity memberEntity) {
         AiChatRoomMember po = AiChatRoomMember.builder()
                 .roomId(memberEntity.getRoomId())
@@ -189,6 +208,25 @@ public class ChatRoomRepository implements IChatRoomRepository {
         }
 
         // 2. 核心职责：将 PO 转换为 Domain 层的 Entity
+        return pos.stream().map(po -> AiChatRoomMessageEntity.builder()
+                .roomId(po.getRoomId())
+                .messageId(po.getMessageId())
+                .senderId(po.getSenderId())
+                .senderName(po.getSenderName())
+                .senderType(po.getSenderType())
+                .messageRole(po.getMessageRole())
+                .content(po.getContent())
+                .isPreempted(po.getIsPreempted())
+                .createTime(po.getCreateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AiChatRoomMessageEntity> queryMessagesByCursor(String roomId, Long cursorTime, Integer limit) {
+        List<AiChatRoomMessage> pos = aiChatRoomMessageDao.queryMessagesByCursor(roomId, cursorTime, limit);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
         return pos.stream().map(po -> AiChatRoomMessageEntity.builder()
                 .roomId(po.getRoomId())
                 .messageId(po.getMessageId())

@@ -50,6 +50,17 @@
         WHERE message_id = #{messageId} AND is_deleted = 0
     </select>
 
+    <select id="queryMessagesByCursor" resultMap="dataMap">
+        SELECT room_id, message_id, sender_id, sender_name, sender_type, message_role, content, is_preempted, create_time
+        FROM ai_chat_room_message
+        WHERE room_id = #{roomId} AND is_deleted = 0
+        <if test="cursorTime != null">
+            AND create_time &lt; FROM_UNIXTIME(#{cursorTime}/1000)
+        </if>
+        ORDER BY create_time DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
 
     <update id="deleteByMessageId">
         UPDATE ai_chat_room_message SET is_deleted = 1

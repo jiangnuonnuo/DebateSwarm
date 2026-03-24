@@ -38,6 +38,14 @@
         ORDER BY create_time DESC
     </select>
 
+    <select id="queryRoomListByMemberId" resultMap="dataMap">
+        SELECT r.room_id, r.room_name, r.room_type, r.status, r.create_time
+        FROM ai_chat_room r
+        INNER JOIN ai_chat_room_member m ON r.room_id = m.room_id
+        WHERE m.member_id = #{memberId} AND r.is_deleted = 0 AND m.is_deleted = 0
+        ORDER BY r.create_time DESC
+    </select>
+
 
     <select id="queryExtConfigByRoomId" resultType="java.lang.String">
         SELECT ext_config FROM ai_chat_room

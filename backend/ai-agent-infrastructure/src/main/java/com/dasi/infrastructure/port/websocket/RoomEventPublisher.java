@@ -43,6 +43,7 @@ public class RoomEventPublisher implements IRoomEventPublisher {
         String roomId = event.getRoomId();
         String jsonMsg = JSON.toJSONString(event);
 
+        log.info("RoomEventPublisher 发送消息，roomId:{},content:{}", roomId, jsonMsg);
         // 对外推送 (WebSocket)
         Map<String, WebSocketSession> sessions = sessionManager.getSessionsByRoomId(roomId);
         if (!sessions.isEmpty()) {

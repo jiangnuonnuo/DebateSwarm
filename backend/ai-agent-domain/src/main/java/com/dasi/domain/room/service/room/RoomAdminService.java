@@ -1,8 +1,11 @@
 package com.dasi.domain.room.service.room;
 
+import com.dasi.domain.ai.model.vo.AiClientVO;
+import com.dasi.domain.ai.repository.IAiRepository;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
+import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.service.IRoomAdminService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +27,9 @@ public class RoomAdminService implements IRoomAdminService {
 
     @Resource
     private IChatRoomRepository chatRoomRepository;
+
+    @Resource
+    private IAiRepository aiRepository;
 
     @Override
     public String createRoom(AiChatRoomEntity roomEntity) {
@@ -72,18 +78,41 @@ public class RoomAdminService implements IRoomAdminService {
     }
 
     @Override
+    public List<AiChatRoomEntity> queryRoomsByMemberId(String memberId) {
+        return chatRoomRepository.queryRoomsByMemberId(memberId);
+    }
+
+    @Override
     public boolean joinRoom(AiChatRoomMemberEntity memberEntity) {
         if (memberEntity.getRoomId() == null || memberEntity.getMemberId() == null) {
             log.warn("【房间管理】加入房间失败：roomId 或 memberId 不能为空");
             return false;
         }
-        // 如果是 Agent，生成一个独立的 SessionID 用于后续隔离
-        if ("AGENT".equals(memberEntity.getMemberType()) && (memberEntity.getAgentSessionId() == null)) {
-            memberEntity.setAgentSessionId("session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+
+        // 幂等性校验：如果已经在房间里，直接返回成功
+        List<AiChatRoomMemberEntity> existingMembers = chatRoomRepository.queryMembersByRoomId(memberEntity.getRoomId());
+        boolean alreadyInRoom = existingMembers.stream()
+                .anyMatch(m -> m.getMemberId().equals(memberEntity.getMemberId()));
+        if (alreadyInRoom) {
+            log.info("【房间管理】成员已在房间中，跳过操作：roomId={}, memberId={}", 
+                    memberEntity.getRoomId(), memberEntity.getMemberId());
+            return true;
+        }
+
+        // 如果是 Agent，查询并冗余存储其 clientName
+        if ("AGENT".equals(memberEntity.getMemberType())) {
+            AiClientVO clientVO = aiRepository.queryAiClientVO(memberEntity.getMemberId());
+            if (clientVO != null) {
+                memberEntity.setMemberName(clientVO.getClientName());
+            }
+            // 生成独立的 SessionID
+            if (memberEntity.getAgentSessionId() == null) {
+                memberEntity.setAgentSessionId("session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+            }
         }
         
-        log.info("【房间管理】成员加入房间：roomId={}, memberId={}, type={}", 
-                memberEntity.getRoomId(), memberEntity.getMemberId(), memberEntity.getMemberType());
+        log.info("【房间管理】成员加入房间：roomId={}, memberId={}, type={}, name={}", 
+                memberEntity.getRoomId(), memberEntity.getMemberId(), memberEntity.getMemberType(), memberEntity.getMemberName());
         chatRoomRepository.saveMember(memberEntity);
         return true;
     }
@@ -104,4 +133,11 @@ public class RoomAdminService implements IRoomAdminService {
     public List<AiChatRoomMemberEntity> queryMembersInRoom(String roomId) {
         return chatRoomRepository.queryMembersByRoomId(roomId);
     }
+
+    @Override
+    public List<AiChatRoomMessageEntity> queryMessagesByCursor(String roomId, Long cursorTime, Integer limit) {
+        log.info("【房间管理】游标查询消息：roomId={}, cursorTime={}, limit={}", roomId, cursorTime, limit);
+        return chatRoomRepository.queryMessagesByCursor(roomId, cursorTime, limit);
+    }
+
 }

@@ -2,6 +2,7 @@ package com.dasi.domain.room.service;
 
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
+import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 
 import java.util.List;
 
@@ -50,6 +51,13 @@ public interface IRoomAdminService {
     List<AiChatRoomEntity> queryRoomsByOwnerId(Long ownerId);
 
     /**
+     * 查询用户参与的所有房间
+     * @param memberId 成员ID
+     * @return 房间列表
+     */
+    List<AiChatRoomEntity> queryRoomsByMemberId(String memberId);
+
+    /**
      * 智能体/用户加入房间
      * @param memberEntity 成员信息
      * @return 成功与否
@@ -77,5 +85,14 @@ public interface IRoomAdminService {
      * @return 成员列表
      */
     List<AiChatRoomMemberEntity> queryMembersInRoom(String roomId);
+
+    /**
+     * 游标查询聊天消息记录
+     * @param roomId     房间ID
+     * @param cursorTime 游标时间戳 (毫秒)
+     * @param limit      查询条数
+     * @return 消息记录列表
+     */
+    List<AiChatRoomMessageEntity> queryMessagesByCursor(String roomId, Long cursorTime, Integer limit);
 
 }

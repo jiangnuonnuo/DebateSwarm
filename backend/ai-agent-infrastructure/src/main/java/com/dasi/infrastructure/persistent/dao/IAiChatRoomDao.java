@@ -29,6 +29,11 @@ public interface IAiChatRoomDao {
     List<AiChatRoom> queryRoomListByOwnerId(@Param("ownerId") Long ownerId);
 
     /**
+     * 分页查询用户参与的房间列表
+     */
+    List<AiChatRoom> queryRoomListByMemberId(@Param("memberId") String memberId);
+
+    /**
      * 更新房间基础信息
      */
     void updateRoomInfo(AiChatRoom aiChatRoom);
