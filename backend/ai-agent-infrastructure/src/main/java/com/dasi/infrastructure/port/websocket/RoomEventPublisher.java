@@ -33,10 +33,17 @@ public class RoomEventPublisher implements IRoomEventPublisher {
 
     @Override
     public void publish(WebSocketEvent<?> event) {
+        // 同时触发对外和对内
+        publishExternal(event);
+        publishInternal(event);
+    }
+
+    @Override
+    public void publishExternal(WebSocketEvent<?> event) {
         String roomId = event.getRoomId();
         String jsonMsg = JSON.toJSONString(event);
 
-        // 1. 对外推送 (WebSocket)
+        // 对外推送 (WebSocket)
         Map<String, WebSocketSession> sessions = sessionManager.getSessionsByRoomId(roomId);
         if (!sessions.isEmpty()) {
             sessions.values().forEach(session -> {
@@ -49,10 +56,13 @@ public class RoomEventPublisher implements IRoomEventPublisher {
                 }
             });
         }
+        log.debug("【推送服务】对外广播成功 roomId={}, type={}", roomId, event.getEventType());
+    }
 
-        // 2. 对内发布 (Spring ApplicationEvent)
+    @Override
+    public void publishInternal(WebSocketEvent<?> event) {
+        // 对内发布 (Spring ApplicationEvent)
         internalEventPublisher.publishEvent(new RoomMessageEvent(this, event));
-        
-        log.debug("【推送服务】事件发布成功 roomId={}, type={}", roomId, event.getEventType());
+        log.debug("【推送服务】对内发布成功 roomId={}, type={}", event.getRoomId(), event.getEventType());
     }
 }

@@ -4,23 +4,22 @@ import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
-import com.dasi.domain.room.model.valobj.AgentStreamPayload;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IContextAssemblerService;
 import com.dasi.domain.room.service.IRoomChatService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
+
+import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
 
 /**
  * @BelongsProject: Agent
@@ -42,14 +41,12 @@ public class RoomChatService implements IRoomChatService {
     @Resource
     private IRoomEventPublisher eventPublisher;
 
-    @Resource(name = "SystemModel")
-    private ChatModel chatModel;
+    @Resource
+    private ApplicationContext applicationContext;
 
-    private final Random random = new Random();
-
-    /** 响应概率 (领域逻辑：暂设 50%) */
-    private static final double RESPONSE_PROBABILITY = 0.5;
-
+    /**
+     * 前端用户发送来的消息，对消息进行处理记录，然后发送回前端，并且通知agent进行消费
+     * */
     @Override
     public void onUserMessage(RoomChatRequest request) {
         String roomId = request.getRoomId();
@@ -91,39 +88,30 @@ public class RoomChatService implements IRoomChatService {
     public void agentChat(String roomId, String agentId) {
         log.info("【群聊服务】智能体响应触发 roomId={}, agentId={}", roomId, agentId);
 
-        // 1. 准备基础信息
-        String roomName = chatRoomRepository.queryRoomName(roomId);
-        String agentName = chatRoomRepository.queryMemberName(roomId, agentId);
+        try {
+            // 1. 获取客户端 (agentId 即 clientId)
+            String beanName = CLIENT.getBeanName(agentId);
+            ChatClient client = applicationContext.getBean(beanName, ChatClient.class);
 
-        // 2. 装配上下文
-        List<Message> messages = contextAssemblerService.assemble(roomId, agentId, roomName, agentName);
+            // 2. 准备基础信息
+            String roomName = chatRoomRepository.queryRoomName(roomId);
+            String agentName = chatRoomRepository.queryMemberName(roomId, agentId);
 
-        // 3. 调用 AI (流式响应)
-        StringBuilder fullContent = new StringBuilder();
-        String messageId = "msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            // 3. 装配上下文
+            List<Message> messages = contextAssemblerService.assemble(roomId, agentId, roomName, agentName);
 
-        Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(messages));
+            // 4. 同步调用 AI
+            String content = client.prompt(new Prompt(messages))
+                    .call()
+                    .content();
 
-        responseFlux.doOnNext(chatResponse -> {
-            // 兼容性修复：Spring AI 获取文本内容
-            String fragment = chatResponse.getResult().getOutput().getText();
-            if (fragment != null) {
-                fullContent.append(fragment);
-                // 推送流式片段给前端
-                eventPublisher.publish(WebSocketEvent.builder()
-                        .roomId(roomId)
-                        .eventType(WebSocketEvent.EventType.AGENT_STREAM)
-                        .payload(AgentStreamPayload.builder()
-                                .agentId(agentId)
-                                .agentName(agentName)
-                                .content(fragment)
-                                .isEnd(false)
-                                .build())
-                        .timestamp(System.currentTimeMillis())
-                        .build());
+            if (content == null || content.isEmpty()) {
+                log.warn("【群聊服务】智能体回答为空 roomId={}, agentId={}", roomId, agentId);
+                return;
             }
-        }).doOnComplete(() -> {
-            // 4. AI 回答结束，持久化结果
+
+            // 5. 持久化结果
+            String messageId = "msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
             AiChatRoomMessageEntity aiMsg = AiChatRoomMessageEntity.builder()
                     .roomId(roomId)
                     .messageId(messageId)
@@ -131,54 +119,31 @@ public class RoomChatService implements IRoomChatService {
                     .senderName(agentName)
                     .senderType("AGENT")
                     .messageRole("assistant")
-                    .content(fullContent.toString())
+                    .content(content)
                     .isPreempted(1)
                     .build();
-            
+
             contextAssemblerService.recordMessage(aiMsg);
 
-            // 5. 发布结束信号 (这会再次触发内部监听器，形成 A2A 闭环)
-            eventPublisher.publish(WebSocketEvent.builder()
+            // 6. 发布事件 (对外广播 AGENT_MSG + 对内触发信号 AGENT_MSG_END)
+            eventPublisher.publishExternal(WebSocketEvent.builder()
+                    .roomId(roomId)
+                    .eventType(WebSocketEvent.EventType.AGENT_MSG)
+                    .payload(aiMsg)
+                    .timestamp(System.currentTimeMillis())
+                    .build());
+
+            eventPublisher.publishInternal(WebSocketEvent.builder()
                     .roomId(roomId)
                     .eventType(WebSocketEvent.EventType.AGENT_MSG_END)
                     .payload(aiMsg)
                     .timestamp(System.currentTimeMillis())
                     .build());
-            
+
             log.info("【群聊服务】智能体回答结束 roomId={}, agentId={}", roomId, agentId);
-        }).subscribe();
-    }
 
-    @Override
-    public void dispatchNextSpeaker(WebSocketEvent<?> wsEvent) {
-        String eventType = wsEvent.getEventType();
-        String roomId = wsEvent.getRoomId();
-
-        // 领域逻辑：只对“发言完成”信号感兴趣
-        if (!WebSocketEvent.EventType.USER_MSG.equals(eventType) 
-                && !WebSocketEvent.EventType.AGENT_MSG_END.equals(eventType)) {
-            return;
-        }
-
-        // 1. 识别当前发言者 ID
-        String currentSenderId = "";
-        if (wsEvent.getPayload() instanceof AiChatRoomMessageEntity) {
-            currentSenderId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getSenderId();
-        }
-
-        // 2. 获取房间内候选 Agent
-        List<AiChatRoomMemberEntity> agents = chatRoomRepository.queryAgentsByRoomId(roomId);
-        if (agents == null || agents.isEmpty()) return;
-
-        // 3. 概率性决策逻辑 (这是纯粹的领域规则)
-        for (AiChatRoomMemberEntity agent : agents) {
-            String agentId = agent.getMemberId();
-            if (agentId.equals(currentSenderId)) continue;
-
-            if (random.nextDouble() < RESPONSE_PROBABILITY) {
-                log.info("【领域调度】命中概率响应：roomId={}, agentId={}", roomId, agentId);
-                this.agentChat(roomId, agentId);
-            }
+        } catch (Exception e) {
+            log.error("【群聊服务】智能体执行失败 roomId={}, agentId={}", roomId, agentId, e);
         }
     }
 }

@@ -17,4 +17,16 @@ public interface IRoomEventPublisher {
      */
     void publish(WebSocketEvent<?> event);
 
+    /**
+     * 仅对外广播 (WebSocket)
+     * @param event 统一信封对象
+     */
+    void publishExternal(WebSocketEvent<?> event);
+
+    /**
+     * 仅对内发布 (Spring ApplicationEvent)
+     * @param event 统一信封对象
+     */
+    void publishInternal(WebSocketEvent<?> event);
+
 }

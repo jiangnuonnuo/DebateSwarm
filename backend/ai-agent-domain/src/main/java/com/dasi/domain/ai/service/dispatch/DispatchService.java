@@ -69,7 +69,6 @@ public class DispatchService implements IDispatchService {
         ArmoryContext armoryContext = new ArmoryContext();
 
         try {
-            log.info("========================================================================================");
             armoryStrategy.armory(armoryRequestEntity, armoryContext);
             armoryRootNode.apply(armoryRequestEntity, armoryContext);
         } catch (Exception e) {

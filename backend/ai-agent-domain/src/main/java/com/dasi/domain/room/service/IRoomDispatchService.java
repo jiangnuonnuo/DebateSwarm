@@ -24,4 +24,11 @@ public interface IRoomDispatchService {
      */
     void onClose(String roomId, String userId);
 
+    /**
+     * 调度下一个发言者 (A2A 核心决策)
+     *
+     * @param event WebSocket 事件
+     */
+    void dispatchNextSpeaker(com.dasi.domain.room.model.valobj.WebSocketEvent<?> event);
+
 }

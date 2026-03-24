@@ -1,7 +1,6 @@
 package com.dasi.domain.room.service;
 
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
-import com.dasi.domain.room.model.valobj.WebSocketEvent;
 
 /**
  * @BelongsProject: Agent
@@ -18,16 +17,11 @@ public interface IRoomChatService {
     void onUserMessage(RoomChatRequest request);
 
     /**
-     * 触发特定智能体发言
-     * @param roomId 房间ID
-     * @param agentId 智能体ID
+     * 智能体发言 (由 DispatchService 调度)
+     *
+     * @param roomId  房间ID
+     * @param agentId 智能体ID (即 clientId)
      */
     void agentChat(String roomId, String agentId);
-
-    /**
-     * 决定下一个该谁说话 (A2A 决策逻辑)
-     * @param event 当前收到的事件
-     */
-    void dispatchNextSpeaker(WebSocketEvent<?> event);
 
 }

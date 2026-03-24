@@ -1,7 +1,7 @@
 package com.dasi.trigger.listener;
 
 import com.dasi.domain.room.model.event.RoomMessageEvent;
-import com.dasi.domain.room.service.IRoomChatService;
+import com.dasi.domain.room.service.IRoomDispatchService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 public class RoomAgentListener {
 
     @Resource
-    private IRoomChatService roomChatService;
+    private IRoomDispatchService roomDispatchService;
 
     /**
      * 监听内部消息事件
@@ -30,6 +30,6 @@ public class RoomAgentListener {
     @EventListener
     public void onRoomMessage(RoomMessageEvent internalEvent) {
         log.info("【A2A 监听】监听到房间内部消息，转发领域层决策");
-        roomChatService.dispatchNextSpeaker(internalEvent.getEvent());
+        roomDispatchService.dispatchNextSpeaker(internalEvent.getEvent());
     }
 }

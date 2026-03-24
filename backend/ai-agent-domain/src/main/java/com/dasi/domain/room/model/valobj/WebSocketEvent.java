@@ -30,7 +30,7 @@ public class WebSocketEvent<T> {
         /** 用户发言 (上行/下行) */
         String USER_MSG = "USER_MSG";
         /** 智能体流式输出 (下行) */
-        String AGENT_STREAM = "AGENT_STREAM";
+        String AGENT_MSG = "AGENT_MSG";
         /** 智能体回答结束 (下行) */
         String AGENT_MSG_END = "AGENT_MSG_END";
         /** 场景/系统通知 (下行) */
