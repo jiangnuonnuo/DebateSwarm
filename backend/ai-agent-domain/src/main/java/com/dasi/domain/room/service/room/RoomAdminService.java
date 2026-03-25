@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -28,8 +29,9 @@ public class RoomAdminService implements IRoomAdminService {
     @Resource
     private IChatRoomRepository chatRoomRepository;
 
+
     @Resource
-    private IAiRepository aiRepository;
+    private Map<String, IRoomMemberInsetService> roomMemberInsetServiceMap;
 
     @Override
     public String createRoom(AiChatRoomEntity roomEntity) {
@@ -90,29 +92,29 @@ public class RoomAdminService implements IRoomAdminService {
         }
 
         // 幂等性校验：如果已经在房间里，直接返回成功
-        List<AiChatRoomMemberEntity> existingMembers = chatRoomRepository.queryMembersByRoomId(memberEntity.getRoomId());
-        boolean alreadyInRoom = existingMembers.stream()
-                .anyMatch(m -> m.getMemberId().equals(memberEntity.getMemberId()));
-        if (alreadyInRoom) {
-            log.info("【房间管理】成员已在房间中，跳过操作：roomId={}, memberId={}", 
-                    memberEntity.getRoomId(), memberEntity.getMemberId());
-            return true;
+        Boolean exist =  chatRoomRepository.queryMemberExistByMemberId(memberEntity.getRoomId() ,memberEntity.getMemberId());
+        if(exist){
+            log.error("房间 id :{} 已经存在用户 {},加入用户失败", memberEntity.getRoomId(), memberEntity.getMemberId());
+            return false;
         }
 
-        // 如果是 Agent，查询并冗余存储其 clientName
-        if ("AGENT".equals(memberEntity.getMemberType())) {
-            AiClientVO clientVO = aiRepository.queryAiClientVO(memberEntity.getMemberId());
-            if (clientVO != null) {
-                memberEntity.setMemberName(clientVO.getClientName());
-            }
-            // 生成独立的 SessionID
-            if (memberEntity.getAgentSessionId() == null) {
-                memberEntity.setAgentSessionId("session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
-            }
+        String strategyKey = memberEntity.getMemberType() + "_MEMBER";
+        IRoomMemberInsetService strategy = roomMemberInsetServiceMap.get(strategyKey);
+
+        if (strategy != null) {
+            String memberName = strategy.queryMemberName(memberEntity.getMemberId(), memberEntity.getMemberType());
+            memberEntity.setMemberName(memberName);
         }
-        
-        log.info("【房间管理】成员加入房间：roomId={}, memberId={}, type={}, name={}", 
-                memberEntity.getRoomId(), memberEntity.getMemberId(), memberEntity.getMemberType(), memberEntity.getMemberName());
+
+        // 统一处理 SessionID 生成 (针对 Agent 或 Client)
+        String type = memberEntity.getMemberType();
+        if (("AGENT".equals(type) || "CLIENT".equals(type)) && memberEntity.getAgentSessionId() == null) {
+            memberEntity.setAgentSessionId("session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+        }
+
+        log.info("【房间管理】成员加入房间：roomId={}, memberId={}, type={}, name={}, sessionId={}", 
+                memberEntity.getRoomId(), memberEntity.getMemberId(), memberEntity.getMemberType(), 
+                memberEntity.getMemberName(), memberEntity.getAgentSessionId());
         chatRoomRepository.saveMember(memberEntity);
         return true;
     }

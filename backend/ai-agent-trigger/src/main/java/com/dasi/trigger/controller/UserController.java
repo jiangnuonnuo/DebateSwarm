@@ -1,5 +1,6 @@
 package com.dasi.trigger.controller;
 
+import com.alibaba.fastjson2.JSON;
 import com.dasi.api.IUserApi;
 import com.dasi.domain.user.model.dto.*;
 import com.dasi.domain.user.model.vo.*;
@@ -107,6 +108,7 @@ public class UserController implements IUserApi {
     @PostMapping(value = "/model/update")
     @Override
     public Result<Void> apiModelUpdate(@Valid @RequestBody SettingApiModelDTO dto) {
+        log.info("正在执行更改模型的操作 {} ， {}",dto.getApiId(), JSON.toJSONString(dto));
         settingService.apiModelUpdate(dto);
         return Result.success();
     }

@@ -39,15 +39,17 @@ onBeforeUnmount(() => {
 <template>
     <div
         :class="[
-            'grid h-screen bg-[var(--bg-page)] text-[var(--text-primary)]',
+            'grid h-screen min-h-0 overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)]',
             hideSidebar
                 ? 'grid-cols-[1fr]'
                 : 'grid-cols-[280px_1fr] max-[960px]:grid-cols-[240px_1fr] max-[720px]:grid-cols-[1fr]'
         ]"
     >
         <Sidebar v-if="!hideSidebar" />
-        <div class="relative min-w-0">
-            <RouterView />
+        <div class="relative min-w-0 min-h-0 overflow-hidden">
+            <div class="h-full min-h-0 overflow-y-auto">
+                <RouterView />
+            </div>
             <Toast />
         </div>
     </div>

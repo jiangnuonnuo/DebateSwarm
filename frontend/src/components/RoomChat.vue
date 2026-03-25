@@ -51,7 +51,7 @@
                     <div :class="['flex flex-col max-w-[80%]', msg.senderType === 'USER' ? 'items-end' : 'items-start']">
                         <div class="flex items-center gap-2 mb-1 px-1">
                             <span class="text-xs font-semibold text-[rgba(231,236,244,0.7)]">{{ msg.senderName }}</span>
-                            <span v-if="msg.senderType === 'AGENT'" class="text-[10px] bg-[#7bc8ff]/20 text-[#7bc8ff] px-1.5 rounded border border-[#7bc8ff]/30">AI</span>
+                            <span v-if="msg.senderType === 'AGENT' || msg.senderType === 'CLIENT'" class="text-[10px] bg-[#7bc8ff]/20 text-[#7bc8ff] px-1.5 rounded border border-[#7bc8ff]/30">AI</span>
                             <span class="text-[10px] text-[rgba(231,236,244,0.3)]">{{ formatTime(msg.createTime) }}</span>
                         </div>
                         <div :class="[
@@ -103,11 +103,28 @@
                 </div>
 
                 <div class="flex-1 overflow-y-auto p-4 space-y-6">
-                    <!-- 智能体列表 -->
+                    <!-- 客户端列表 -->
+                    <section>
+                        <div class="flex items-center justify-between mb-3 px-2">
+                            <h4 class="text-xs font-bold text-[rgba(231,236,244,0.4)] uppercase tracking-wider">客户端 (Clients)</h4>
+                            <button @click="openInvite('client')" class="text-[#7bc8ff] hover:text-[#5db8ff] text-xs font-medium">+ 邀请</button>
+                        </div>
+                        <div class="space-y-2">
+                            <div v-for="client in clientMembers" :key="client.memberId" class="group flex items-center justify-between p-2 rounded-xl hover:bg-[rgba(255,255,255,0.03)] transition-all">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <img :src="getAgentAvatar(client.memberId)" class="w-8 h-8 rounded-lg border border-[rgba(123,200,255,0.2)]" alt="" />
+                                    <span class="text-sm font-medium truncate">{{ client.memberName }}</span>
+                                </div>
+                                <button @click="removeMember(client.memberId)" class="opacity-0 group-hover:opacity-100 p-1 text-[#ef4444] hover:bg-[#ef4444]/10 rounded transition-all">🗑</button>
+                            </div>
+                            <div v-if="clientMembers.length === 0" class="text-center py-4 text-xs text-[rgba(231,236,244,0.3)] italic">暂无客户端</div>
+                        </div>
+                    </section>
+
                     <section>
                         <div class="flex items-center justify-between mb-3 px-2">
                             <h4 class="text-xs font-bold text-[rgba(231,236,244,0.4)] uppercase tracking-wider">智能体 (Agents)</h4>
-                            <button @click="showInviteModal = true" class="text-[#7bc8ff] hover:text-[#5db8ff] text-xs font-medium">+ 邀请</button>
+                            <button @click="openInvite('agent')" class="text-[#7bc8ff] hover:text-[#5db8ff] text-xs font-medium">+ 邀请</button>
                         </div>
                         <div class="space-y-2">
                             <div v-for="agent in agentMembers" :key="agent.memberId" class="group flex items-center justify-between p-2 rounded-xl hover:bg-[rgba(255,255,255,0.03)] transition-all">
@@ -130,7 +147,7 @@
                                     {{ human.memberName?.charAt(0) }}
                                 </div>
                                 <span class="text-sm font-medium">{{ human.memberName }}</span>
-                                <span v-if="human.memberId === String(currentUser.id)" class="text-[10px] text-[rgba(231,236,244,0.3)]">(你)</span>
+                                <span v-if="human.memberId === currentUser?.username || human.memberId === currentUser?.userName" class="text-[10px] text-[rgba(231,236,244,0.3)]">(你)</span>
                             </div>
                         </div>
                     </section>
@@ -138,26 +155,26 @@
             </aside>
         </transition>
 
-        <!-- 邀请智能体弹窗 -->
+        <!-- 邀请弹窗 -->
         <div v-if="showInviteModal" class="fixed inset-0 z-50 grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-md p-4" @click.self="showInviteModal = false">
             <div class="w-full max-w-lg bg-[#0f172a] rounded-3xl border border-[rgba(255,255,255,0.1)] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                 <div class="p-6 border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between">
                     <div>
-                        <h3 class="text-xl font-bold text-[#7bc8ff]">邀请智能体</h3>
-                        <p class="text-xs text-[rgba(231,236,244,0.5)] mt-1">选择一个已装配的 Client 加入群聊</p>
+                        <h3 class="text-xl font-bold text-[#7bc8ff]">邀请成员</h3>
+                        <p class="text-xs text-[rgba(231,236,244,0.5)] mt-1">{{ inviteMode === 'client' ? '选择一个 Client 加入群聊' : '选择一个 Agent 加入群聊' }}</p>
                     </div>
                     <button @click="showInviteModal = false" class="w-8 h-8 grid place-items-center rounded-full hover:bg-[rgba(255,255,255,0.05)]">×</button>
                 </div>
                 
                 <div class="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-3 scrollbar-thin">
-                    <div v-for="client in availableClients" :key="client.clientId" 
-                         @click="addAgent(client)"
+                    <div v-for="item in inviteList" :key="inviteMode === 'client' ? item.clientId : item.agentId" 
+                         @click="inviteMode === 'client' ? addClient(item) : addAgent(item)"
                          class="p-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] hover:border-[#7bc8ff] hover:bg-[#7bc8ff]/5 cursor-pointer transition-all group">
                         <div class="flex flex-col items-center text-center gap-3">
-                            <img :src="getAgentAvatar(client.clientId)" class="w-16 h-16 rounded-2xl border border-[rgba(255,255,255,0.1)] group-hover:scale-105 transition-transform" />
+                            <img :src="getAgentAvatar(inviteMode === 'client' ? item.clientId : item.agentId)" class="w-16 h-16 rounded-2xl border border-[rgba(255,255,255,0.1)] group-hover:scale-105 transition-transform" />
                             <div>
-                                <div class="font-bold text-sm">{{ client.clientName || client.clientId }}</div>
-                                <div class="text-[10px] text-[rgba(231,236,244,0.4)] mt-1 line-clamp-1">{{ client.clientRole || 'AI Assistant' }}</div>
+                                <div class="font-bold text-sm">{{ inviteMode === 'client' ? (item.clientName || item.clientId) : (item.agentName || item.agentId) }}</div>
+                                <div class="text-[10px] text-[rgba(231,236,244,0.4)] mt-1 line-clamp-1">{{ inviteMode === 'client' ? (item.clientRole || 'CLIENT') : (item.agentDesc || 'AGENT') }}</div>
                             </div>
                         </div>
                     </div>
@@ -180,7 +197,8 @@ import {
     chatRoomMemberAdd, 
     chatRoomMemberRemove, 
     chatRoomMessageCursor,
-    queryChatModels as listClients
+    queryChatModels as listClients,
+    queryAgentList as listAgents
 } from '../request/api';
 import toast from '../utils/toast';
 import { formatTime } from '../utils/DatetimeUtil';
@@ -198,6 +216,7 @@ const members = computed(() => roomStore.members);
 const currentUser = computed(() => authStore.user);
 
 const agentMembers = computed(() => members.value.filter(m => m.memberType === 'AGENT'));
+const clientMembers = computed(() => members.value.filter(m => m.memberType === 'CLIENT'));
 const humanMembers = computed(() => members.value.filter(m => m.memberType === 'USER'));
 
 const inputText = ref('');
@@ -207,6 +226,10 @@ const loadingHistory = ref(false);
 const hasMoreHistory = ref(true);
 const socketReady = ref(false);
 const availableClients = ref([]);
+const availableAgents = ref([]);
+const inviteMode = ref('client');
+
+const inviteList = computed(() => (inviteMode.value === 'client' ? availableClients.value : availableAgents.value));
 
 const messageListRef = ref(null);
 const bottomAnchor = ref(null);
@@ -266,8 +289,7 @@ const initWebSocket = () => {
 const handleIncomingEvent = (wsEvent) => {
     const { eventType, payload } = wsEvent;
     
-    // 我们目前后端发送的消息类型主要有 USER_MSG 和 AGENT_MSG
-    if (eventType === 'USER_MSG' || eventType === 'AGENT_MSG') {
+    if (eventType === 'USER_MSG' || eventType === 'AGENT_MSG' || eventType === 'CLIENT_MSG') {
         roomStore.pushMessage(payload);
         scrollToBottom();
     }
@@ -345,15 +367,48 @@ const loadAvailableClients = async () => {
     }
 };
 
-const addAgent = async (client) => {
+const loadAvailableAgents = async () => {
+    try {
+        const res = await listAgents();
+        if (res.code === 200) {
+            availableAgents.value = res.data || [];
+        }
+    } catch (e) {
+        console.error('加载可用 Agent 失败', e);
+    }
+};
+
+const openInvite = (mode) => {
+    inviteMode.value = mode === 'agent' ? 'agent' : 'client';
+    showInviteModal.value = true;
+};
+
+const addClient = async (client) => {
     try {
         const res = await chatRoomMemberAdd({
             roomId: roomId.value,
             memberId: client.clientId,
-            memberType: 'AGENT'
+            memberType: 'CLIENT'
         });
         if (res.code === 200) {
             toast.show(`已邀请 ${client.clientName || client.clientId} 加入房间`);
+            showInviteModal.value = false;
+            loadMembers();
+        }
+    } catch (e) {
+        toast.show('邀请失败');
+    }
+};
+
+const addAgent = async (agent) => {
+    try {
+        const res = await chatRoomMemberAdd({
+            roomId: roomId.value,
+            memberId: agent.agentId,
+            memberType: 'AGENT'
+        });
+        if (res.code === 200) {
+            toast.show(`已邀请 ${agent.agentName || agent.agentId} 加入房间`);
             showInviteModal.value = false;
             loadMembers();
         }
@@ -421,6 +476,7 @@ onMounted(() => {
     loadHistory(true);
     initWebSocket();
     loadAvailableClients();
+    loadAvailableAgents();
 });
 
 onBeforeUnmount(() => {

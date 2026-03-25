@@ -22,9 +22,9 @@
         WHERE prompt_id = #{promptId}
     </select>
 
-    <update id="loadSystenPrompt">
+    <update id="loadSystemPrompt">
         UPDATE ai_prompt
-        SET systen_prompt = #{systenPrompt}
+        SET systen_prompt = #{systemPrompt}
         WHERE prompt_id = #{promptId}
     </update>
 
@@ -86,10 +86,23 @@
         </set>
         WHERE id = #{id}
     </update>
+    <update id="updateSystenByPromptId">
+        UPDATE ai_prompt
+        <set>
+            <if test="systemPrompt != null">systen_prompt = #{systemPrompt},</if>
+        </set>
+        WHERE prompt_id  = #{promptId}
+    </update>
 
     <delete id="delete">
         DELETE
         FROM ai_prompt
         WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByPromptId">
+        DELETE
+        FROM ai_prompt
+        WHERE prompt_id = #{promptId}
     </delete>
 </mapper>

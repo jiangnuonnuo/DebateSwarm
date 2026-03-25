@@ -25,4 +25,8 @@ public class UserApiModelVO {
 
     private String apiCompletionPath;
 
+    private String clientName;
+
+    private String systemPrompt;
+
 }

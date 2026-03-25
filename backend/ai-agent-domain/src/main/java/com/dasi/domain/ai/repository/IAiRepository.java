@@ -28,5 +28,7 @@ public interface IAiRepository {
 
     List<AiTaskVO> queryTaskVOList();
 
+    String queryAgentNameByAgentId(String agentId);
+
     List<AiMcpVO> queryAiMcpVOListByMcpIdList(List<String> mcpIdList);
 }

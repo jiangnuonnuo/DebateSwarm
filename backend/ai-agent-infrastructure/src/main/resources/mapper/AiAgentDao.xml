@@ -126,6 +126,11 @@
         FROM ai_agent
     </select>
 
+    <select id="queryAgentNameByAgentId" resultType="java.lang.String">
+        SELECT agent_name from ai_agent
+        FROM agent_id = agentId
+    </select>
+
     <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiAgent">
         INSERT INTO ai_agent (agent_id,
                               agent_name,

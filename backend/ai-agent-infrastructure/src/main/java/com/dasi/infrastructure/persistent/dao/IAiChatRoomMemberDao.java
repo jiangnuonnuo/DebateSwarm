@@ -29,6 +29,11 @@ public interface IAiChatRoomMemberDao {
     List<AiChatRoomMember> queryAgentMemberByRoomId(@Param("roomId") String roomId);
 
     /**
+     * 查询房间内的所有客户端成员
+     */
+    List<AiChatRoomMember> queryClientMemberByRoomId(@Param("roomId") String roomId);
+
+    /**
      * 根据房间ID和成员ID查询特定成员信息
      */
     AiChatRoomMember queryMemberByRoomIdAndMemberId(@Param("roomId") String roomId, @Param("memberId") String memberId);

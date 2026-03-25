@@ -7,21 +7,8 @@ import com.dasi.domain.user.model.vo.UserVO;
 import com.dasi.domain.user.repository.IUserRepository;
 import com.dasi.domain.util.jwt.UserContext;
 import com.dasi.domain.util.random.IRandomUtil;
-import com.dasi.infrastructure.persistent.dao.IAiApiDao;
-import com.dasi.infrastructure.persistent.dao.IAiAgentDao;
-import com.dasi.infrastructure.persistent.dao.IAiClientDao;
-import com.dasi.infrastructure.persistent.dao.IAiMcpDao;
-import com.dasi.infrastructure.persistent.dao.IAiModelDao;
-import com.dasi.infrastructure.persistent.dao.IAiTaskDao;
-import com.dasi.infrastructure.persistent.dao.IAiUserDao;
-import com.dasi.infrastructure.persistent.po.AiAgent;
-import com.dasi.infrastructure.persistent.po.AiApi;
-import com.dasi.infrastructure.persistent.po.AiClient;
-import com.dasi.infrastructure.persistent.po.AiMcp;
-import com.dasi.infrastructure.persistent.po.AiModel;
-import com.dasi.infrastructure.persistent.po.AiTask;
-import com.dasi.infrastructure.persistent.po.AiUser;
-import com.dasi.infrastructure.persistent.po.AiApiModel;
+import com.dasi.infrastructure.persistent.dao.*;
+import com.dasi.infrastructure.persistent.po.*;
 import com.dasi.domain.user.model.dto.SettingApiModelDTO;
 import com.dasi.domain.user.model.dto.SettingMcpDTO;
 import com.dasi.domain.user.model.dto.SettingTaskDTO;
@@ -61,6 +48,12 @@ public class UserRepository implements IUserRepository {
 
     @Resource
     private IAiTaskDao taskDao;
+
+    @Resource
+    private IAiPromptDao promptDao;
+
+    @Resource
+    private IAiConfigDao configDao;
 
     @Resource
     private IAiAgentDao agentDao;
@@ -133,6 +126,19 @@ public class UserRepository implements IUserRepository {
             return userApiModelVOList;
         }
         for (AiApiModel aiApiModel : aiApiModelList) {
+            String clientName = null;
+            AiClient aiClient = clientDao.queryChatClientByModelIdAndUserId(aiApiModel.getModelId(), userId);
+            if (aiClient != null) {
+                clientName = aiClient.getClientName();
+            }
+
+            String systemPrompt = null;
+            String promptId = "prompt_" + aiApiModel.getApiId();
+            AiPrompt aiPrompt = promptDao.queryByPromptId(promptId);
+            if (aiPrompt != null) {
+                systemPrompt = aiPrompt.getSystenPrompt();
+            }
+
             userApiModelVOList.add(UserApiModelVO.builder()
                     .apiId(aiApiModel.getApiId())
                     .modelId(aiApiModel.getModelId())
@@ -141,6 +147,8 @@ public class UserRepository implements IUserRepository {
                     .apiBaseUrl(aiApiModel.getApiBaseUrl())
                     .apiKey(aiApiModel.getApiKey())
                     .apiCompletionPath(aiApiModel.getApiCompletionPath())
+                    .clientName(clientName)
+                    .systemPrompt(systemPrompt)
                     .build());
         }
         return userApiModelVOList;
@@ -151,7 +159,7 @@ public class UserRepository implements IUserRepository {
     public void apiModelInsert(SettingApiModelDTO dto, String apiId, String modelId) {
         Long userId = userContext.getUserId();
 
-        // 新增 api
+        // 1. 新增 api
         AiApi aiApi = AiApi.builder()
                 .apiId(apiId)
                 .apiBaseUrl(dto.getApiBaseUrl())
@@ -161,7 +169,7 @@ public class UserRepository implements IUserRepository {
                 .build();
         apiDao.insert(aiApi);
 
-        // 新增 model
+        // 2. 新增 model
         AiModel aiModel = AiModel.builder()
                 .apiId(apiId)
                 .modelId(modelId)
@@ -171,70 +179,78 @@ public class UserRepository implements IUserRepository {
                 .build();
         modelDao.insert(aiModel);
 
-        // 新增 client
+        // 3. 新增 client
+        String clientId = randomUtil.randomClientId();
         AiClient aiClient = AiClient.builder()
-                .clientId(randomUtil.randomClientId())
+                .clientId(clientId)
                 .clientType("chat")
                 .clientRole("chatclient")
                 .modelId(modelId)
                 .modelName(dto.getModelName())
-                .clientName(dto.getModelName())
+                .clientName(dto.getClientName())
                 .clientStatus(1)
                 .clientFrom(userId)
                 .build();
         clientDao.insert(aiClient);
+
+        // 4. 绑定 client 和 prompt 关联
+        String promptId = "prompt_" + apiId;
+        AiConfig aiConfig = AiConfig.builder()
+                .clientId(clientId)
+                .configType("prompt")
+                .configValue(promptId)
+                .configStatus(1)
+                .build();
+        configDao.insert(aiConfig);
+
+        // 5. 新增 prompt (最后一步)
+        AiPrompt aiPrompt = AiPrompt.builder()
+                .promptId(promptId)
+                .promptName(dto.getClientName() + "人设")
+                .systenPrompt(dto.getSystemPrompt())
+                .build();
+        promptDao.insert(aiPrompt);
     }
 
     @Override
     @CacheEvict(evictType = CacheEvictType.USER)
     public void apiModelUpdate(SettingApiModelDTO dto) {
         Long userId = userContext.getUserId();
-        if (dto.getApiId() == null) {
-            throw new WorkException(ILLEGAL_DATA);
-        }
 
-        // 更改 api
+        // 1. 更新 api
         AiApi aiApi = apiDao.queryByApiId(dto.getApiId());
-        if (aiApi == null || !aiApi.getApiFrom().equals(userId)) {
+        if (!aiApi.getApiFrom().equals(userId)) {
             throw new WorkException(ILLEGAL_USER);
         }
-        aiApi.setApiBaseUrl(dto.getApiBaseUrl());
-        aiApi.setApiKey(dto.getApiKey());
-        aiApi.setApiCompletionsPath(dto.getApiCompletionPath());
-        apiDao.update(aiApi);
+        apiDao.update(AiApi.builder()
+                .id(aiApi.getId())
+                .apiBaseUrl(dto.getApiBaseUrl())
+                .apiCompletionsPath(dto.getApiCompletionPath())
+                .apiKey(dto.getApiKey())
+                .build());
 
-        // 更改 model
-        String modelId = modelDao.queryModelIdByApiId(aiApi.getApiId()).get(0);
-        AiModel aiModel = modelDao.queryByModelId(modelId);
-        if (!aiModel.getModelFrom().equals(userId)) {
-            throw new WorkException(ILLEGAL_USER);
-        }
-        aiModel.setModelName(dto.getModelName());
-        aiModel.setModelType(dto.getModelType());
-        aiModel.setModelFrom(userId);
-        modelDao.update(aiModel);
+        // 2. 更新 model
+        AiModel aiModel = modelDao.queryByApiId(dto.getApiId());
+        String modelId = aiModel.getModelId();
+        modelDao.update(AiModel.builder()
+                .id(aiModel.getId())
+                .modelName(dto.getModelName())
+                .modelType(dto.getModelType())
+                .build());
 
-        // 更改 client
-        AiClient chatClient = clientDao.queryChatClientByModelIdAndUserId(modelId, userId);
-        if (chatClient != null) {
-            chatClient.setModelName(dto.getModelName());
-            chatClient.setClientName(dto.getModelName());
-            chatClient.setClientStatus(1);
-            clientDao.update(chatClient);
-        } else {
-            AiClient aiClient = AiClient.builder()
-                    .clientId(randomUtil.randomClientId())
-                    .clientType("chat")
-                    .clientRole("chatclient")
-                    .modelId(modelId)
+        // 3. 更新 client 的名称
+        AiClient aiClient = clientDao.queryChatClientByModelIdAndUserId(modelId, userId);
+        if (aiClient != null) {
+            clientDao.update(AiClient.builder()
+                    .id(aiClient.getId())
+                    .clientName(dto.getClientName())
                     .modelName(dto.getModelName())
-                    .clientName(dto.getModelName())
-                    .clientStatus(1)
-                    .clientFrom(userId)
-                    .build();
-            clientDao.insert(aiClient);
-        }
+                    .build());
 
+            // 4. 更新关联的提示词 (最后一步更新)
+            String promptId = "prompt_" + dto.getApiId();
+            promptDao.updateSystenByPromptId(promptId, dto.getSystemPrompt());
+        }
     }
 
     @Override
@@ -260,8 +276,12 @@ public class UserRepository implements IUserRepository {
             if (!aiClient.getClientFrom().equals(userId)) {
                 throw new WorkException(ILLEGAL_USER);
             }
+            configDao.deleteByClientId(aiClient.getClientId());
             clientDao.deleteByClientId(aiClient.getClientId());
         }
+
+        String promptId = "prompt_" + apiId;
+        promptDao.deleteByPromptId(promptId);
     }
 
     // -------------------- MCP --------------------

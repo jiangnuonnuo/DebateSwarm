@@ -138,9 +138,11 @@ const apiList = ref([]);
 const apiForm = reactive({
     modelType: '',
     modelName: '',
+    clientName: '',
     apiBaseUrl: '',
     apiCompletionPath: '/v1/chat/completions',
-    apiKey: ''
+    apiKey: '',
+    systemPrompt: ''
 });
 const apiCreateDialogOpen = ref(false);
 
@@ -151,9 +153,11 @@ const apiDialogForm = reactive({
     apiId: '',
     modelType: '',
     modelName: '',
+    clientName: '',
     apiBaseUrl: '',
     apiCompletionPath: '/v1/chat/completions',
-    apiKey: ''
+    apiKey: '',
+    systemPrompt: ''
 });
 
 const taskLoading = ref(false);
@@ -558,9 +562,11 @@ const openMcpCreateDialog = () => {
 const resetApiForm = () => {
     apiForm.modelType = '';
     apiForm.modelName = '';
+    apiForm.clientName = '';
     apiForm.apiBaseUrl = '';
     apiForm.apiCompletionPath = '/v1/chat/completions';
     apiForm.apiKey = '';
+    apiForm.systemPrompt = '';
 };
 
 const openApiCreateDialog = () => {
@@ -761,18 +767,22 @@ const loadApiList = async (keyword = '') => {
 const buildApiPayload = (form, apiId = '') => {
     const modelType = (form.modelType || '').trim();
     const modelName = (form.modelName || '').trim();
+    const clientName = (form.clientName || '').trim();
     const apiBaseUrl = (form.apiBaseUrl || '').trim();
     const apiCompletionPath = (form.apiCompletionPath || '').trim();
     const apiKey = (form.apiKey || '').trim();
-    if (!modelType || !modelName || !apiBaseUrl || !apiCompletionPath || !apiKey) {
+    const systemPrompt = (form.systemPrompt || '').trim();
+    if (!modelType || !modelName || !clientName || !apiBaseUrl || !apiCompletionPath || !apiKey || !systemPrompt) {
         throw new Error('请完整填写 MODEL 必填项');
     }
     const payload = {
         modelName,
+        clientName,
         modelType,
         apiBaseUrl,
         apiCompletionPath,
-        apiKey
+        apiKey,
+        systemPrompt
     };
     if (apiId) {
         payload.apiId = apiId;
@@ -808,9 +818,11 @@ const openApiDialog = (item) => {
     apiDialogForm.apiId = (item.apiId || '').trim();
     apiDialogForm.modelType = item.modelType || '';
     apiDialogForm.modelName = item.modelName || '';
+    apiDialogForm.clientName = item.clientName || '';
     apiDialogForm.apiBaseUrl = item.apiBaseUrl || '';
     apiDialogForm.apiCompletionPath = item.apiCompletionPath || '/v1/chat/completions';
     apiDialogForm.apiKey = item.apiKey || '';
+    apiDialogForm.systemPrompt = item.systemPrompt || '';
     apiDialogOpen.value = true;
 };
 
@@ -1728,6 +1740,14 @@ onBeforeUnmount(() => {
                         <input v-model="apiForm.modelName" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入模型名称，例如 qwen-plus" />
                     </label>
                     <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
+                        <span class="pt-[10px] text-[var(--text-secondary)]">客户端名称</span>
+                        <input v-model="apiForm.clientName" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入客户端名称，例如 qwen-plus 助手" />
+                    </label>
+                    <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
+                        <span class="pt-[10px] text-[var(--text-secondary)]">系统提示词</span>
+                        <textarea v-model="apiForm.systemPrompt" rows="6" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入系统提示词，用于定义该 Client 的人设/行为规范" />
+                    </label>
+                    <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
                         <span class="pt-[10px] text-[var(--text-secondary)]">接口密钥</span>
                         <input v-model="apiForm.apiKey" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入接口密钥" />
                     </label>
@@ -2023,6 +2043,14 @@ onBeforeUnmount(() => {
                     <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
                         <span class="pt-[10px] text-[var(--text-secondary)]">模型名称</span>
                         <input v-model="apiDialogForm.modelName" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" />
+                    </label>
+                    <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
+                        <span class="pt-[10px] text-[var(--text-secondary)]">客户端名称</span>
+                        <input v-model="apiDialogForm.clientName" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入客户端名称" />
+                    </label>
+                    <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
+                        <span class="pt-[10px] text-[var(--text-secondary)]">系统提示词</span>
+                        <textarea v-model="apiDialogForm.systemPrompt" rows="6" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入系统提示词，用于定义该 Client 的人设/行为规范" />
                     </label>
                     <label class="grid items-start gap-[10px] text-[13px] md:grid-cols-[140px_1fr]">
                         <span class="pt-[10px] text-[var(--text-secondary)]">接口密钥</span>

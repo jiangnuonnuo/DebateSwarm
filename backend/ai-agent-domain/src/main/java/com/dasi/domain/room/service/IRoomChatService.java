@@ -17,11 +17,11 @@ public interface IRoomChatService {
     void onUserMessage(RoomChatRequest request);
 
     /**
-     * 智能体发言 (由 DispatchService 调度)
+     * 客户端发言 (由 DispatchService 调度)
      *
      * @param roomId  房间ID
-     * @param agentId 智能体ID (即 clientId)
+     * @param clientId 客户端ID (clientId)
      */
-    void agentChat(String roomId, String agentId);
+    void clientChat(String roomId, String clientId);
 
 }

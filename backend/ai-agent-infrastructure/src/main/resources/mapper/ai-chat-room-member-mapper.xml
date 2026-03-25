@@ -39,6 +39,12 @@
         WHERE room_id = #{roomId} AND member_type = 'AGENT' AND is_deleted = 0
     </select>
 
+    <select id="queryClientMemberByRoomId" resultMap="dataMap">
+        SELECT member_id, member_type, member_name, agent_session_id
+        FROM ai_chat_room_member
+        WHERE room_id = #{roomId} AND member_type = 'CLIENT' AND is_deleted = 0
+    </select>
+
     <select id="queryMemberByRoomIdAndMemberId" resultMap="dataMap">
         SELECT member_id, member_type, member_name, agent_session_id
         FROM ai_chat_room_member

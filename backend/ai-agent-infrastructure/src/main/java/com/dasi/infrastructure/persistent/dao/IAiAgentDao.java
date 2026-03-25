@@ -33,4 +33,6 @@ public interface IAiAgentDao {
     void deleteByAgentId(@Param("agentId") String agentId);
 
     void toggle(AiAgent aiAgent);
+
+    String queryAgentNameByAgentId(@Param("agentId") String agentId);
 }

@@ -23,10 +23,10 @@ public class AiChatRoomMemberEntity {
     /** 房间ID */
     private String roomId;
 
-    /** 成员ID (UserID或AgentID) */
+    /** 成员ID (UserID或AgentID或者CLIENTID) */
     private String memberId;
 
-    /** 类型: USER, AGENT */
+    /** 类型: USER, AGENT,CLIENT */
     private String memberType;
 
     /** 昵称(用于构建上下文) */

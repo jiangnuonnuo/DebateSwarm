@@ -61,6 +61,11 @@ public interface IChatRoomRepository {
     List<AiChatRoomMemberEntity> queryAgentsByRoomId(String roomId);
 
     /**
+     * 查询房间内的所有客户端成员
+     */
+    List<AiChatRoomMemberEntity> queryClientsByRoomId(String roomId);
+
+    /**
      * 查询成员在房间的昵称
      */
     String queryMemberName(String roomId, String memberId);
@@ -86,4 +91,6 @@ public interface IChatRoomRepository {
     List<AiChatRoomMessageEntity> queryMessagesByCursor(String roomId, Long cursorTime, Integer limit);
 
     String queryExtConfigByRoomId(String roomId);
+
+    Boolean queryMemberExistByMemberId(String roomId, String memberId);
 }

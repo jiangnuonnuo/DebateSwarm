@@ -172,6 +172,23 @@ public class ChatRoomRepository implements IChatRoomRepository {
     }
 
     @Override
+    public List<AiChatRoomMemberEntity> queryClientsByRoomId(String roomId) {
+        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryClientMemberByRoomId(roomId);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return pos.stream().map(po -> AiChatRoomMemberEntity.builder()
+                .roomId(po.getRoomId())
+                .memberId(po.getMemberId())
+                .memberType(po.getMemberType())
+                .memberName(po.getMemberName())
+                .agentSessionId(po.getAgentSessionId())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
     public String queryMemberName(String roomId, String memberId) {
         AiChatRoomMember member = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
         return member != null ? member.getMemberName() : "未知成员";
@@ -243,5 +260,11 @@ public class ChatRoomRepository implements IChatRoomRepository {
     @Override
     public String queryExtConfigByRoomId(String roomId) {
         return aiChatRoomDao.queryExtConfigByRoomId(roomId) ;
+    }
+
+    @Override
+    public Boolean queryMemberExistByMemberId(String roomId, String memberId) {
+        AiChatRoomMember aiChatRoomMember = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
+        return aiChatRoomMember != null ? true : false;
     }
 }

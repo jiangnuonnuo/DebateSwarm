@@ -29,6 +29,10 @@ public class WebSocketEvent<T> {
     public interface EventType {
         /** 用户发言 (上行/下行) */
         String USER_MSG = "USER_MSG";
+        /** 客户端输出 (下行) */
+        String CLIENT_MSG = "CLIENT_MSG";
+        /** 客户端回答结束 (下行) */
+        String CLIENT_MSG_END = "CLIENT_MSG_END";
         /** 智能体流式输出 (下行) */
         String AGENT_MSG = "AGENT_MSG";
         /** 智能体回答结束 (下行) */

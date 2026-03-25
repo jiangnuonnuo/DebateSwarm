@@ -70,8 +70,15 @@
 
     body {
         @apply m-0 font-sans leading-[1.5];
+        height: 100%;
+        overflow: hidden;
         background: var(--bg-page);
         color: var(--text-primary);
+    }
+
+    html {
+        height: 100%;
+        overflow: hidden;
     }
 
     #app {

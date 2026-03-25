@@ -102,9 +102,9 @@ public class RoomDispatchService implements IRoomDispatchService {
         String eventType = wsEvent.getEventType();
         String roomId = wsEvent.getRoomId();
 
-        // 领域逻辑：只对“用户发言”或“智能体发言完成”信号感兴趣
+        // 领域逻辑：只对“用户发言”或“客户端发言完成”信号感兴趣
         if (!WebSocketEvent.EventType.USER_MSG.equals(eventType)
-                && !WebSocketEvent.EventType.AGENT_MSG_END.equals(eventType)) {
+                && !WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)) {
             return;
         }
 
@@ -114,27 +114,27 @@ public class RoomDispatchService implements IRoomDispatchService {
             currentSenderId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getSenderId();
         }
 
-        // 2. 获取房间内候选 Agent
-        List<AiChatRoomMemberEntity> agents = chatRoomRepository.queryAgentsByRoomId(roomId);
-        if (agents == null || agents.isEmpty()) return;
+        // 2. 获取房间内候选 Client
+        List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(roomId);
+        if (clients == null || clients.isEmpty()) return;
 
         // 3. 概率性决策逻辑
-        for (AiChatRoomMemberEntity agent : agents) {
-            String agentId = agent.getMemberId();
-            if (agentId.equals(currentSenderId)) continue;
+        for (AiChatRoomMemberEntity clientMember : clients) {
+            String clientId = clientMember.getMemberId();
+            if (clientId.equals(currentSenderId)) continue;
 
             if (random.nextDouble() < RESPONSE_PROBABILITY) {
-                log.info("【领域调度】命中概率响应：roomId={}, agentId={}", roomId, agentId);
+                log.info("【领域调度】命中概率响应：roomId={}, clientId={}", roomId, clientId);
 
-                // 4. 资源检查与装配 (agentId 即 clientId)
-                String beanName = CLIENT.getBeanName(agentId);
+                // 4. 资源检查与装配
+                String beanName = CLIENT.getBeanName(clientId);
                 if (!applicationContext.containsBean(beanName)) {
-                    log.info("【领域调度】容器中不存在 Bean {} clientID {}，触发装配策略", beanName ,agentId);
-                    aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(agentId));
+                    log.info("【领域调度】容器中不存在 Bean {} clientID {}，触发装配策略", beanName, clientId);
+                    aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(clientId));
                 }
 
                 // 5. 下达执行指令
-                roomChatService.agentChat(roomId, agentId);
+                roomChatService.clientChat(roomId, clientId);
             }
         }
     }

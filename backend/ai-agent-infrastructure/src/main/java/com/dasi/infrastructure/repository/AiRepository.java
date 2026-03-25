@@ -226,7 +226,7 @@ public class AiRepository implements IAiRepository {
                 AiPromptVO aiPromptVO = AiPromptVO.builder()
                         .promptId(aiPrompt.getPromptId())
                         .promptName(aiPrompt.getPromptName())
-                        .systenPrompt(aiPrompt.getSystenPrompt())
+                        .systemPrompt(aiPrompt.getSystenPrompt())
                         .build();
 
                 aiPromptVOMap.put(promptId, aiPromptVO);
@@ -401,6 +401,11 @@ public class AiRepository implements IAiRepository {
                         .taskStatus(aiTask.getTaskStatus())
                         .build())
                 .toList();
+    }
+
+    @Override
+    public String queryAgentNameByAgentId(String agentId) {
+        return aiAgentDao.queryAgentNameByAgentId(agentId);
     }
 
     @Override

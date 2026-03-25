@@ -85,20 +85,20 @@ public class RoomChatService implements IRoomChatService {
     }
 
     @Override
-    public void agentChat(String roomId, String agentId) {
-        log.info("【群聊服务】智能体响应触发 roomId={}, agentId={}", roomId, agentId);
+    public void clientChat(String roomId, String clientId) {
+        log.info("【群聊服务】客户端响应触发 roomId={}, clientId={}", roomId, clientId);
 
         try {
-            // 1. 获取客户端 (agentId 即 clientId)
-            String beanName = CLIENT.getBeanName(agentId);
+            // 1. 获取客户端
+            String beanName = CLIENT.getBeanName(clientId);
             ChatClient client = applicationContext.getBean(beanName, ChatClient.class);
 
             // 2. 准备基础信息
             String roomName = chatRoomRepository.queryRoomName(roomId);
-            String agentName = chatRoomRepository.queryMemberName(roomId, agentId);
+            String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
 
             // 3. 装配上下文
-            List<Message> messages = contextAssemblerService.assemble(roomId, agentId, roomName, agentName);
+            List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName);
 
             // 4. 同步调用 AI
             String content = client.prompt(new Prompt(messages))
@@ -106,7 +106,7 @@ public class RoomChatService implements IRoomChatService {
                     .content();
 
             if (content == null || content.isEmpty()) {
-                log.warn("【群聊服务】智能体回答为空 roomId={}, agentId={}", roomId, agentId);
+                log.warn("【群聊服务】客户端回答为空 roomId={}, clientId={}", roomId, clientId);
                 return;
             }
 
@@ -115,9 +115,9 @@ public class RoomChatService implements IRoomChatService {
             AiChatRoomMessageEntity aiMsg = AiChatRoomMessageEntity.builder()
                     .roomId(roomId)
                     .messageId(messageId)
-                    .senderId(agentId)
-                    .senderName(agentName)
-                    .senderType("AGENT")
+                    .senderId(clientId)
+                    .senderName(clientName)
+                    .senderType("CLIENT")
                     .messageRole("assistant")
                     .content(content)
                     .isPreempted(1)
@@ -125,25 +125,25 @@ public class RoomChatService implements IRoomChatService {
 
             contextAssemblerService.recordMessage(aiMsg);
 
-            // 6. 发布事件 (对外广播 AGENT_MSG + 对内触发信号 AGENT_MSG_END)
+            // 6. 发布事件 (对外广播 CLIENT_MSG + 对内触发信号 CLIENT_MSG_END)
             eventPublisher.publishExternal(WebSocketEvent.builder()
                     .roomId(roomId)
-                    .eventType(WebSocketEvent.EventType.AGENT_MSG)
+                    .eventType(WebSocketEvent.EventType.CLIENT_MSG)
                     .payload(aiMsg)
                     .timestamp(System.currentTimeMillis())
                     .build());
 
             eventPublisher.publishInternal(WebSocketEvent.builder()
                     .roomId(roomId)
-                    .eventType(WebSocketEvent.EventType.AGENT_MSG_END)
+                    .eventType(WebSocketEvent.EventType.CLIENT_MSG_END)
                     .payload(aiMsg)
                     .timestamp(System.currentTimeMillis())
                     .build());
 
-            log.info("【群聊服务】智能体回答结束 roomId={}, agentId={}", roomId, agentId);
+            log.info("【群聊服务】客户端回答结束 roomId={}, clientId={}", roomId, clientId);
 
         } catch (Exception e) {
-            log.error("【群聊服务】智能体执行失败 roomId={}, agentId={}", roomId, agentId, e);
+            log.error("【群聊服务】客户端执行失败 roomId={}, clientId={}", roomId, clientId, e);
         }
     }
 }

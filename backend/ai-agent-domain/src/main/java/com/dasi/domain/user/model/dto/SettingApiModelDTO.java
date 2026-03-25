@@ -18,6 +18,9 @@ public class SettingApiModelDTO {
     private String modelName;
 
     @NotBlank
+    private String clientName;
+
+    @NotBlank
     private String modelType;
 
     @NotBlank
@@ -28,5 +31,8 @@ public class SettingApiModelDTO {
 
     @NotBlank
     private String apiCompletionPath;
+
+    @NotBlank(message = "系统提示词不能为空")
+    private String systemPrompt;
 
 }
