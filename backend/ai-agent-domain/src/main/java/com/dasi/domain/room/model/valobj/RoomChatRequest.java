@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Set;
+
 /**
  * @BelongsProject: Agent
  * @BelongsPackage: com.dasi.domain.room.model.valobj
@@ -23,6 +26,9 @@ public class RoomChatRequest {
 
     /** 发送者ID (UserID) */
     private String userId;
+
+    /** 被制定者的ID*/
+    private String specialMembers;
 
     /** 消息内容 */
     private String content;

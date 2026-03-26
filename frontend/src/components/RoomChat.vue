@@ -59,7 +59,8 @@
                             msg.senderType === 'USER' 
                                 ? 'bg-indigo-600 text-white rounded-tr-none' 
                                 : 'bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] rounded-tl-none'
-                        ]">
+                        ]"
+                        @contextmenu.prevent="openMsgContextMenu(msg, $event)">
                             {{ msg.content }}
                         </div>
                     </div>
@@ -70,11 +71,40 @@
             </div>
 
             <!-- 输入框 -->
-            <div class="p-4 bg-[rgba(11,18,32,0.5)] border-t border-[rgba(255,255,255,0.06)]">
+            <div class="p-4 bg-[rgba(11,18,32,0.5)] border-t border-[rgba(255,255,255,0.06)] relative">
+                <div v-if="showMsgContextMenu"
+                     class="fixed bg-[#0f172a] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-2xl z-50 overflow-hidden"
+                     :style="{ left: msgContextMenuPos.x + 'px', top: msgContextMenuPos.y + 'px' }"
+                     @click.stop>
+                    <button class="w-full text-left px-4 py-2 text-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+                            @click="mentionFromContextMenu">
+                        @ TA
+                    </button>
+                </div>
+
+                <!-- @ 选人弹窗 -->
+                <div v-if="showAtList" class="absolute bottom-full left-4 mb-2 w-56 bg-[#1e293b] border border-[#334155] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                    <ul class="py-1">
+                        <li v-for="agent in filteredAtMembers" :key="agent.memberId" 
+                            @click="selectAtMember(agent)"
+                            class="px-3 py-2 text-sm cursor-pointer hover:bg-[#334155] flex items-center gap-2 transition-colors">
+                            <span class="w-6 h-6 rounded-full bg-[#1a2333] border border-[#7bc8ff]/30 flex items-center justify-center text-xs text-[#7bc8ff]">
+                                {{ agent.memberName.charAt(0) }}
+                            </span>
+                            <span class="text-[#e7ecf4] truncate flex-1">{{ agent.memberName }}</span>
+                            <span class="text-[10px] text-[rgba(231,236,244,0.4)]">{{ agent.memberType === 'CLIENT' ? '客户端' : '智能体' }}</span>
+                        </li>
+                        <li v-if="filteredAtMembers.length === 0" class="px-3 py-3 text-xs text-center text-[rgba(231,236,244,0.4)]">
+                            未找到匹配的成员
+                        </li>
+                    </ul>
+                </div>
+
                 <div class="max-w-4xl mx-auto relative flex items-end gap-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-2xl p-2 focus-within:border-[#7bc8ff]/50 transition-all shadow-inner">
-                    <textarea v-model="inputText" 
+                    <textarea ref="inputRef" v-model="inputText" 
                               rows="1"
-                              @keydown.enter.prevent="sendMessage"
+                              @input="handleInput"
+                              @keydown="handleKeydown"
                               class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-3 resize-none max-h-32 overflow-y-auto scrollbar-none"
                               placeholder="发条消息，和 Agent 们聊聊吧..."></textarea>
                     <button @click="sendMessage" 
@@ -233,6 +263,180 @@ const inviteList = computed(() => (inviteMode.value === 'client' ? availableClie
 
 const messageListRef = ref(null);
 const bottomAnchor = ref(null);
+const inputRef = ref(null);
+
+// -------------------- @ 选人逻辑状态 --------------------
+const showAtList = ref(false);
+const atSearchText = ref('');
+const selectedAtMembers = ref([]);
+
+const filteredAtMembers = computed(() => {
+    // 可以被 @ 的成员：类型为 CLIENT 或 AGENT
+    const bots = members.value.filter(m => m.memberType === 'CLIENT' || m.memberType === 'AGENT');
+    if (!atSearchText.value) return bots;
+    return bots.filter(m => m.memberName.toLowerCase().includes(atSearchText.value.toLowerCase()));
+});
+
+const handleInput = (e) => {
+    const text = inputText.value;
+    const cursorPosition = e.target.selectionStart;
+    
+    // 找光标前最后一个 @
+    const lastAtIdx = text.lastIndexOf('@', cursorPosition - 1);
+    if (lastAtIdx !== -1) {
+        // 提取 @ 之后到光标位置的文本作为搜索词
+        const searchStr = text.slice(lastAtIdx + 1, cursorPosition);
+        // 如果中间没有空格，说明正在 @
+        if (!searchStr.includes(' ')) {
+            atSearchText.value = searchStr;
+            showAtList.value = true;
+        } else {
+            showAtList.value = false;
+        }
+    } else {
+        showAtList.value = false;
+    }
+};
+
+const handleKeydown = (e) => {
+    // 拦截 Enter 发送
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+        return;
+    }
+
+    // 拦截 Backspace 整体删除 @ 标签
+    if (e.key === 'Backspace') {
+        const text = inputText.value;
+        const cursorPosition = inputRef.value.selectionStart;
+        
+        // 检查光标前面是否是一个已选的 @标签
+        for (const member of selectedAtMembers.value) {
+            const tagText = `@${member.name} `;
+            // 找当前标签在光标前的最近一次出现位置
+            const tagIndex = text.lastIndexOf(tagText, cursorPosition);
+            
+            // 如果光标刚好在这个标签内部或者紧贴着标签末尾
+            if (tagIndex !== -1 && cursorPosition > tagIndex && cursorPosition <= tagIndex + tagText.length) {
+                e.preventDefault(); // 阻止默认删除行为
+                
+                // 将整个标签从文本中删除
+                const newText = text.slice(0, tagIndex) + text.slice(tagIndex + tagText.length);
+                inputText.value = newText;
+                
+                // 从已选列表中移除
+                selectedAtMembers.value = selectedAtMembers.value.filter(m => m.id !== member.id);
+                
+                // 恢复光标位置
+                nextTick(() => {
+                    inputRef.value.focus();
+                    inputRef.value.setSelectionRange(tagIndex, tagIndex);
+                });
+                return;
+            }
+        }
+    }
+};
+
+const selectAtMember = (agent) => {
+    const text = inputText.value;
+    const cursorPosition = inputRef.value.selectionStart;
+    const lastAtIdx = text.lastIndexOf('@', cursorPosition - 1);
+    
+    if (lastAtIdx !== -1) {
+        // 替换 @ 后面的文本为选中的成员名称，并加一个空格
+        const beforeAt = text.slice(0, lastAtIdx);
+        const afterCursor = text.slice(cursorPosition);
+        const replaceText = `@${agent.memberName} `;
+        
+        inputText.value = beforeAt + replaceText + afterCursor;
+        
+        // 存入已选列表 (去重)
+        if (!selectedAtMembers.value.find(m => m.id === agent.memberId)) {
+            selectedAtMembers.value.push({ id: agent.memberId, name: agent.memberName });
+        }
+        
+        // 将焦点重新定位到文本框
+        nextTick(() => {
+            inputRef.value.focus();
+            const newCursorPos = beforeAt.length + replaceText.length;
+            inputRef.value.setSelectionRange(newCursorPos, newCursorPos);
+        });
+    }
+    
+    showAtList.value = false;
+    atSearchText.value = '';
+};
+
+const showMsgContextMenu = ref(false);
+const msgContextMenuPos = reactive({ x: 0, y: 0 });
+const msgContextMenuMember = ref(null);
+
+const openMsgContextMenu = (msg, event) => {
+    if (msg.senderType !== 'CLIENT' && msg.senderType !== 'AGENT') {
+        showMsgContextMenu.value = false;
+        return;
+    }
+
+    msgContextMenuMember.value = {
+        memberId: msg.senderId,
+        memberName: msg.senderName,
+        memberType: msg.senderType
+    };
+
+    const menuWidth = 140;
+    const menuHeight = 44;
+    const padding = 8;
+
+    const maxX = Math.max(padding, window.innerWidth - menuWidth - padding);
+    const maxY = Math.max(padding, window.innerHeight - menuHeight - padding);
+
+    msgContextMenuPos.x = Math.min(Math.max(event.clientX, padding), maxX);
+    msgContextMenuPos.y = Math.min(Math.max(event.clientY, padding), maxY);
+
+    showMsgContextMenu.value = true;
+    showAtList.value = false;
+};
+
+const closeMsgContextMenu = () => {
+    showMsgContextMenu.value = false;
+    msgContextMenuMember.value = null;
+};
+
+const insertTextAtCursor = (textToInsert) => {
+    const el = inputRef.value;
+    const text = inputText.value;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? start;
+
+    inputText.value = text.slice(0, start) + textToInsert + text.slice(end);
+
+    nextTick(() => {
+        inputRef.value?.focus();
+        const newPos = start + textToInsert.length;
+        inputRef.value?.setSelectionRange(newPos, newPos);
+    });
+};
+
+const mentionMember = (memberId, memberName) => {
+    if (!memberId || !memberName) return;
+
+    if (!selectedAtMembers.value.find(m => m.id === memberId)) {
+        selectedAtMembers.value.push({ id: memberId, name: memberName });
+    }
+
+    const tagText = `@${memberName} `;
+    insertTextAtCursor(tagText);
+};
+
+const mentionFromContextMenu = () => {
+    const member = msgContextMenuMember.value;
+    if (member) {
+        mentionMember(member.memberId, member.memberName);
+    }
+    closeMsgContextMenu();
+};
 
 let socket = null;
 
@@ -298,13 +502,22 @@ const handleIncomingEvent = (wsEvent) => {
 const sendMessage = () => {
     if (!inputText.value.trim() || !socketReady.value) return;
 
+    // 组装逗号分隔的 id 字符串
+    const atMemberIdsStr = selectedAtMembers.value.map(m => m.id).join(',');
+
     const payload = {
         content: inputText.value.trim(),
-        traceId: 'trace_' + Date.now()
+        traceId: 'trace_' + Date.now(),
+        atMemberIds: atMemberIdsStr
     };
 
     socket.send(JSON.stringify(payload));
+    
+    // 清空输入框和已选成员
     inputText.value = '';
+    selectedAtMembers.value = [];
+    showAtList.value = false;
+    
     nextTick(() => scrollToBottom());
 };
 
@@ -477,12 +690,14 @@ onMounted(() => {
     initWebSocket();
     loadAvailableClients();
     loadAvailableAgents();
+    window.addEventListener('click', closeMsgContextMenu);
 });
 
 onBeforeUnmount(() => {
     if (socket) {
         socket.close();
     }
+    window.removeEventListener('click', closeMsgContextMenu);
 });
 
 watch(roomId, (newId) => {

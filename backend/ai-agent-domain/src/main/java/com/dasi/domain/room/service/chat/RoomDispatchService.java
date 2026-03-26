@@ -11,15 +11,17 @@ import com.dasi.domain.room.model.valobj.RoomChatRequest;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IRoomChatService;
 import com.dasi.domain.room.service.IRoomDispatchService;
+import com.dasi.types.constant.Constants;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static com.dasi.domain.ai.model.enumeration.AiArmoryType.ARMORY_CHAT;
 import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
@@ -74,14 +76,19 @@ public class RoomDispatchService implements IRoomDispatchService {
         log.debug("【调度服务】收到原始消息：roomId={}, username={}, payload={}", roomId, username, payload);
         try {
             JSONObject json = JSON.parseObject(payload);
+
+            String content = json.getString("content");
+            // 直接从前端传来的 JSON 中获取逗号分隔的 memberId
+            String specialMembers = json.getString("atMemberIds");
+            log.info("被 @的人群有 {} ,房间id {}", specialMembers , roomId);
             // 转化为领域对象请求
             RoomChatRequest request = RoomChatRequest.builder()
                     .roomId(roomId)
                     .userId(username)
-                    .content(json.getString("content"))
+                    .content(content)
+                    .specialMembers(specialMembers)
                     .traceId(json.getString("traceId"))
                     .build();
-
 
             // 调用核心对话服务
             roomChatService.onUserMessage(request);
@@ -108,24 +115,48 @@ public class RoomDispatchService implements IRoomDispatchService {
             return;
         }
 
-        // 1. 识别当前发言者 ID
+        // 1. 识别当前发言者 ID 和 绑定的成员信息
         String currentSenderId = "";
+        String atMemberId = "" ;
         if (wsEvent.getPayload() instanceof AiChatRoomMessageEntity) {
             currentSenderId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getSenderId();
+            atMemberId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getAtMemberId();
+        }
+
+        // 解析被 @ 的成员 ID 集合 (以逗号分隔)
+        Set<String> atMemberIds = new HashSet<>();
+        if (atMemberId != null && !atMemberId.trim().isEmpty()) {
+            String[] ids = atMemberId.split(",");
+            for (String id : ids) {
+                if (!id.trim().isEmpty()) {
+                    atMemberIds.add(id.trim());
+                }
+            }
         }
 
         // 2. 获取房间内候选 Client
         List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(roomId);
         if (clients == null || clients.isEmpty()) return;
 
-        // 3. 概率性决策逻辑
+        // 3. 概率性决策逻辑,todo:1，解析atMemberId 进行专项回复 ，2, 仲裁官（智能决策实现仲裁）
         for (AiChatRoomMemberEntity clientMember : clients) {
             String clientId = clientMember.getMemberId();
             if (clientId.equals(currentSenderId)) continue;
 
-            if (random.nextDouble() < RESPONSE_PROBABILITY) {
-                log.info("【领域调度】命中概率响应：roomId={}, clientId={}", roomId, clientId);
+            boolean shouldSpeak = false;
 
+            // 优先判断是否被 @，如果被 @，强制命中回答
+            if (atMemberIds.contains(clientId)) {
+                log.info("【领域调度】命中 @ 指定回答：roomId={}, clientId={}", roomId, clientId);
+                shouldSpeak = true;
+            } 
+            // 否则走概率性回答
+            else if (random.nextDouble() < RESPONSE_PROBABILITY) {
+                log.info("【领域调度】命中概率响应：roomId={}, clientId={}", roomId, clientId);
+                shouldSpeak = true;
+            }
+
+            if (shouldSpeak) {
                 // 4. 资源检查与装配
                 String beanName = CLIENT.getBeanName(clientId);
                 if (!applicationContext.containsBean(beanName)) {
@@ -137,5 +168,19 @@ public class RoomDispatchService implements IRoomDispatchService {
                 roomChatService.clientChat(roomId, clientId);
             }
         }
+    }
+
+
+    /** 将名字按照 "张三,李四,王五"  拆成 列表，*/
+    public List<String> extractNames(String membersStr) {
+        if (membersStr == null || membersStr.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 按逗号分割，并去除每个名字的前后空格
+        return Arrays.stream(membersStr.split(Constants.commma))
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .collect(Collectors.toList());
     }
 }

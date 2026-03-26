@@ -67,6 +67,7 @@ public class RoomChatService implements IRoomChatService {
                 .senderType("USER")
                 .messageRole("user")
                 .content(content)
+                .atMemberId(request.getSpecialMembers())
                 .isPreempted(0)
                 .build();
         

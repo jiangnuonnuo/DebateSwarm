@@ -211,6 +211,7 @@ public class ChatRoomRepository implements IChatRoomRepository {
                 .senderType(messageEntity.getSenderType())
                 .messageRole(messageEntity.getMessageRole())
                 .content(messageEntity.getContent())
+                .atMemberId(messageEntity.getAtMemberId())
                 .isPreempted(messageEntity.getIsPreempted())
                 .build();
         aiChatRoomMessageDao.insert(po);
