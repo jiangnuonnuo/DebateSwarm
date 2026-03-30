@@ -1,5 +1,6 @@
 package com.dasi.infrastructure.repository;
 
+import com.alibaba.fastjson2.JSON;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
@@ -10,6 +11,7 @@ import com.dasi.infrastructure.persistent.dao.IAiChatRoomMessageDao;
 import com.dasi.infrastructure.persistent.po.AiChatRoom;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMember;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMessage;
+import com.dasi.infrastructure.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 
@@ -22,10 +24,10 @@ import java.util.stream.Collectors;
  * @BelongsPackage: com.dasi.infrastructure.repository
  * @Author: xerina
  * @CreateTime: 2026-03-23  11:08
- * @Description: 聊天室仓储实现类 (负责 PO 到 Entity 的转换)
+ * @Description: 聊天室仓储实现类 (接入元数据缓存)
  */
 @Repository
-public class ChatRoomRepository implements IChatRoomRepository {
+public class ChatRoomRepository extends AbstractRepository implements IChatRoomRepository {
 
     @Resource
     private IAiChatRoomDao aiChatRoomDao;
@@ -35,6 +37,13 @@ public class ChatRoomRepository implements IChatRoomRepository {
 
     @Resource
     private IAiChatRoomMessageDao aiChatRoomMessageDao;
+
+    @Resource
+    private RedisUtil redisUtil;
+
+    private static final String ROOM_META_KEY = "room_meta:";
+    private static final String MEMBER_NAME_KEY = "member_name:";
+    private static final String ROOM_CLIENTS_KEY = "room_clients:";
 
     @Override
     public void saveRoom(AiChatRoomEntity roomEntity) {
@@ -56,30 +65,34 @@ public class ChatRoomRepository implements IChatRoomRepository {
         } else {
             aiChatRoomDao.updateRoomInfo(po);
         }
+        // 3. 清理缓存
+        redisUtil.deleteByKey(ROOM_META_KEY + roomEntity.getRoomId());
     }
 
     @Override
     public void deleteRoom(String roomId) {
         aiChatRoomDao.deleteByRoomId(roomId);
+        redisUtil.deleteByKey(ROOM_META_KEY + roomId);
     }
 
     @Override
     public AiChatRoomEntity queryRoomById(String roomId) {
-        AiChatRoom po = aiChatRoomDao.queryRoomByRoomId(roomId);
-        if (po == null) {
-            return null;
-        }
-        return AiChatRoomEntity.builder()
-                .roomId(po.getRoomId())
-                .roomName(po.getRoomName())
-                .roomDesc(po.getRoomDesc())
-                .ownerId(po.getOwnerId())
-                .roomType(po.getRoomType())
-                .extConfig(po.getExtConfig())
-                .status(po.getStatus())
-                .createTime(po.getCreateTime())
-                .updateTime(po.getUpdateTime())
-                .build();
+        String cacheKey = ROOM_META_KEY + roomId;
+        return getFromCacheOrDb(cacheKey, AiChatRoomEntity.class, () -> {
+            AiChatRoom po = aiChatRoomDao.queryRoomByRoomId(roomId);
+            if (po == null) return null;
+            return AiChatRoomEntity.builder()
+                    .roomId(po.getRoomId())
+                    .roomName(po.getRoomName())
+                    .roomDesc(po.getRoomDesc())
+                    .ownerId(po.getOwnerId())
+                    .roomType(po.getRoomType())
+                    .extConfig(po.getExtConfig())
+                    .status(po.getStatus())
+                    .createTime(po.getCreateTime())
+                    .updateTime(po.getUpdateTime())
+                    .build();
+        });
     }
 
     @Override
@@ -130,11 +143,16 @@ public class ChatRoomRepository implements IChatRoomRepository {
                 .agentSessionId(memberEntity.getAgentSessionId())
                 .build();
         aiChatRoomMemberDao.insert(po);
+        // 清理成员相关缓存
+        redisUtil.deleteByKey(MEMBER_NAME_KEY + memberEntity.getRoomId() + ":" + memberEntity.getMemberId());
+        redisUtil.deleteByKey(ROOM_CLIENTS_KEY + memberEntity.getRoomId());
     }
 
     @Override
     public void deleteMember(String roomId, String memberId) {
         aiChatRoomMemberDao.deleteMember(roomId, memberId);
+        redisUtil.deleteByKey(MEMBER_NAME_KEY + roomId + ":" + memberId);
+        redisUtil.deleteByKey(ROOM_CLIENTS_KEY + roomId);
     }
 
     @Override
@@ -173,11 +191,16 @@ public class ChatRoomRepository implements IChatRoomRepository {
 
     @Override
     public List<AiChatRoomMemberEntity> queryClientsByRoomId(String roomId) {
-        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryClientMemberByRoomId(roomId);
-        if (pos == null || pos.isEmpty()) {
-            return new ArrayList<>();
+        String cacheKey = ROOM_CLIENTS_KEY + roomId;
+        String json = redisUtil.getValue(cacheKey, String.class);
+        if (json != null) {
+            return JSON.parseArray(json, AiChatRoomMemberEntity.class);
         }
-        return pos.stream().map(po -> AiChatRoomMemberEntity.builder()
+        
+        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryClientMemberByRoomId(roomId);
+        if (pos == null || pos.isEmpty()) return new ArrayList<>();
+        
+        List<AiChatRoomMemberEntity> result = pos.stream().map(po -> AiChatRoomMemberEntity.builder()
                 .roomId(po.getRoomId())
                 .memberId(po.getMemberId())
                 .memberType(po.getMemberType())
@@ -186,17 +209,23 @@ public class ChatRoomRepository implements IChatRoomRepository {
                 .createTime(po.getCreateTime())
                 .updateTime(po.getUpdateTime())
                 .build()).collect(Collectors.toList());
+        
+        redisUtil.setValue(cacheKey, JSON.toJSONString(result));
+        return result;
     }
 
     @Override
     public String queryMemberName(String roomId, String memberId) {
-        AiChatRoomMember member = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
-        return member != null ? member.getMemberName() : "未知成员";
+        String cacheKey = MEMBER_NAME_KEY + roomId + ":" + memberId;
+        return getFromCacheOrDb(cacheKey, String.class, () -> {
+            AiChatRoomMember member = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
+            return member != null ? member.getMemberName() : "未知成员";
+        });
     }
 
     @Override
     public String queryRoomName(String roomId) {
-        AiChatRoom room = aiChatRoomDao.queryRoomByRoomId(roomId);
+        AiChatRoomEntity room = queryRoomById(roomId);
         return room != null ? room.getRoomName() : "未知聊天室";
     }
 

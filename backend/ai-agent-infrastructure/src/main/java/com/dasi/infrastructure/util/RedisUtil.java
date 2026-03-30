@@ -76,6 +76,7 @@ public class RedisUtil implements IRedisUtil {
         }
     }
 
+
     @Override
     public void setList(String key, List<?> values) {
         if (key == null || key.isBlank()) return;
