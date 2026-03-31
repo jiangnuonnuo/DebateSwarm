@@ -91,32 +91,16 @@ public class RoomAdminService implements IRoomAdminService {
             return false;
         }
 
-        // 幂等性校验：如果已经在房间里，直接返回成功
-        Boolean exist =  chatRoomRepository.queryMemberExistByMemberId(memberEntity.getRoomId() ,memberEntity.getMemberId());
-        if(exist){
-            log.error("房间 id :{} 已经存在用户 {},加入用户失败", memberEntity.getRoomId(), memberEntity.getMemberId());
-            return false;
-        }
-
         String strategyKey = memberEntity.getMemberType() + "_MEMBER";
         IRoomMemberInsetService strategy = roomMemberInsetServiceMap.get(strategyKey);
 
-        if (strategy != null) {
-            String memberName = strategy.queryMemberName(memberEntity.getMemberId(), memberEntity.getMemberType());
-            memberEntity.setMemberName(memberName);
+        if (strategy == null) {
+            log.error("【房间管理】未找到对应的成员处理策略：type={}", memberEntity.getMemberType());
+            return false;
         }
 
-        // 统一处理 SessionID 生成 (针对 Agent 或 Client)
-        String type = memberEntity.getMemberType();
-        if (("AGENT".equals(type) || "CLIENT".equals(type)) && memberEntity.getAgentSessionId() == null) {
-            memberEntity.setAgentSessionId("session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
-        }
-
-        log.info("【房间管理】成员加入房间：roomId={}, memberId={}, type={}, name={}, sessionId={}", 
-                memberEntity.getRoomId(), memberEntity.getMemberId(), memberEntity.getMemberType(), 
-                memberEntity.getMemberName(), memberEntity.getAgentSessionId());
-        chatRoomRepository.saveMember(memberEntity);
-        return true;
+        // 调用具体策略执行加入逻辑 (内部包含 basicJoin 和 doJoin)
+        return strategy.joinRoom(memberEntity);
     }
 
     @Override

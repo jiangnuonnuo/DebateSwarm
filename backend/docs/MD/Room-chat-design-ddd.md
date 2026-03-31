@@ -52,24 +52,25 @@
 - Domain（领域层）
   - 房间管理（创建/加入/离开/查询）  
     `backend/ai-agent-domain/src/main/java/com/dasi/domain/room/service/room/RoomAdminService.java`
+  - 成员入场策略（策略模式实现不同成员入场逻辑）  
+    `backend/ai-agent-domain/src/main/java/com/dasi/domain/room/service/room/impl/AbstractRoomMemberService.java`（基类）  
+    `backend/ai-agent-domain/src/main/java/com/dasi/domain/room/service/room/impl/ClientMemberService.java`（提示词重构核心）
   - 调度与回复（概率触发、装配检查、指令下达）  
     `backend/ai-agent-domain/src/main/java/com/dasi/domain/room/service/chat/RoomDispatchService.java`
   - 对话执行（clientChat，同步调用 LLM，落库并广播）  
     `backend/ai-agent-domain/src/main/java/com/dasi/domain/room/service/chat/RoomChatService.java`
-  - Armory 装配（Client/Agent Bean 装配）  
-    `backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/armory/strategy/ArmoryChatStrategy.java`  
-    `backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/armory/strategy/ArmoryWorkStrategy.java`（保留，未来接入）
+  - Armory 装配（Client/Agent Bean 装配，支持覆盖注册）  
+    `backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/armory/strategy/ArmoryChatStrategy.java`
   - 执行框架入口（未来对接 Agent 执行链，仅渲染最终总结）  
     `backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/execute`
 
 - Infrastructure（基础设施）
   - 房间仓储/成员映射/消息映射  
-    `backend/ai-agent-infrastructure/src/main/java/com/dasi/infrastructure/repository/ChatRoomRepository.java`  
-    `backend/ai-agent-infrastructure/src/main/resources/mapper/ai-chat-room-member-mapper.xml`  
-    `backend/ai-agent-infrastructure/src/main/resources/mapper/ai-chat-room-message-mapper.xml`
-  - 用户配置仓储（模型配置、Client、Prompt）  
-    `backend/ai-agent-infrastructure/src/main/java/com/dasi/infrastructure/repository/UserRepository.java`  
-    `backend/ai-agent-infrastructure/src/main/resources/mapper/AiPromptDao.xml`
+    `backend/ai-agent-infrastructure/src/main/java/com/dasi/infrastructure/repository/ChatRoomRepository.java`
+  - AI 配置仓储（支持提示词更新与轻量级查询）  
+    `backend/ai-agent-infrastructure/src/main/java/com/dasi/infrastructure/repository/AiRepository.java`
+  - 缓存基类（支持过期时间与通用缓存处理）  
+    `backend/ai-agent-infrastructure/src/main/java/com/dasi/infrastructure/repository/AbstractRepository.java`
 
 - Frontend（关键页面）
   - 群聊页（邀请 CLIENT/AGENT、气泡渲染、WebSocket 事件处理）  
@@ -98,82 +99,78 @@
 
 ## 5. 提示词工程（System Prompt & Context）
 
-### 5.1 系统提示词模板（defaultSystem，唯一 SystemMessage）
+### 5.1 提示词合成机制 (Join -> Reconstruct -> Overwrite)
 
-- **数据来源**：Client 的 `systemPrompt`（人设），创建/更新于模型配置页。
-- **注入变量**（模板占位符，推荐 `{var}` 格式）：
-  - `{clientName}`：当前 Client 的名称（如“女朋友”、“工具助手”）。
-  - `{roomName}`：当前所处房间名。
-  - `{roomId}`：当前房间唯一标识。
-  - `{tone}`（可选）：情绪/语气风格。
-  - `{botRole}`（可选）：扮演的角色名（如“仲裁官”、“辩手A”）。
-- **存放位置**：项目内置模板放于  
-  `backend/ai-agent-app/src/main/resources/prompt/system-prompt/*.txt`  
-  自定义模板通过 `ai_prompt` 表维护（`prompt_{apiId}`）。
-- **原则**：**只有一条**系统提示词（作为 defaultSystem 注入 ChatClient）；标识 Bot 的名字、房间信息、人设/语气等 **必须**在系统层明确。
+系统不再实时组装提示词变量，而是采用**入场即重构**的“快照”模式：
 
-### 5.2 上下文装配（Context，普通消息）
+- **触发时机**：`Client/Agent` 成员被邀请进入房间时。
+- **重构逻辑**：
+  1. **原料获取**：从数据库读取 Bot 的 `originalPrompt`（原始人设）和当前房间的 `roomName/roomDesc`。
+  2. **模板合成**：加载内置资源 `group-chat-template.txt`，将变量注入模板。
+  3. **持久化覆盖**：将合成后的完整提示词写回 `ai_prompt.systen_prompt`。
+  4. **缓存与内存刷新**：清理 Redis 缓存，强制触发 `Armory` 覆盖注册 Bean。
+- **自愈能力**：合成逻辑会自动检测并提取已有的“原始人设”部分，防止在多次进出房间时产生提示词嵌套膨胀。
 
-- **数据来源**：最近 N 条群聊记录，经 `ContextAssembler` 转换为 `senderName: content` 的普通消息列表（保持时间顺序）。
-- **原则**：上下文只作为普通 User/Assistant Message 入 Prompt，**不再追加二次 SystemMessage**，避免覆盖人设或系统层含义。
+### 5.2 系统提示词模板（group-chat-template.txt）
+
+- **存放位置**：`backend/ai-agent-app/src/main/resources/prompt/system-prompt/group-chat-template.txt`
+- **注入变量**：
+  - `{originalPrompt}`：Bot 的原始身份定义。
+  - `{roomName}`：当前房间名称。
+  - `{roomDesc}`：房间背景背景设定。
+- **行为约束**：强制要求 Bot 保持人设、简洁回复、严禁带名称前缀（如 `[小A]:`）。
+
+### 5.3 上下文装配（Context，普通消息）
+
+- **数据来源**：最近 20 条群聊记录，经 `ContextAssembler` 转换为 `senderName: content` 的普通消息列表。
+- **原则**：上下文仅作为 `UserMessage` 追加，**不干扰**已固化在 `SystemMessage` 中的身份定义。
 
 
 ## 6. 已实现能力（Delivered）
 
-1) **WebSocket 实时群聊**  
-   - 握手路径：`/miniagent/api/v1/ws/room/{roomId}/{username}`（浏览器原生 WS，不携带 Authorization）  
-   - 对外事件：`USER_MSG`、`CLIENT_MSG`；内部信号：`CLIENT_MSG_END`  
-   - 统一信封：`WebSocketEvent`（包含 eventType/payload/roomId/timestamp）
+1) **策略化成员入场逻辑**  
+   - 引入 `AbstractRoomMemberService` 模板类，统一 `basicJoin` 通用流程。
+   - 实现 `User/Client/Agent` 不同策略子类，解耦入场加工细节。
 
-2) **Bot 候选与概率回复（CLIENT）**  
-   - 候选仅取房间内 `member_type='CLIENT'` 的成员。  
-   - 命中概率 → 检查 `client_{clientId}` Bean：不存在则触发 `ARMORY_CHAT` 装配，再调用 `clientChat`。  
-   - 落库 `senderType='CLIENT'`，广播 `CLIENT_MSG`，内部触发 `CLIENT_MSG_END`。
+2) **动态提示词重构引擎**  
+   - 实现“入场即定性”的提示词装配流，支持从资源文件动态加载模板。
+   - 解决 Bot 跨房间的人设隔离与场景感知问题。
 
-3) **成员管理（加入/离开/名称冗余）**  
-   - USER/CLIENT/AGENT 均可加入；Client/Agent 自动生成 `agent_session_id`。  
-   - 已实现离开（踢出）接口：`RoomAdminService.leaveRoom(roomId, memberId)` → repository → mapper。
+3) **Bean 覆盖装配机制**  
+   - 利用 `Armory` 的动态注册能力，实现内存中 `ChatClient` 实例的热更新，无需重启服务。
 
-4) **模型配置（clientName + systemPrompt）**  
-   - 新增/更新：携带 `clientName` 与 `systemPrompt`；`prompt_id=prompt_{apiId}`。  
-   - 列表：`/user/model/list` 返回 `clientName + systemPrompt`（按 apiId 直查 prompt，避免复杂 join）。  
-   - 删除：同步清理 `ai_config` 与对应 `ai_prompt`。
+4) **WebSocket 实时群聊与 @ 指定回答**  
+   - 完善上行 JSON 协议，后端 `RoomDispatchService` 优先强制命中被 @ 成员。
 
-5) **前端体验**  
-   - 左侧 Sidebar 固定不滚动；聊天区域独立滚动（避免整页高度膨胀）。  
-   - 邀请弹窗支持邀请 **CLIENT** 与 **AGENT**；气泡渲染区分 USER/CLIENT/AGENT。
-
-6) **@ 指定回答（已实现）**  
-   - 上行协议改为结构化 JSON：前端直接传 `atMemberIds`（逗号分隔的 memberId）。  
-   - 后端 `RoomDispatchService.onMessage` 直接读取 `atMemberIds`，`dispatchNextSpeaker` 优先强制命中被 @ 的成员，其它成员走概率逻辑。  
-   - 智能体回复事件 `CLIENT_MSG_END` 的 payload 不含 `atMemberId`，避免调度死循环。
-
-7) **前端 @ 体验增强（已实现）**  
-   - 输入框内 `@` 触发智能体列表（CLIENT/AGENT），选择后自动回填 `@名字 ` 并记录对应 `memberId`，发送时组装 `atMemberIds`。  
-   - 支持右键消息气泡一键 `@TA`（对 CLIENT/AGENT 消息），自动插入 `@名字 ` 并记录 id。  
-   - 支持“整体删除”标签：在 `@名字 ` 内部退格会一次性清除整段，防止残留半标签导致错发。
+5) **领域模型层 (Repository) 增强**  
+   - `AiRepository` 支持轻量级 `queryPromptByClientId` 与持久化 `updateSystenByPromptId`。
 
 
 ## 7. 规划中能力（Planned）
 
-1) **专业提示词自动组装**  
-   - 以模板 + 占位符方式管理（可视化编辑），保持人设与房间信息注入的标准化。  
-   - 变量注入规范：`{clientName}` / `{roomName}` / `{roomId}` / `{tone}` / `{botRole}`…
+1) **调度决策解耦与规则链重构 (Priority: High)**  
+   - 将当前 `RoomDispatchService` 中的硬编码逻辑（如 @命中、50% 概率）拆分为独立规则。
+   - 引入 `DispatchRuleChain`，支持按优先级（如：`AtRule` > `ArbitratorRule` > `ProbabilityRule`）顺序执行。
+   - 为后续“轮次推进/令牌抢占”提供插件化扩展点。
 
-2) **Agent 执行链接入（只渲染最终总结）**  
-   - 使用 `domain/ai/service/execute` 既有框架；保留思考/步骤在后端记录，不广播。  
-   - 对外事件仍用 `CLIENT_MSG` 或新增 `AGENT_MSG`（待定）。
+2) **仲裁者 (Arbitrator) 角色引入 (Priority: High)**  
+   - 引入特殊 Bot 身份“仲裁者”，具备最高发言权控制逻辑。
+   - 仲裁者可基于对话上下文或特定指令（如：`/stop`, `/next`）干预群聊流向。
+   - 实现“发言令牌”机制，由仲裁者分配当前谁可以说话。
 
-3) **多 Bot 智能答辩与仲裁官**  
-   - “仲裁官（裁判）”作为特殊 Bot（Agent 或 Client），拥有“发言权控制/停止口令”等策略。  
-   - 与“消息限流/轮次推进/令牌抢占”组合使用。
+3) **基础设施缓存分级设计 (Infrastructure Cache)**  
+   - 基于 `AbstractRepository` 实现带过期时间 (TTL) 的缓存。
+   - **分级策略**：
+     - 房间/成员信息：10-30 mins。
+     - AI 静态配置：1 hour。
+     - 模型/API 定义：12-24 hours。
 
-4) **游戏化扩展**  
-   - 状态机 + 私有信息注入（如牌局私牌），结合 `ai_chat_room_state` 维护回合与规则。
+4) **Agent 执行链接入（只渲染最终总结）**  
+   - 激活房间内的 `AGENT` 成员，对接 `domain/ai/service/execute` 执行框架。
 
-5) **调度架构重构（规则链/策略）**  
-   - 将“仲裁者/指定@/概率”拆分为独立规则组件，按优先级执行，`RoomDispatchService` 只负责收事件、拉候选、执行命令。  
-   - 为后续“轮次推进/抢占/限流/状态机”演进提供清晰扩展点。
+5) **多 Bot 智能答辩与游戏化模板**  
+   - 结合 `ai_chat_room_state` 维护回合制规则（如辩论赛、狼人杀场景）。
+   - 实现私有信息注入（私牌/秘密指令）与状态机流转。
 
 
 ## 8. 消息限流与截断策略（Guidelines）

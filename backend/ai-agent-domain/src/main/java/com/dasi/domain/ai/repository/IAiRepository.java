@@ -31,4 +31,18 @@ public interface IAiRepository {
     String queryAgentNameByAgentId(String agentId);
 
     List<AiMcpVO> queryAiMcpVOListByMcpIdList(List<String> mcpIdList);
+
+    /**
+     * 更新系统提示词内容
+     * @param promptId      提示词ID
+     * @param systemPrompt  系统提示词内容
+     */
+    void updateSystenByPromptId(String promptId, String systemPrompt);
+
+    /**
+     * 根据 clientId 查询关联的提示词信息 (轻量级)
+     * @param clientId 客户端ID
+     * @return 提示词VO
+     */
+    AiPromptVO queryPromptByClientId(String clientId);
 }

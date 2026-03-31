@@ -1,8 +1,6 @@
 package com.dasi.domain.room.service.room.impl;
 
-import com.dasi.domain.ai.repository.IAiRepository;
-import com.dasi.domain.room.service.room.IRoomMemberInsetService;
-import jakarta.annotation.Resource;
+import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import org.springframework.stereotype.Service;
 
 /**
@@ -10,18 +8,19 @@ import org.springframework.stereotype.Service;
  * @BelongsPackage: com.dasi.domain.room.service.room.impl
  * @Author: xerina
  * @CreateTime: 2026-03-25  17:51
- * @Description: TODO
+ * @Description: 智能体成员处理策略
  */
-
 @Service("AGENT_MEMBER")
-public class AgentMemberService implements IRoomMemberInsetService {
-
-    @Resource
-    private IAiRepository aiRepository;
+public class AgentMemberService extends AbstractRoomMemberService {
 
     @Override
     public String queryMemberName(String memberId, String memberType) {
        return aiRepository.queryAgentNameByAgentId(memberId);
     }
 
+    @Override
+    protected boolean doJoin(AiChatRoomMemberEntity memberEntity) {
+        // 智能体入场 (未来可扩展其特有的执行链配置)
+        return true;
+    }
 }
