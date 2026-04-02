@@ -3,8 +3,10 @@ package com.dasi.domain.room.service.dispatch.node;
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
+import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
+import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,11 @@ public class AtMentionNode extends AbstractDispatchNode {
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
         Set<String> atMemberIds = strategyEntity.getAtMemberIds();
         if (atMemberIds == null || atMemberIds.isEmpty()) {
+            return router(strategyEntity, dispatchContext);
+        }
+
+        DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(strategyEntity.getRoomId());
+        if (activeSession != null && DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
             return router(strategyEntity, dispatchContext);
         }
 

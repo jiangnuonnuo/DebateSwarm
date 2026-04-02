@@ -8,16 +8,20 @@ import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.model.entity.DebateRecordEntity;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.valobj.DebateContextVO;
+import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
 import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomDao;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomMemberDao;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomMessageDao;
+import com.dasi.infrastructure.persistent.dao.IAiChatRoomStateDao;
 import com.dasi.infrastructure.persistent.dao.IAiDebateRecordDao;
 import com.dasi.infrastructure.persistent.dao.IAiDebateSessionDao;
 import com.dasi.infrastructure.persistent.po.AiChatRoom;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMember;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMessage;
+import com.dasi.infrastructure.persistent.po.AiChatRoomState;
 import com.dasi.infrastructure.persistent.po.AiDebateRecord;
 import com.dasi.infrastructure.persistent.po.AiDebateSession;
 import com.dasi.infrastructure.util.RedisUtil;
@@ -48,6 +52,9 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     private IAiChatRoomMessageDao aiChatRoomMessageDao;
 
     @Resource
+    private IAiChatRoomStateDao aiChatRoomStateDao;
+
+    @Resource
     private IAiDebateSessionDao aiDebateSessionDao;
 
     @Resource
@@ -61,6 +68,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     private static final String ROOM_CLIENTS_KEY = "room_clients:";
     private static final String ACTIVE_DEBATE_SESSION_KEY = "active_debate_session:";
     private static final String DEBATE_CONTEXT_KEY = "debate_context:";
+    private static final String ROOM_DEBATE_STATE_KEY = "room_debate_state:";
 
     @Override
     public void saveRoom(AiChatRoomEntity roomEntity) {
@@ -258,6 +266,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .messageRole(messageEntity.getMessageRole())
                 .content(messageEntity.getContent())
                 .atMemberId(messageEntity.getAtMemberId())
+                .extData(messageEntity.getExtData())
                 .isPreempted(messageEntity.getIsPreempted())
                 .build();
         aiChatRoomMessageDao.insert(po);
@@ -280,6 +289,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .senderType(po.getSenderType())
                 .messageRole(po.getMessageRole())
                 .content(po.getContent())
+                .extData(po.getExtData())
                 .isPreempted(po.getIsPreempted())
                 .createTime(po.getCreateTime())
                 .build()).collect(Collectors.toList());
@@ -299,6 +309,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .senderType(po.getSenderType())
                 .messageRole(po.getMessageRole())
                 .content(po.getContent())
+                .extData(po.getExtData())
                 .isPreempted(po.getIsPreempted())
                 .createTime(po.getCreateTime())
                 .build()).collect(Collectors.toList());
@@ -313,6 +324,55 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     public Boolean queryMemberExistByMemberId(String roomId, String memberId) {
         AiChatRoomMember aiChatRoomMember = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
         return aiChatRoomMember != null ? true : false;
+    }
+
+    @Override
+    public RoomDebateStateVO queryRoomDebateState(String roomId) {
+        String cacheKey = ROOM_DEBATE_STATE_KEY + roomId;
+        return getFromCacheOrDb(cacheKey, RoomDebateStateVO.class, () -> {
+            AiChatRoomState po = aiChatRoomStateDao.queryByRoomId(roomId);
+            if (po == null || po.getPublicData() == null || po.getPublicData().isBlank()) {
+                return null;
+            }
+            RoomDebateStateVO state = JSON.parseObject(po.getPublicData(), RoomDebateStateVO.class);
+            if (state != null) {
+                state.setVersion(po.getVersion());
+            }
+            return state;
+        });
+    }
+
+    @Override
+    public boolean saveRoomDebateState(String roomId, RoomDebateStateVO state, Integer version) {
+        AiChatRoomState po = AiChatRoomState.builder()
+                .roomId(roomId)
+                .currentStage(state != null && state.getActiveDebateSessionId() != null ? "DEBATE" : "FREE_CHAT")
+                .publicData(state == null ? "{}" : JSON.toJSONString(state))
+                .roundNumber(state == null ? 0 : state.getPendingRoundNumber())
+                .version(version)
+                .build();
+        int count = aiChatRoomStateDao.updateStateWithLock(po);
+        if (count > 0) {
+            redisUtil.deleteByKey(ROOM_DEBATE_STATE_KEY + roomId);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void initRoomStateIfAbsent(String roomId) {
+        AiChatRoomState state = aiChatRoomStateDao.queryByRoomId(roomId);
+        if (state != null) {
+            return;
+        }
+        aiChatRoomStateDao.insert(AiChatRoomState.builder()
+                .roomId(roomId)
+                .currentStage("FREE_CHAT")
+                .publicData("{}")
+                .privateData("{}")
+                .roundNumber(0)
+                .version(0)
+                .build());
     }
 
     @Override
@@ -332,7 +392,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .version(session.getVersion())
                 .build();
 
-        AiDebateSession existing = aiDebateSessionDao.queryBySessionId(session.getSessionId());
+        AiDebateSession existing = aiDebateSessionDao.querySessionDetailBySessionId(session.getSessionId());
         if (existing == null) {
             aiDebateSessionDao.insert(po);
         } else {
@@ -347,7 +407,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     public DebateSessionEntity queryActiveDebateSession(String roomId) {
         String cacheKey = ACTIVE_DEBATE_SESSION_KEY + roomId;
         return getFromCacheOrDb(cacheKey, DebateSessionEntity.class, () -> {
-            AiDebateSession po = aiDebateSessionDao.queryActiveByRoomId(roomId);
+            AiDebateSession po = aiDebateSessionDao.queryActiveSessionHeaderByRoomId(roomId);
             if (po == null) return null;
             return convertToDebateSessionEntity(po);
         });
@@ -355,13 +415,22 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
 
     @Override
     public DebateSessionEntity queryDebateSessionBySessionId(String sessionId) {
-        AiDebateSession po = aiDebateSessionDao.queryBySessionId(sessionId);
+        AiDebateSession po = aiDebateSessionDao.querySessionDetailBySessionId(sessionId);
         if (po == null) return null;
         return convertToDebateSessionEntity(po);
     }
 
     @Override
-    public boolean updateDebateSession(DebateSessionEntity session) {
+    public boolean updateDebateSessionProgress(DebateSessionEntity session) {
+        return doUpdateDebateSession(session);
+    }
+
+    @Override
+    public boolean updateDebateSessionStatus(DebateSessionEntity session) {
+        return doUpdateDebateSession(session);
+    }
+
+    private boolean doUpdateDebateSession(DebateSessionEntity session) {
         AiDebateSession po = AiDebateSession.builder()
                 .sessionId(session.getSessionId())
                 .topic(session.getTopic())
@@ -375,7 +444,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
         int count = aiDebateSessionDao.updateWithLock(po);
         if (count > 0) {
             // 乐观锁更新成功，清理缓存
-            AiDebateSession latest = aiDebateSessionDao.queryBySessionId(session.getSessionId());
+            AiDebateSession latest = aiDebateSessionDao.querySessionDetailBySessionId(session.getSessionId());
             if (latest != null) {
                 redisUtil.deleteByKey(ACTIVE_DEBATE_SESSION_KEY + latest.getRoomId());
                 redisUtil.deleteByKey(DEBATE_CONTEXT_KEY + session.getSessionId());
@@ -388,8 +457,9 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     @Override
     public void saveDebateRecord(DebateRecordEntity record) {
         AiDebateRecord po = AiDebateRecord.builder()
-                .record_id(record.getRecordId())
+                .recordId(record.getRecordId())
                 .sessionId(record.getSessionId())
+                .roomId(record.getRoomId())
                 .roundNumber(record.getRoundNumber())
                 .turnNumber(record.getTurnNumber())
                 .speakerClientId(record.getSpeakerClientId())
@@ -402,12 +472,32 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     }
 
     @Override
-    public List<DebateRecordEntity> queryDebateRecords(String sessionId, int roundNumber) {
+    public List<DebateRecordEntity> queryDebateRecordsByRound(String sessionId, Integer roundNumber) {
         List<AiDebateRecord> pos = aiDebateRecordDao.queryBySessionAndRound(sessionId, roundNumber);
         if (pos == null || pos.isEmpty()) return new ArrayList<>();
         return pos.stream().map(po -> DebateRecordEntity.builder()
-                .recordId(po.getRecord_id())
+                .recordId(po.getRecordId())
                 .sessionId(po.getSessionId())
+                .roomId(po.getRoomId())
+                .roundNumber(po.getRoundNumber())
+                .turnNumber(po.getTurnNumber())
+                .speakerClientId(po.getSpeakerClientId())
+                .speakerName(po.getSpeakerName())
+                .side(po.getSide())
+                .messageId(po.getMessageId())
+                .arbitratorReasoning(po.getArbitratorReasoning())
+                .createTime(po.getCreateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DebateRecordEntity> queryLatestDebateRecords(String sessionId, Integer limit) {
+        List<AiDebateRecord> pos = aiDebateRecordDao.queryLatestBySessionId(sessionId, limit);
+        if (pos == null || pos.isEmpty()) return new ArrayList<>();
+        return pos.stream().map(po -> DebateRecordEntity.builder()
+                .recordId(po.getRecordId())
+                .sessionId(po.getSessionId())
+                .roomId(po.getRoomId())
                 .roundNumber(po.getRoundNumber())
                 .turnNumber(po.getTurnNumber())
                 .speakerClientId(po.getSpeakerClientId())

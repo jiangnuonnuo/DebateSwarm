@@ -28,30 +28,32 @@
     <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiDebateSession">
         INSERT INTO ai_debate_session (
             session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
-            turns_per_round, current_round, current_turn, status, version
+            turns_per_round, current_round, current_turn, round_winners, status, version
         )
         VALUES (
             #{sessionId}, #{roomId}, #{topic}, #{arbitratorClientId}, #{proClientIds}, #{conClientIds},
-            #{turnsPerRound}, #{currentRound}, #{currentTurn}, #{status}, #{version}
+            #{turnsPerRound}, #{currentRound}, #{currentTurn}, #{roundWinners}, #{status}, #{version}
         )
     </insert>
 
-    <select id="queryBySessionId" resultMap="dataMap">
-        SELECT session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
-               turns_per_round, current_round, current_turn, round_winners, status, version
+    <select id="querySessionDetailBySessionId" resultMap="dataMap">
+        SELECT id, session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
+               turns_per_round, current_round, current_turn, round_winners, status, version, is_deleted,
+               create_time, update_time
         FROM ai_debate_session
         WHERE session_id = #{sessionId} AND is_deleted = 0
     </select>
 
-    <select id="queryActiveByRoomId" resultMap="dataMap">
-        SELECT session_id, status
+    <select id="queryActiveSessionHeaderByRoomId" resultMap="dataMap">
+        SELECT session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
+               turns_per_round, current_round, current_turn, round_winners, status, version
         FROM ai_debate_session
         WHERE room_id = #{roomId} AND status IN ('RUNNING', 'ROUND_END') AND is_deleted = 0
         LIMIT 1
     </select>
 
     <select id="querySessionContext" resultMap="dataMap">
-        SELECT topic, pro_client_ids, con_client_ids, current_round, turns_per_round
+        SELECT session_id, topic, pro_client_ids, con_client_ids, current_round, current_turn, turns_per_round, status
         FROM ai_debate_session
         WHERE session_id = #{sessionId} AND is_deleted = 0
     </select>

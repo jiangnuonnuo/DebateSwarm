@@ -29,7 +29,7 @@
     </insert>
 
     <select id="queryContextMessages" resultMap="dataMap">
-        SELECT sender_id, sender_name, message_role, content, sender_type
+        SELECT room_id, sender_id, sender_name, message_role, content, sender_type, ext_data, create_time
         FROM ai_chat_room_message
         WHERE room_id = #{roomId} AND is_deleted = 0
         ORDER BY create_time DESC
@@ -51,7 +51,7 @@
     </select>
 
     <select id="queryMessagesByCursor" resultMap="dataMap">
-        SELECT room_id, message_id, sender_id, sender_name, sender_type, message_role, content, is_preempted, create_time
+        SELECT room_id, message_id, sender_id, sender_name, sender_type, message_role, content, ext_data, is_preempted, create_time
         FROM ai_chat_room_message
         WHERE room_id = #{roomId} AND is_deleted = 0
         <if test="cursorTime != null">

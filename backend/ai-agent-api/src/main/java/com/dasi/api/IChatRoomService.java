@@ -3,9 +3,14 @@ package com.dasi.api;
 import com.dasi.api.dto.request.ChatRoomCreateRequest;
 import com.dasi.api.dto.request.ChatRoomCursorRequest;
 import com.dasi.api.dto.request.ChatRoomMemberRequest;
+import com.dasi.api.dto.request.ArbitratorSetRequest;
+import com.dasi.api.dto.request.DebateRoomRequest;
+import com.dasi.api.dto.request.DebateStartRequest;
+import com.dasi.api.dto.request.DebateWinnerRequest;
 import com.dasi.api.dto.response.ChatRoomDTO;
 import com.dasi.api.dto.response.ChatRoomMemberDTO;
 import com.dasi.api.dto.response.ChatRoomMessageDTO;
+import com.dasi.api.dto.response.DebateStatusDTO;
 import com.dasi.types.result.Result;
 import org.springframework.web.bind.annotation.*;
 
@@ -74,5 +79,26 @@ public interface IChatRoomService {
      */
     @PostMapping("/chat-room/message/cursor")
     Result<List<ChatRoomMessageDTO>> queryMessagesByCursor(@RequestBody ChatRoomCursorRequest request);
+
+    @PostMapping("/chat-room/arbitrator/set")
+    Result<Boolean> setArbitrator(@RequestBody ArbitratorSetRequest request);
+
+    @DeleteMapping("/chat-room/arbitrator/remove")
+    Result<Boolean> removeArbitrator(@RequestParam("roomId") String roomId);
+
+    @PostMapping("/chat-room/debate/start")
+    Result<String> startDebate(@RequestBody DebateStartRequest request);
+
+    @PostMapping("/chat-room/debate/round/winner")
+    Result<Boolean> declareRoundWinner(@RequestBody DebateWinnerRequest request);
+
+    @PostMapping("/chat-room/debate/round/next")
+    Result<Boolean> startNextRound(@RequestBody DebateRoomRequest request);
+
+    @PostMapping("/chat-room/debate/stop")
+    Result<Boolean> stopDebate(@RequestBody DebateRoomRequest request);
+
+    @GetMapping("/chat-room/debate/status")
+    Result<DebateStatusDTO> queryDebateStatus(@RequestParam("roomId") String roomId);
 
 }

@@ -49,7 +49,7 @@
 
     <select id="queryExtConfigByRoomId" resultType="java.lang.String">
         SELECT ext_config FROM ai_chat_room
-        WHERE roomid = #{roomId}
+        WHERE room_id = #{roomId} AND is_deleted = 0
     </select>
 
     <update id="updateRoomInfo" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoom">

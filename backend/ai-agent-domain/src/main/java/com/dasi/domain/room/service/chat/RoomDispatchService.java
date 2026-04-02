@@ -145,6 +145,7 @@ public class RoomDispatchService implements IRoomDispatchService {
                 .eventType(eventType)
                 .senderId(currentSenderId)
                 .atMemberIds(atMemberIds)
+                .currentMessage(wsEvent.getPayload() instanceof AiChatRoomMessageEntity ? (AiChatRoomMessageEntity) wsEvent.getPayload() : null)
                 .build();
 
         // 4. 调用决策树工厂执行调度逻辑

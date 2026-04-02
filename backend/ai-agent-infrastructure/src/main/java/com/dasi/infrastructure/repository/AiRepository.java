@@ -109,6 +109,31 @@ public class AiRepository implements IAiRepository {
     }
 
     @Override
+    public AiPromptVO queryPromptByClientId(String clientId) {
+        List<AiConfig> clientConfigList = aiConfigDao.queryByClientIdAndConfigType(clientId, PROMPT.getType());
+        if (clientConfigList == null || clientConfigList.isEmpty()) {
+            return null;
+        }
+
+        for (AiConfig clientConfig : clientConfigList) {
+            if (clientConfig.getConfigStatus() == 0) {
+                continue;
+            }
+            AiPrompt aiPrompt = aiPromptDao.queryByPromptId(clientConfig.getConfigValue());
+            if (aiPrompt == null) {
+                continue;
+            }
+            return AiPromptVO.builder()
+                    .promptId(aiPrompt.getPromptId())
+                    .promptName(aiPrompt.getPromptName())
+                    .systemPrompt(aiPrompt.getSystenPrompt())
+                    .build();
+        }
+
+        return null;
+    }
+
+    @Override
     @Cacheable(cachePrefix = AI_MODEL_VO_PREFIX, cacheClass = AiModelVO.class, cacheType = CacheType.SET)
     public Set<AiModelVO> queryAiModelVOSetByClientIdSet(Set<String> clientIdSet) {
         if (clientIdSet == null || clientIdSet.isEmpty()) {

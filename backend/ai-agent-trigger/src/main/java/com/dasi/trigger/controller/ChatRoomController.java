@@ -1,16 +1,27 @@
 package com.dasi.trigger.controller;
 
 import com.dasi.api.IChatRoomService;
+import com.dasi.api.dto.request.ArbitratorSetRequest;
 import com.dasi.api.dto.request.ChatRoomCreateRequest;
 import com.dasi.api.dto.request.ChatRoomCursorRequest;
 import com.dasi.api.dto.request.ChatRoomMemberRequest;
+import com.dasi.api.dto.request.DebateRoomRequest;
+import com.dasi.api.dto.request.DebateStartRequest;
+import com.dasi.api.dto.request.DebateWinnerRequest;
 import com.dasi.api.dto.response.ChatRoomDTO;
 import com.dasi.api.dto.response.ChatRoomMemberDTO;
 import com.dasi.api.dto.response.ChatRoomMessageDTO;
+import com.dasi.api.dto.response.DebateMemberDTO;
+import com.dasi.api.dto.response.DebateRoundSummaryDTO;
+import com.dasi.api.dto.response.DebateStatusDTO;
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.valobj.DebateMemberStatusVO;
+import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
+import com.dasi.domain.room.model.valobj.DebateStatusVO;
 import com.dasi.domain.room.service.IRoomAdminService;
+import com.dasi.domain.room.service.debate.IDebateService;
 import com.dasi.domain.util.jwt.UserContext;
 import com.dasi.types.result.Result;
 import jakarta.annotation.Resource;
@@ -39,6 +50,9 @@ public class ChatRoomController implements IChatRoomService {
 
     @Resource
     private UserContext userContext;
+
+    @Resource
+    private IDebateService debateService;
 
     @Override
     @PostMapping("/create")
@@ -169,6 +183,7 @@ public class ChatRoomController implements IChatRoomService {
                     .senderType(entity.getSenderType())
                     .messageRole(entity.getMessageRole())
                     .content(entity.getContent())
+                    .extData(entity.getExtData())
                     .isPreempted(entity.getIsPreempted())
                     .createTime(Date.from(entity.getCreateTime().atZone(ZoneId.systemDefault()).toInstant()))
                     .timestamp(entity.getCreateTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
@@ -179,5 +194,140 @@ public class ChatRoomController implements IChatRoomService {
             log.error("【房间管理】查询历史记录失败", e);
             return Result.error("获取聊天记录失败");
         }
+    }
+
+    @Override
+    @PostMapping("/arbitrator/set")
+    public Result<Boolean> setArbitrator(@RequestBody ArbitratorSetRequest request) {
+        try {
+            debateService.setArbitrator(request.getRoomId(), request.getClientId());
+            return Result.success(Boolean.TRUE);
+        } catch (Exception e) {
+            log.error("【辩论管理】设置仲裁者失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @DeleteMapping("/arbitrator/remove")
+    public Result<Boolean> removeArbitrator(@RequestParam("roomId") String roomId) {
+        try {
+            debateService.removeArbitrator(roomId);
+            return Result.success(Boolean.TRUE);
+        } catch (Exception e) {
+            log.error("【辩论管理】移除仲裁者失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @PostMapping("/debate/start")
+    public Result<String> startDebate(@RequestBody DebateStartRequest request) {
+        try {
+            return Result.success(debateService.startDebate(
+                    request.getRoomId(),
+                    request.getTopic(),
+                    request.getProClientIds(),
+                    request.getConClientIds(),
+                    request.getTurnsPerRound()
+            ));
+        } catch (Exception e) {
+            log.error("【辩论管理】开始辩论失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @PostMapping("/debate/round/winner")
+    public Result<Boolean> declareRoundWinner(@RequestBody DebateWinnerRequest request) {
+        try {
+            debateService.declareRoundWinner(request.getRoomId(), request.getWinnerSide());
+            return Result.success(Boolean.TRUE);
+        } catch (Exception e) {
+            log.error("【辩论管理】宣布胜方失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @PostMapping("/debate/round/next")
+    public Result<Boolean> startNextRound(@RequestBody DebateRoomRequest request) {
+        try {
+            debateService.startNextRound(request.getRoomId());
+            return Result.success(Boolean.TRUE);
+        } catch (Exception e) {
+            log.error("【辩论管理】开始下一轮失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @PostMapping("/debate/stop")
+    public Result<Boolean> stopDebate(@RequestBody DebateRoomRequest request) {
+        try {
+            debateService.stopDebate(request.getRoomId());
+            return Result.success(Boolean.TRUE);
+        } catch (Exception e) {
+            log.error("【辩论管理】停止辩论失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @Override
+    @GetMapping("/debate/status")
+    public Result<DebateStatusDTO> queryDebateStatus(@RequestParam("roomId") String roomId) {
+        try {
+            return Result.success(convertDebateStatus(debateService.queryDebateStatus(roomId)));
+        } catch (Exception e) {
+            log.error("【辩论管理】查询辩论状态失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    private DebateStatusDTO convertDebateStatus(DebateStatusVO statusVO) {
+        if (statusVO == null) {
+            return null;
+        }
+        return DebateStatusDTO.builder()
+                .sessionId(statusVO.getSessionId())
+                .topic(statusVO.getTopic())
+                .status(statusVO.getStatus() == null ? null : statusVO.getStatus().getCode())
+                .currentRound(statusVO.getCurrentRound())
+                .currentTurn(statusVO.getCurrentTurn())
+                .turnsPerRound(statusVO.getTurnsPerRound())
+                .roundWinners(statusVO.getRoundWinners())
+                .arbitratorClientId(statusVO.getArbitratorClientId())
+                .arbitratorName(statusVO.getArbitratorName())
+                .waitingForWinner(statusVO.getWaitingForWinner())
+                .pendingRoundNumber(statusVO.getPendingRoundNumber())
+                .lastRoundSummary(convertRoundSummary(statusVO.getLastRoundSummary()))
+                .proMembers(convertMembers(statusVO.getProMembers()))
+                .conMembers(convertMembers(statusVO.getConMembers()))
+                .build();
+    }
+
+    private DebateRoundSummaryDTO convertRoundSummary(DebateRoundSummaryVO summaryVO) {
+        if (summaryVO == null) {
+            return null;
+        }
+        return DebateRoundSummaryDTO.builder()
+                .roundNumber(summaryVO.getRoundNumber())
+                .turnCount(summaryVO.getTurnCount())
+                .lastSpeakerId(summaryVO.getLastSpeakerId())
+                .lastSpeakerName(summaryVO.getLastSpeakerName())
+                .waitingForWinner(summaryVO.getWaitingForWinner())
+                .build();
+    }
+
+    private List<DebateMemberDTO> convertMembers(List<DebateMemberStatusVO> members) {
+        if (members == null) {
+            return List.of();
+        }
+        return members.stream()
+                .map(item -> DebateMemberDTO.builder()
+                        .clientId(item.getClientId())
+                        .clientName(item.getClientName())
+                        .build())
+                .collect(Collectors.toList());
     }
 }

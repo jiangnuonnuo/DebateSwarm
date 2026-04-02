@@ -24,4 +24,9 @@ public interface IRoomChatService {
      */
     void clientChat(String roomId, String clientId);
 
+    /**
+     * 广播系统通知并落库
+     */
+    void publishSystemNotice(String roomId, String noticeType, String content, String extData);
+
 }

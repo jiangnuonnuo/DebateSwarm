@@ -24,6 +24,9 @@ public class DispatchContext {
     /** 扩展属性位 */
     private final Map<String, Object> metadata = new HashMap<>();
 
+    /** 是否终止后续链路 */
+    private boolean terminateChain;
+
     /**
      * 是否已经产生决策
      */

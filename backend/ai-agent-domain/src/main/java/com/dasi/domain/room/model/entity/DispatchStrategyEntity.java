@@ -30,4 +30,7 @@ public class DispatchStrategyEntity {
     /** 被 @ 的成员ID集合 */
     private Set<String> atMemberIds;
 
+    /** 触发当前调度的消息体 */
+    private AiChatRoomMessageEntity currentMessage;
+
 }

@@ -7,6 +7,7 @@ import com.dasi.domain.room.model.entity.DebateRecordEntity;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.valobj.DebateContextVO;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 
 import java.util.List;
 
@@ -98,6 +99,12 @@ public interface IChatRoomRepository {
 
     Boolean queryMemberExistByMemberId(String roomId, String memberId);
 
+    RoomDebateStateVO queryRoomDebateState(String roomId);
+
+    boolean saveRoomDebateState(String roomId, RoomDebateStateVO state, Integer version);
+
+    void initRoomStateIfAbsent(String roomId);
+
     /**
      * 保存/更新辩论会话
      * @param session 辩论会话领域对象
@@ -123,7 +130,9 @@ public interface IChatRoomRepository {
      * @param session 包含业务ID和version的会话对象
      * @return 是否更新成功
      */
-    boolean updateDebateSession(DebateSessionEntity session);
+    boolean updateDebateSessionProgress(DebateSessionEntity session);
+
+    boolean updateDebateSessionStatus(DebateSessionEntity session);
 
     /**
      * 保存辩论对话记录
@@ -137,7 +146,9 @@ public interface IChatRoomRepository {
      * @param roundNumber 轮次号
      * @return 记录列表
      */
-    List<DebateRecordEntity> queryDebateRecords(String sessionId, int roundNumber);
+    List<DebateRecordEntity> queryDebateRecordsByRound(String sessionId, Integer roundNumber);
+
+    List<DebateRecordEntity> queryLatestDebateRecords(String sessionId, Integer limit);
 
     /**
      * 查询辩论会话上下文信息 (含缓存处理)

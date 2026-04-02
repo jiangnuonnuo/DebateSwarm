@@ -12,6 +12,8 @@ public interface IAiRepository {
 
     AiClientVO queryAiClientVO(String clientId);
 
+    AiPromptVO queryPromptByClientId(String clientId);
+
     Set<AiAdvisorVO> queryAiAdvisorVOSetByClientIdSet(Set<String> clientIdSet);
 
     Map<String, AiPromptVO> queryAiPromptVOMapByClientIdSet(Set<String> clientIdSet);

@@ -1,6 +1,7 @@
 package com.dasi.domain.room.model.entity;
 
 import com.dasi.domain.room.model.valobj.DebateStatus;
+import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,11 +58,71 @@ public class DebateSessionEntity {
     /** 乐观锁版本号 */
     private Integer version;
 
-    /**
-     * 获取指定 Client 在辩论中的阵营
-     * @param clientId 参与者ID
-     * @return PRO/CON/null
-     */
+    public void startFirstRound() {
+        this.currentRound = 1;
+        this.currentTurn = 0;
+        this.status = DebateStatus.RUNNING;
+        if (this.roundWinners == null) {
+            this.roundWinners = new ArrayList<>();
+        }
+    }
+
+    public void recordTurnFinished() {
+        if (currentTurn == null) {
+            currentTurn = 0;
+        }
+        currentTurn++;
+    }
+
+    public void finishCurrentRound() {
+        if (!isRunning()) {
+            throw new IllegalStateException("当前辩论未在运行中，无法结束本轮");
+        }
+        this.status = DebateStatus.ROUND_END;
+    }
+
+    public boolean canDeclareWinner() {
+        return DebateStatus.ROUND_END.equals(this.status);
+    }
+
+    public void declareRoundWinner(String winnerSide) {
+        if (!canDeclareWinner()) {
+            throw new IllegalStateException("当前不处于待宣判状态");
+        }
+        if (!"PRO".equals(winnerSide) && !"CON".equals(winnerSide)) {
+            throw new IllegalArgumentException("winnerSide 只能是 PRO 或 CON");
+        }
+        if (roundWinners == null) {
+            roundWinners = new ArrayList<>();
+        }
+        if (roundWinners.size() >= currentRound) {
+            throw new IllegalStateException("当前轮已宣判胜方");
+        }
+        roundWinners.add(winnerSide);
+    }
+
+    public boolean canStartNextRound() {
+        return DebateStatus.ROUND_END.equals(status)
+                && roundWinners != null
+                && roundWinners.size() >= currentRound;
+    }
+
+    public void startNextRound() {
+        if (!canStartNextRound()) {
+            throw new IllegalStateException("当前轮尚未宣判，无法开始下一轮");
+        }
+        if (currentRound == null) {
+            currentRound = 0;
+        }
+        currentRound++;
+        currentTurn = 0;
+        status = DebateStatus.RUNNING;
+    }
+
+    public void finishDebate() {
+        this.status = DebateStatus.FINISHED;
+    }
+
     public String getSideForClient(String clientId) {
         if (proClientIds != null && proClientIds.contains(clientId)) {
             return "PRO";
@@ -81,29 +143,62 @@ public class DebateSessionEntity {
         return all;
     }
 
-    /**
-     * 检查本轮是否已完成
-     */
     public boolean isRoundComplete() {
         return currentTurn != null && turnsPerRound != null && currentTurn >= turnsPerRound;
     }
 
-    /**
-     * 推进到下一个发言位
-     */
-    public void advanceTurn() {
-        if (currentTurn == null) currentTurn = 0;
-        currentTurn++;
+    public boolean validateDebater(String clientId) {
+        return getSideForClient(clientId) != null;
     }
 
-    /**
-     * 推进到下一轮
-     */
-    public void advanceRound() {
-        if (currentRound == null) currentRound = 0;
-        currentRound++;
-        currentTurn = 0;
-        status = DebateStatus.RUNNING;
+    public String nextSpeakerByRoundRobin(String lastSpeakerId) {
+        if (proClientIds == null || proClientIds.isEmpty() || conClientIds == null || conClientIds.isEmpty()) {
+            return null;
+        }
+
+        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
+            return proClientIds.get(0);
+        }
+
+        String lastSide = getSideForClient(lastSpeakerId);
+        if ("PRO".equals(lastSide)) {
+            return nextFromSide(conClientIds, lastSpeakerId);
+        }
+        if ("CON".equals(lastSide)) {
+            return nextFromSide(proClientIds, lastSpeakerId);
+        }
+
+        return proClientIds.get(0);
+    }
+
+    public DebateRoundSummaryVO buildRoundSummary(String lastSpeakerId, String lastSpeakerName) {
+        return DebateRoundSummaryVO.builder()
+                .roundNumber(currentRound)
+                .turnCount(currentTurn)
+                .lastSpeakerId(lastSpeakerId)
+                .lastSpeakerName(lastSpeakerName)
+                .waitingForWinner(DebateStatus.ROUND_END.equals(status))
+                .build();
+    }
+
+    public boolean isRunning() {
+        return DebateStatus.RUNNING.equals(this.status);
+    }
+
+    public boolean isFinished() {
+        return DebateStatus.FINISHED.equals(this.status);
+    }
+
+    private String nextFromSide(List<String> sideMembers, String lastSpeakerId) {
+        if (sideMembers == null || sideMembers.isEmpty()) {
+            return null;
+        }
+        List<String> members = new ArrayList<>(sideMembers);
+        int currentIndex = members.indexOf(lastSpeakerId);
+        if (currentIndex < 0) {
+            return members.get(0);
+        }
+        return members.get((currentIndex + 1) % members.size());
     }
 
     /**
@@ -123,5 +218,9 @@ public class DebateSessionEntity {
     public static String listToStr(List<String> list) {
         if (list == null || list.isEmpty()) return "";
         return String.join(",", list);
+    }
+
+    public List<String> safeRoundWinners() {
+        return roundWinners == null ? Collections.emptyList() : roundWinners;
     }
 }

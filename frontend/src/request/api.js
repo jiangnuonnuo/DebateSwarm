@@ -119,6 +119,13 @@ const CHAT_ROOM_MEMBER_REMOVE_PATH = `${CHAT_ROOM_BASE_PATH}/member/remove`;
 const CHAT_ROOM_MEMBER_LIST_PATH = `${CHAT_ROOM_BASE_PATH}/member/list`;
 const CHAT_ROOM_LIST_PATH = `${CHAT_ROOM_BASE_PATH}/list`;
 const CHAT_ROOM_MESSAGE_CURSOR_PATH = `${CHAT_ROOM_BASE_PATH}/message/cursor`;
+const CHAT_ROOM_ARBITRATOR_SET_PATH = `${CHAT_ROOM_BASE_PATH}/arbitrator/set`;
+const CHAT_ROOM_ARBITRATOR_REMOVE_PATH = `${CHAT_ROOM_BASE_PATH}/arbitrator/remove`;
+const CHAT_ROOM_DEBATE_START_PATH = `${CHAT_ROOM_BASE_PATH}/debate/start`;
+const CHAT_ROOM_DEBATE_WINNER_PATH = `${CHAT_ROOM_BASE_PATH}/debate/round/winner`;
+const CHAT_ROOM_DEBATE_NEXT_PATH = `${CHAT_ROOM_BASE_PATH}/debate/round/next`;
+const CHAT_ROOM_DEBATE_STOP_PATH = `${CHAT_ROOM_BASE_PATH}/debate/stop`;
+const CHAT_ROOM_DEBATE_STATUS_PATH = `${CHAT_ROOM_BASE_PATH}/debate/status`;
 
 const WORKSPACE_BASE_PATH = '/api/v1/workspace';
 const PLAZA_BASE_PATH = `${WORKSPACE_BASE_PATH}/plaza`;
@@ -819,6 +826,27 @@ export const chatRoomList = async () =>
 
 export const chatRoomMessageCursor = async (payload = {}) =>
     http.post(CHAT_ROOM_MESSAGE_CURSOR_PATH, payload, { toast: false });
+
+export const chatRoomArbitratorSet = async (payload = {}) =>
+    http.post(CHAT_ROOM_ARBITRATOR_SET_PATH, trimStrings(payload));
+
+export const chatRoomArbitratorRemove = async (roomId) =>
+    http.delete(CHAT_ROOM_ARBITRATOR_REMOVE_PATH, { params: { roomId } });
+
+export const chatRoomDebateStart = async (payload = {}) =>
+    http.post(CHAT_ROOM_DEBATE_START_PATH, trimStrings(payload));
+
+export const chatRoomDebateDeclareWinner = async (payload = {}) =>
+    http.post(CHAT_ROOM_DEBATE_WINNER_PATH, trimStrings(payload));
+
+export const chatRoomDebateNextRound = async (payload = {}) =>
+    http.post(CHAT_ROOM_DEBATE_NEXT_PATH, trimStrings(payload));
+
+export const chatRoomDebateStop = async (payload = {}) =>
+    http.post(CHAT_ROOM_DEBATE_STOP_PATH, trimStrings(payload));
+
+export const chatRoomDebateStatus = async (roomId) =>
+    http.get(CHAT_ROOM_DEBATE_STATUS_PATH, { params: { roomId: roomId?.trim() }, toast: false });
 
 // 以下接口后端当前未实现，保留函数供调用方降级处理
 // -------------------- Studio / Workspace Agent --------------------

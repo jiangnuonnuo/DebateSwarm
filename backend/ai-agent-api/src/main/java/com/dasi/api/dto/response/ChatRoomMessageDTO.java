@@ -41,6 +41,9 @@ public class ChatRoomMessageDTO implements Serializable {
     /** 消息内容 */
     private String content;
 
+    /** 扩展数据 */
+    private String extData;
+
     /** 是否抢占发言: 0-否, 1-是 */
     private Integer isPreempted;
 

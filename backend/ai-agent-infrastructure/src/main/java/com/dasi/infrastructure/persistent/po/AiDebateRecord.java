@@ -20,10 +20,13 @@ public class AiDebateRecord {
     private Long id;
 
     /** 记录业务ID (dr_xxx) */
-    private String record_id;
+    private String recordId;
 
     /** 关联辩论会话ID */
     private String sessionId;
+
+    /** 房间ID */
+    private String roomId;
 
     /** 所属轮次(1-based) */
     private Integer roundNumber;
@@ -48,6 +51,9 @@ public class AiDebateRecord {
 
     /** 消息内容 (JOIN 查询使用) */
     private String content;
+
+    /** 逻辑删除标记 */
+    private Integer isDeleted;
 
     /** 创建时间 */
     private LocalDateTime createTime;

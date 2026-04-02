@@ -22,6 +22,9 @@ public class DebateRecordEntity {
     /** 关联辩论会话ID */
     private String sessionId;
 
+    /** 房间ID */
+    private String roomId;
+
     /** 所属轮次(1-based) */
     private Integer roundNumber;
 

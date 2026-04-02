@@ -147,4 +147,29 @@ public class RoomChatService implements IRoomChatService {
             log.error("【群聊服务】客户端执行失败 roomId={}, clientId={}", roomId, clientId, e);
         }
     }
+
+    @Override
+    public void publishSystemNotice(String roomId, String noticeType, String content, String extData) {
+        AiChatRoomMessageEntity systemMsg = AiChatRoomMessageEntity.builder()
+                .roomId(roomId)
+                .messageId("msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                .senderId("system")
+                .senderName("系统通知")
+                .senderType("SYSTEM")
+                .messageRole("system")
+                .content(content)
+                .extData(extData)
+                .isPreempted(0)
+                .build();
+
+        contextAssemblerService.recordMessage(systemMsg);
+
+        eventPublisher.publishExternal(WebSocketEvent.<AiChatRoomMessageEntity>builder()
+                .roomId(roomId)
+                .eventType(WebSocketEvent.EventType.SYSTEM_NOTICE)
+                .payload(systemMsg)
+                .timestamp(System.currentTimeMillis())
+                .traceId(noticeType)
+                .build());
+    }
 }

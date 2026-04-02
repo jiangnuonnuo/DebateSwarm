@@ -28,7 +28,8 @@
     </insert>
 
     <select id="queryByRoomId" resultMap="dataMap">
-        SELECT current_stage, active_member_id, public_data, private_data, version
+        SELECT id, room_id, current_stage, active_member_id, action_deadline, public_data, private_data,
+               round_number, last_action_msg_id, version, is_deleted, create_time, update_time
         FROM ai_chat_room_state
         WHERE room_id = #{roomId} AND is_deleted = 0
     </select>

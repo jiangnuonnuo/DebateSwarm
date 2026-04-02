@@ -8,8 +8,9 @@
 <mapper namespace="com.dasi.infrastructure.persistent.dao.IAiDebateRecordDao">
     <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiDebateRecord">
         <id column="id" property="id"/>
-        <result column="record_id" property="record_id"/>
+        <result column="record_id" property="recordId"/>
         <result column="session_id" property="sessionId"/>
+        <result column="room_id" property="roomId"/>
         <result column="round_number" property="roundNumber"/>
         <result column="turn_number" property="turnNumber"/>
         <result column="speaker_client_id" property="speakerClientId"/>
@@ -18,16 +19,17 @@
         <result column="message_id" property="messageId"/>
         <result column="arbitrator_reasoning" property="arbitratorReasoning"/>
         <result column="content" property="content"/>
+        <result column="is_deleted" property="isDeleted"/>
         <result column="create_time" property="createTime"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiDebateRecord">
         INSERT INTO ai_debate_record (
-            record_id, session_id, round_number, turn_number, speaker_client_id, speaker_name, side,
+            record_id, session_id, room_id, round_number, turn_number, speaker_client_id, speaker_name, side,
             message_id, arbitrator_reasoning
         )
         VALUES (
-            #{record_id}, #{sessionId}, #{roundNumber}, #{turnNumber}, #{speakerClientId}, #{speakerName}, #{side},
+            #{recordId}, #{sessionId}, #{roomId}, #{roundNumber}, #{turnNumber}, #{speakerClientId}, #{speakerName}, #{side},
             #{messageId}, #{arbitratorReasoning}
         )
     </insert>
@@ -36,27 +38,28 @@
         SELECT r.side, r.speaker_client_id, r.speaker_name, m.content
         FROM ai_debate_record r
         LEFT JOIN ai_chat_room_message m ON r.message_id = m.message_id
-        WHERE r.session_id = #{sessionId} AND r.round_number = #{roundNumber}
+        WHERE r.session_id = #{sessionId} AND r.round_number = #{roundNumber} AND r.is_deleted = 0
         ORDER BY r.turn_number ASC
     </select>
 
     <select id="queryBySessionAndRound" resultMap="dataMap">
-        SELECT record_id, session_id, round_number, turn_number, speaker_client_id, side,
-               message_id, arbitrator_reasoning, create_time
+        SELECT id, record_id, session_id, room_id, round_number, turn_number, speaker_client_id, speaker_name, side,
+               message_id, arbitrator_reasoning, is_deleted, create_time
         FROM ai_debate_record
-        WHERE session_id = #{sessionId} AND round_number = #{roundNumber}
+        WHERE session_id = #{sessionId} AND round_number = #{roundNumber} AND is_deleted = 0
         ORDER BY turn_number ASC
     </select>
 
-    <select id="queryBySessionId" resultMap="dataMap">
-        SELECT record_id, session_id, round_number, turn_number, speaker_client_id, side,
-               message_id, arbitrator_reasoning, create_time
+    <select id="queryLatestBySessionId" resultMap="dataMap">
+        SELECT id, record_id, session_id, room_id, round_number, turn_number, speaker_client_id, speaker_name, side,
+               message_id, arbitrator_reasoning, is_deleted, create_time
         FROM ai_debate_record
-        WHERE session_id = #{sessionId}
-        ORDER BY round_number ASC, turn_number ASC
+        WHERE session_id = #{sessionId} AND is_deleted = 0
+        ORDER BY round_number DESC, turn_number DESC
+        LIMIT #{limit}
     </select>
 
     <delete id="deleteBySessionId">
-        DELETE FROM ai_debate_record WHERE session_id = #{sessionId}
+        UPDATE ai_debate_record SET is_deleted = 1 WHERE session_id = #{sessionId}
     </delete>
 </mapper>

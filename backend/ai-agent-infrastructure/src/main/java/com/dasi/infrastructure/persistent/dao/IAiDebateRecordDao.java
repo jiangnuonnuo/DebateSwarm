@@ -28,10 +28,7 @@ public interface IAiDebateRecordDao {
      */
     List<AiDebateRecord> queryBySessionAndRound(@Param("sessionId") String sessionId, @Param("roundNumber") Integer roundNumber);
 
-    /**
-     * 查询会话下的所有记录
-     */
-    List<AiDebateRecord> queryBySessionId(@Param("sessionId") String sessionId);
+    List<AiDebateRecord> queryLatestBySessionId(@Param("sessionId") String sessionId, @Param("limit") Integer limit);
 
     /**
      * 物理/逻辑删除会话相关记录

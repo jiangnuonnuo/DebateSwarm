@@ -40,6 +40,9 @@ public class AiChatRoomMessageEntity {
     /** 被@的成员ID */
     private String atMemberId;
 
+    /** 扩展数据 */
+    private String extData;
+
     /** 是否抢占成功发言 */
     private Integer isPreempted;
 

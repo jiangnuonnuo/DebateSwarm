@@ -9,6 +9,12 @@
                     <p class="text-xs text-[rgba(231,236,244,0.5)] truncate">{{ currentRoom?.roomDesc || '多智能体协同空间' }}</p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <button @click="showDebatePanel = !showDebatePanel"
+                            class="px-3 py-2 rounded-lg border border-[rgba(123,200,255,0.28)] text-xs font-medium text-[#7bc8ff] hover:bg-[#7bc8ff]/10 transition-all"
+                            :class="debatePanelVisible ? 'bg-[#7bc8ff]/10' : ''"
+                            title="辩论面板">
+                        {{ debatePanelVisible ? '收起辩论' : '辩论面板' }}
+                    </button>
                     <button @click="showMemberDrawer = !showMemberDrawer" 
                             class="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-all relative"
                             title="房间成员">
@@ -23,6 +29,205 @@
                 </div>
             </header>
 
+            <section v-if="debatePanelVisible"
+                     class="px-6 py-4 border-b border-[rgba(255,255,255,0.06)] bg-[linear-gradient(135deg,rgba(123,200,255,0.08),rgba(20,32,58,0.82))]">
+                <div class="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
+                    <div class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(8,14,26,0.72)] p-4 space-y-4">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.24em] text-[rgba(231,236,244,0.38)]">Debate Status</p>
+                                <h3 class="mt-1 text-base font-semibold text-[#e7ecf4]">
+                                    {{ debateStatus?.topic || debateTopic || '尚未开始辩论' }}
+                                </h3>
+                                <p class="mt-1 text-xs text-[rgba(231,236,244,0.55)]">
+                                    仲裁者：{{ debateStatus?.arbitratorName || selectedArbitratorName || '未设置' }}
+                                </p>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 text-right">
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold border"
+                                      :class="debateStatusPillClass">
+                                    {{ debateStatusLabel }}
+                                </span>
+                                <span class="text-xs text-[rgba(231,236,244,0.55)]">{{ debateProgressLabel }}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-[rgba(231,236,244,0.38)]">当前轮次</p>
+                                <p class="mt-2 text-sm font-medium text-[#e7ecf4]">
+                                    第 {{ debateStatus?.currentRound || debateStatus?.pendingRoundNumber || 0 }} 轮
+                                </p>
+                                <p class="mt-1 text-xs text-[rgba(231,236,244,0.5)]">
+                                    {{ debateStatus?.currentTurn || 0 }}/{{ debateStatus?.turnsPerRound || debateTurns || 0 }} 次发言
+                                </p>
+                            </div>
+                            <div class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-[rgba(231,236,244,0.38)]">轮次结果</p>
+                                <p class="mt-2 text-sm font-medium text-[#e7ecf4]">{{ debateRoundResultLabel }}</p>
+                                <p class="mt-1 text-xs text-[rgba(231,236,244,0.5)]">
+                                    {{ debateStatus?.lastRoundSummary?.lastSpeakerName ? `最后发言：${debateStatus.lastRoundSummary.lastSpeakerName}` : '等待发言记录' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <div class="rounded-xl border border-[rgba(68,184,255,0.18)] bg-[rgba(68,184,255,0.06)] p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-[#7bc8ff]">正方</span>
+                                    <span class="text-[10px] text-[rgba(231,236,244,0.45)]">{{ selectedProIds.length }} 人</span>
+                                </div>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <span v-for="member in (debateStatus?.proMembers?.length ? debateStatus.proMembers : selectedProMembers)"
+                                          :key="member.clientId"
+                                          class="px-2.5 py-1 rounded-full text-xs bg-[#7bc8ff]/12 border border-[#7bc8ff]/24 text-[#cfeaff]">
+                                        {{ member.clientName }}
+                                    </span>
+                                    <span v-if="!(debateStatus?.proMembers?.length || selectedProMembers.length)"
+                                          class="text-xs text-[rgba(231,236,244,0.35)]">暂未选择</span>
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-[rgba(251,146,60,0.18)] bg-[rgba(251,146,60,0.06)] p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-[#fbbf24]">反方</span>
+                                    <span class="text-[10px] text-[rgba(231,236,244,0.45)]">{{ selectedConIds.length }} 人</span>
+                                </div>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <span v-for="member in (debateStatus?.conMembers?.length ? debateStatus.conMembers : selectedConMembers)"
+                                          :key="member.clientId"
+                                          class="px-2.5 py-1 rounded-full text-xs bg-[#f59e0b]/12 border border-[#f59e0b]/24 text-[#ffe4b5]">
+                                        {{ member.clientName }}
+                                    </span>
+                                    <span v-if="!(debateStatus?.conMembers?.length || selectedConMembers.length)"
+                                          class="text-xs text-[rgba(231,236,244,0.35)]">暂未选择</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="debateStatus?.lastRoundSummary"
+                             class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3 text-xs text-[rgba(231,236,244,0.58)]">
+                            第 {{ debateStatus.lastRoundSummary.roundNumber }} 轮已结束，共 {{ debateStatus.lastRoundSummary.turnCount }} 次发言。
+                            <span v-if="debateStatus.lastRoundSummary.waitingForWinner">当前等待裁决胜方。</span>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(8,14,26,0.72)] p-4 space-y-4">
+                        <div class="space-y-2">
+                            <label class="text-xs font-medium text-[rgba(231,236,244,0.58)]">仲裁者</label>
+                            <div class="flex gap-2">
+                                <select v-model="selectedArbitratorId"
+                                        class="flex-1 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-[#e7ecf4] outline-none">
+                                    <option value="">请选择客户端</option>
+                                    <option v-for="option in debateClientOptions" :key="option.id" :value="option.id">
+                                        {{ option.name }}
+                                    </option>
+                                </select>
+                                <button @click="setDebateArbitrator"
+                                        :disabled="debateLoading || !selectedArbitratorId"
+                                        class="px-3 py-2 rounded-xl bg-[#7bc8ff] text-[#09111f] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                    设置
+                                </button>
+                                <button @click="removeDebateArbitrator"
+                                        :disabled="debateLoading || !selectedArbitratorId"
+                                        class="px-3 py-2 rounded-xl border border-[rgba(255,255,255,0.1)] text-sm text-[rgba(231,236,244,0.78)] hover:bg-[rgba(255,255,255,0.04)] disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                    清空
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-[1fr,120px]">
+                            <label class="space-y-2">
+                                <span class="text-xs font-medium text-[rgba(231,236,244,0.58)]">辩题</span>
+                                <input v-model="debateTopic"
+                                       type="text"
+                                       maxlength="200"
+                                       class="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-[#e7ecf4] outline-none"
+                                       placeholder="例如：AI 会提升而不是替代程序员" />
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-xs font-medium text-[rgba(231,236,244,0.58)]">每轮发言数</span>
+                                <input v-model="debateTurns"
+                                       type="number"
+                                       min="2"
+                                       max="20"
+                                       class="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-[#e7ecf4] outline-none" />
+                            </label>
+                        </div>
+
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <div class="rounded-xl border border-[rgba(68,184,255,0.18)] bg-[rgba(68,184,255,0.04)] p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-[#7bc8ff]">选择正方</span>
+                                    <span class="text-[10px] text-[rgba(231,236,244,0.45)]">{{ selectedProIds.length }} 人</span>
+                                </div>
+                                <div class="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                                    <label v-for="option in availableDebaterOptions"
+                                           :key="`pro-${option.id}`"
+                                           class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm transition-all cursor-pointer"
+                                           :class="selectedProIds.includes(option.id) ? 'border-[#7bc8ff]/45 bg-[#7bc8ff]/10 text-[#e7ecf4]' : 'border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] text-[rgba(231,236,244,0.72)] hover:bg-[rgba(255,255,255,0.05)]'">
+                                        <span class="truncate">{{ option.name }}</span>
+                                        <input type="checkbox"
+                                               :checked="selectedProIds.includes(option.id)"
+                                               @change="toggleDebater('PRO', option.id)"
+                                               class="accent-[#7bc8ff]" />
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-[rgba(251,146,60,0.18)] bg-[rgba(251,146,60,0.04)] p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-[#fbbf24]">选择反方</span>
+                                    <span class="text-[10px] text-[rgba(231,236,244,0.45)]">{{ selectedConIds.length }} 人</span>
+                                </div>
+                                <div class="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                                    <label v-for="option in availableDebaterOptions"
+                                           :key="`con-${option.id}`"
+                                           class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm transition-all cursor-pointer"
+                                           :class="selectedConIds.includes(option.id) ? 'border-[#f59e0b]/45 bg-[#f59e0b]/10 text-[#e7ecf4]' : 'border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] text-[rgba(231,236,244,0.72)] hover:bg-[rgba(255,255,255,0.05)]'">
+                                        <span class="truncate">{{ option.name }}</span>
+                                        <input type="checkbox"
+                                               :checked="selectedConIds.includes(option.id)"
+                                               @change="toggleDebater('CON', option.id)"
+                                               class="accent-[#f59e0b]" />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <button @click="startDebateFlow"
+                                    :disabled="debateLoading || isDebateRunning"
+                                    class="px-4 py-2 rounded-xl bg-[#22c55e] text-[#05140a] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                开始辩论
+                            </button>
+                            <button v-if="waitingForWinner"
+                                    @click="declareDebateWinner('PRO')"
+                                    :disabled="debateLoading"
+                                    class="px-4 py-2 rounded-xl bg-[#38bdf8] text-[#07121d] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                正方胜
+                            </button>
+                            <button v-if="waitingForWinner"
+                                    @click="declareDebateWinner('CON')"
+                                    :disabled="debateLoading"
+                                    class="px-4 py-2 rounded-xl bg-[#f59e0b] text-[#1d1204] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                反方胜
+                            </button>
+                            <button v-if="canStartNextRound"
+                                    @click="startDebateNextRound"
+                                    :disabled="debateLoading"
+                                    class="px-4 py-2 rounded-xl border border-[rgba(123,200,255,0.25)] text-[#7bc8ff] text-sm font-semibold hover:bg-[#7bc8ff]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                开始下一轮
+                            </button>
+                            <button v-if="isDebateRunning"
+                                    @click="stopDebateFlow"
+                                    :disabled="debateLoading"
+                                    class="px-4 py-2 rounded-xl border border-[rgba(239,68,68,0.3)] text-[#f87171] text-sm font-semibold hover:bg-[#ef4444]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                                结束辩论
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 消息列表 -->
             <div ref="messageListRef" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)]" @scroll="handleScroll">
                 <!-- 加载更多历史 -->
@@ -34,34 +239,42 @@
                     </button>
                 </div>
 
-                <div v-for="msg in messages" :key="msg.messageId" 
-                     :class="['flex w-full gap-3', msg.senderType === 'USER' ? 'flex-row-reverse' : 'flex-row']">
-                    <!-- 头像 -->
-                    <div class="shrink-0">
-                        <div v-if="msg.senderType === 'USER'" 
-                             class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold border border-[rgba(255,255,255,0.2)]">
-                            {{ msg.senderName?.charAt(0) || 'U' }}
+                <div v-for="msg in messages" :key="msg.messageId">
+                    <div v-if="msg.senderType === 'SYSTEM'" class="flex justify-center">
+                        <div class="max-w-[82%] rounded-2xl border border-[rgba(123,200,255,0.16)] bg-[rgba(123,200,255,0.08)] px-4 py-3 text-center shadow-sm">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-[#7bc8ff]">{{ parseSystemNoticeType(msg) }}</div>
+                            <div class="mt-1 text-sm leading-relaxed text-[#d7e8ff]">{{ msg.content }}</div>
+                            <div class="mt-2 text-[10px] text-[rgba(231,236,244,0.42)]">{{ formatTime(msg.createTime) }}</div>
                         </div>
-                        <img v-else :src="getAgentAvatar(msg.senderId)" 
-                             class="w-10 h-10 rounded-full border border-[rgba(123,200,255,0.3)] bg-[#1a2333]" 
-                             alt="Agent" />
                     </div>
-
-                    <!-- 消息内容 -->
-                    <div :class="['flex flex-col max-w-[80%]', msg.senderType === 'USER' ? 'items-end' : 'items-start']">
-                        <div class="flex items-center gap-2 mb-1 px-1">
-                            <span class="text-xs font-semibold text-[rgba(231,236,244,0.7)]">{{ msg.senderName }}</span>
-                            <span v-if="msg.senderType === 'AGENT' || msg.senderType === 'CLIENT'" class="text-[10px] bg-[#7bc8ff]/20 text-[#7bc8ff] px-1.5 rounded border border-[#7bc8ff]/30">AI</span>
-                            <span class="text-[10px] text-[rgba(231,236,244,0.3)]">{{ formatTime(msg.createTime) }}</span>
+                    <div v-else :class="['flex w-full gap-3', msg.senderType === 'USER' ? 'flex-row-reverse' : 'flex-row']">
+                        <!-- 头像 -->
+                        <div class="shrink-0">
+                            <div v-if="msg.senderType === 'USER'" 
+                                 class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold border border-[rgba(255,255,255,0.2)]">
+                                {{ msg.senderName?.charAt(0) || 'U' }}
+                            </div>
+                            <img v-else :src="getAgentAvatar(msg.senderId)" 
+                                 class="w-10 h-10 rounded-full border border-[rgba(123,200,255,0.3)] bg-[#1a2333]" 
+                                 alt="Agent" />
                         </div>
-                        <div :class="[
-                            'px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm break-words',
-                            msg.senderType === 'USER' 
-                                ? 'bg-indigo-600 text-white rounded-tr-none' 
-                                : 'bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] rounded-tl-none'
-                        ]"
-                        @contextmenu.prevent="openMsgContextMenu(msg, $event)">
-                            {{ msg.content }}
+
+                        <!-- 消息内容 -->
+                        <div :class="['flex flex-col max-w-[80%]', msg.senderType === 'USER' ? 'items-end' : 'items-start']">
+                            <div class="flex items-center gap-2 mb-1 px-1">
+                                <span class="text-xs font-semibold text-[rgba(231,236,244,0.7)]">{{ msg.senderName }}</span>
+                                <span v-if="msg.senderType === 'AGENT' || msg.senderType === 'CLIENT'" class="text-[10px] bg-[#7bc8ff]/20 text-[#7bc8ff] px-1.5 rounded border border-[#7bc8ff]/30">AI</span>
+                                <span class="text-[10px] text-[rgba(231,236,244,0.3)]">{{ formatTime(msg.createTime) }}</span>
+                            </div>
+                            <div :class="[
+                                'px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm break-words',
+                                msg.senderType === 'USER' 
+                                    ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                    : 'bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] rounded-tl-none'
+                            ]"
+                            @contextmenu.prevent="openMsgContextMenu(msg, $event)">
+                                {{ msg.content }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -227,6 +440,13 @@ import {
     chatRoomMemberAdd, 
     chatRoomMemberRemove, 
     chatRoomMessageCursor,
+    chatRoomArbitratorSet,
+    chatRoomArbitratorRemove,
+    chatRoomDebateStart,
+    chatRoomDebateDeclareWinner,
+    chatRoomDebateNextRound,
+    chatRoomDebateStop,
+    chatRoomDebateStatus,
     queryChatModels as listClients,
     queryAgentList as listAgents
 } from '../request/api';
@@ -252,14 +472,75 @@ const humanMembers = computed(() => members.value.filter(m => m.memberType === '
 const inputText = ref('');
 const showMemberDrawer = ref(false);
 const showInviteModal = ref(false);
+const showDebatePanel = ref(false);
 const loadingHistory = ref(false);
 const hasMoreHistory = ref(true);
 const socketReady = ref(false);
 const availableClients = ref([]);
 const availableAgents = ref([]);
 const inviteMode = ref('client');
+const debateStatus = ref(null);
+const debateLoading = ref(false);
+const debateTopic = ref('');
+const debateTurns = ref(6);
+const selectedArbitratorId = ref('');
+const selectedProIds = ref([]);
+const selectedConIds = ref([]);
 
 const inviteList = computed(() => (inviteMode.value === 'client' ? availableClients.value : availableAgents.value));
+const isDebateRunning = computed(() => ['RUNNING', 'ROUND_END'].includes(debateStatus.value?.status || ''));
+const waitingForWinner = computed(() => Boolean(debateStatus.value?.waitingForWinner));
+const canStartNextRound = computed(() => Boolean(isDebateRunning.value && !waitingForWinner.value && debateStatus.value?.status === 'ROUND_END'));
+const debatePanelVisible = computed(() => Boolean(showDebatePanel.value || debateStatus.value?.sessionId || debateStatus.value?.arbitratorClientId));
+const debateClientOptions = computed(() => clientMembers.value.map(item => ({
+    id: item.memberId,
+    name: item.memberName
+})));
+const availableDebaterOptions = computed(() => debateClientOptions.value.filter(item => item.id !== selectedArbitratorId.value));
+const clientNameMap = computed(() => debateClientOptions.value.reduce((acc, item) => {
+    acc[item.id] = item.name;
+    return acc;
+}, {}));
+const selectedArbitratorName = computed(() => clientNameMap.value[selectedArbitratorId.value] || '');
+const selectedProMembers = computed(() => selectedProIds.value.map(id => ({
+    clientId: id,
+    clientName: clientNameMap.value[id] || id
+})));
+const selectedConMembers = computed(() => selectedConIds.value.map(id => ({
+    clientId: id,
+    clientName: clientNameMap.value[id] || id
+})));
+const debateStatusLabel = computed(() => {
+    const status = debateStatus.value?.status;
+    if (status === 'RUNNING') return '进行中';
+    if (status === 'ROUND_END') return waitingForWinner.value ? '等待裁决' : '待开启下一轮';
+    if (status === 'FINISHED') return '已结束';
+    return '未开始';
+});
+const debateStatusPillClass = computed(() => {
+    const status = debateStatus.value?.status;
+    if (status === 'RUNNING') return 'border-[#22c55e]/35 bg-[#22c55e]/12 text-[#86efac]';
+    if (status === 'ROUND_END') return 'border-[#f59e0b]/35 bg-[#f59e0b]/12 text-[#fcd34d]';
+    if (status === 'FINISHED') return 'border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.06)] text-[rgba(231,236,244,0.75)]';
+    return 'border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.06)] text-[rgba(231,236,244,0.75)]';
+});
+const debateRoundResultLabel = computed(() => {
+    const winners = debateStatus.value?.roundWinners || {};
+    const currentRound = debateStatus.value?.currentRound || debateStatus.value?.pendingRoundNumber;
+    if (currentRound && winners[String(currentRound)]) {
+        return winners[String(currentRound)] === 'PRO' ? '本轮正方获胜' : '本轮反方获胜';
+    }
+    if (waitingForWinner.value) return '等待仲裁者裁决';
+    if (Object.keys(winners).length > 0) return '已有轮次结果';
+    return '暂无结果';
+});
+const debateProgressLabel = computed(() => {
+    if (!debateStatus.value?.sessionId) return '未开始';
+    const round = debateStatus.value.currentRound || debateStatus.value.pendingRoundNumber || 0;
+    const turn = debateStatus.value.currentTurn || 0;
+    const total = debateStatus.value.turnsPerRound || 0;
+    return `第 ${round} 轮 · ${turn}/${total} 次发言`;
+});
 
 const messageListRef = ref(null);
 const bottomAnchor = ref(null);
@@ -493,8 +774,11 @@ const initWebSocket = () => {
 const handleIncomingEvent = (wsEvent) => {
     const { eventType, payload } = wsEvent;
     
-    if (eventType === 'USER_MSG' || eventType === 'AGENT_MSG' || eventType === 'CLIENT_MSG') {
+    if (eventType === 'USER_MSG' || eventType === 'AGENT_MSG' || eventType === 'CLIENT_MSG' || eventType === 'SYSTEM_NOTICE') {
         roomStore.pushMessage(payload);
+        if (eventType === 'SYSTEM_NOTICE') {
+            loadDebateStatus();
+        }
         scrollToBottom();
     }
 };
@@ -589,6 +873,157 @@ const loadAvailableAgents = async () => {
     } catch (e) {
         console.error('加载可用 Agent 失败', e);
     }
+};
+
+const syncDebateFormFromStatus = (status) => {
+    if (!status) return;
+    selectedArbitratorId.value = status.arbitratorClientId || selectedArbitratorId.value || '';
+    if (status.sessionId) {
+        debateTopic.value = status.topic || debateTopic.value;
+        debateTurns.value = status.turnsPerRound || debateTurns.value || 6;
+        selectedProIds.value = Array.isArray(status.proMembers) ? status.proMembers.map(item => item.clientId) : [];
+        selectedConIds.value = Array.isArray(status.conMembers) ? status.conMembers.map(item => item.clientId) : [];
+    }
+};
+
+const loadDebateStatus = async () => {
+    if (!roomId.value) return;
+    try {
+        const res = await chatRoomDebateStatus(roomId.value);
+        if (res.code === 200) {
+            debateStatus.value = res.data || null;
+            syncDebateFormFromStatus(debateStatus.value);
+        }
+    } catch (e) {
+        console.error('加载辩论状态失败', e);
+        debateStatus.value = null;
+    }
+};
+
+const runDebateAction = async (action) => {
+    if (debateLoading.value) return;
+    debateLoading.value = true;
+    try {
+        await action();
+        await loadDebateStatus();
+    } finally {
+        debateLoading.value = false;
+    }
+};
+
+const setDebateArbitrator = async () => {
+    if (!selectedArbitratorId.value) {
+        toast.show('请先选择仲裁者');
+        return;
+    }
+    await runDebateAction(async () => {
+        const res = await chatRoomArbitratorSet({
+            roomId: roomId.value,
+            clientId: selectedArbitratorId.value
+        });
+        if (res.code !== 200) {
+            throw new Error(res.info || '设置仲裁者失败');
+        }
+        toast.show('仲裁者设置成功');
+    }).catch((e) => toast.show(e.message || '设置仲裁者失败'));
+};
+
+const removeDebateArbitrator = async () => {
+    await runDebateAction(async () => {
+        const res = await chatRoomArbitratorRemove(roomId.value);
+        if (res.code !== 200) {
+            throw new Error(res.info || '移除仲裁者失败');
+        }
+        toast.show('已移除仲裁者');
+    }).catch((e) => toast.show(e.message || '移除仲裁者失败'));
+};
+
+const toggleDebater = (side, clientId) => {
+    const target = side === 'PRO' ? selectedProIds : selectedConIds;
+    const opposite = side === 'PRO' ? selectedConIds : selectedProIds;
+    if (target.value.includes(clientId)) {
+        target.value = target.value.filter(id => id !== clientId);
+        return;
+    }
+    opposite.value = opposite.value.filter(id => id !== clientId);
+    target.value = [...target.value, clientId];
+};
+
+const startDebateFlow = async () => {
+    if (!selectedArbitratorId.value) {
+        toast.show('请先设置仲裁者');
+        return;
+    }
+    if (!debateTopic.value.trim()) {
+        toast.show('请输入辩题');
+        return;
+    }
+    if (!selectedProIds.value.length || !selectedConIds.value.length) {
+        toast.show('请至少选择一名正方和一名反方辩手');
+        return;
+    }
+    await runDebateAction(async () => {
+        const res = await chatRoomDebateStart({
+            roomId: roomId.value,
+            topic: debateTopic.value.trim(),
+            proClientIds: selectedProIds.value,
+            conClientIds: selectedConIds.value,
+            turnsPerRound: Number(debateTurns.value) || 6
+        });
+        if (res.code !== 200) {
+            throw new Error(res.info || '开始辩论失败');
+        }
+        toast.show('辩论已开始');
+    }).catch((e) => toast.show(e.message || '开始辩论失败'));
+};
+
+const declareDebateWinner = async (winnerSide) => {
+    await runDebateAction(async () => {
+        const res = await chatRoomDebateDeclareWinner({
+            roomId: roomId.value,
+            winnerSide
+        });
+        if (res.code !== 200) {
+            throw new Error(res.info || '宣布胜方失败');
+        }
+        toast.show(`已宣布${winnerSide === 'PRO' ? '正方' : '反方'}获胜`);
+    }).catch((e) => toast.show(e.message || '宣布胜方失败'));
+};
+
+const startDebateNextRound = async () => {
+    await runDebateAction(async () => {
+        const res = await chatRoomDebateNextRound({ roomId: roomId.value });
+        if (res.code !== 200) {
+            throw new Error(res.info || '开始下一轮失败');
+        }
+        toast.show('下一轮已开始');
+    }).catch((e) => toast.show(e.message || '开始下一轮失败'));
+};
+
+const stopDebateFlow = async () => {
+    await runDebateAction(async () => {
+        const res = await chatRoomDebateStop({ roomId: roomId.value });
+        if (res.code !== 200) {
+            throw new Error(res.info || '停止辩论失败');
+        }
+        toast.show('辩论已结束');
+    }).catch((e) => toast.show(e.message || '停止辩论失败'));
+};
+
+const parseSystemNoticeType = (msg) => {
+    try {
+        const ext = msg?.extData ? JSON.parse(msg.extData) : null;
+        const noticeType = ext?.noticeType;
+        if (noticeType === 'DEBATE_START') return '辩论开始';
+        if (noticeType === 'HOST_INTRO') return '主持调度';
+        if (noticeType === 'ROUND_END') return '本轮结束';
+        if (noticeType === 'ROUND_WINNER') return '本轮结果';
+        if (noticeType === 'ROUND_NEXT') return '下一轮开始';
+        if (noticeType === 'DEBATE_STOP') return '辩论结束';
+    } catch (e) {
+        console.warn('解析系统通知失败', e);
+    }
+    return '系统通知';
 };
 
 const openInvite = (mode) => {
@@ -687,6 +1122,7 @@ onMounted(() => {
     roomStore.setCurrentRoomId(roomId.value);
     loadMembers();
     loadHistory(true);
+    loadDebateStatus();
     initWebSocket();
     loadAvailableClients();
     loadAvailableAgents();
@@ -706,6 +1142,7 @@ watch(roomId, (newId) => {
         hasMoreHistory.value = true;
         loadMembers();
         loadHistory(true);
+        loadDebateStatus();
         initWebSocket();
     }
 });

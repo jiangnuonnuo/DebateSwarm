@@ -4,8 +4,6 @@ import com.dasi.infrastructure.persistent.po.AiDebateSession;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-import java.util.List;
-
 /**
  * @Author: xerina
  * @Description: 辩论会话表 DAO
@@ -21,12 +19,12 @@ public interface IAiDebateSessionDao {
     /**
      * 根据业务ID查询会话
      */
-    AiDebateSession queryBySessionId(@Param("sessionId") String sessionId);
+    AiDebateSession querySessionDetailBySessionId(@Param("sessionId") String sessionId);
 
     /**
-     * 根据房间ID查询活跃辩论会话状态 (轻量化查询，仅判断状态)
+     * 根据房间ID查询活跃辩论会话头信息
      */
-    AiDebateSession queryActiveByRoomId(@Param("roomId") String roomId);
+    AiDebateSession queryActiveSessionHeaderByRoomId(@Param("roomId") String roomId);
 
     /**
      * 查询会话上下文信息 (中频查询，包含主题、正反方成员等不变量)
