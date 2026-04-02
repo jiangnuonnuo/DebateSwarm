@@ -458,31 +458,6 @@ public class AiRepository implements IAiRepository {
         aiPromptDao.updateSystenByPromptId(promptId, systemPrompt);
     }
 
-    @Override
-    public AiPromptVO queryPromptByClientId(String clientId) {
-        // 1. 获取关联的提示词配置 (直接根据 clientId 和 PROMPT 类型查找)
-        List<AiConfig> configList = aiConfigDao.queryByClientIdAndConfigType(clientId, PROMPT.getType());
-        if (configList == null || configList.isEmpty()) {
-            return null;
-        }
-
-        // 2. 取第一个关联的 promptId
-        String promptId = configList.get(0).getConfigValue();
-
-        // 3. 查询提示词详情
-        AiPrompt aiPrompt = aiPromptDao.queryByPromptId(promptId);
-        if (aiPrompt == null) {
-            return null;
-        }
-
-        // 4. 返回精简的 VO
-        return AiPromptVO.builder()
-                .promptId(aiPrompt.getPromptId())
-                .promptName(aiPrompt.getPromptName())
-                .systemPrompt(aiPrompt.getSystenPrompt())
-                .build();
-    }
-
     private AiTaskVO.TaskParam parseTaskParam(String taskParam, String taskId) {
         try {
             if (taskParam == null || taskParam.isBlank())

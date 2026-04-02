@@ -7,10 +7,12 @@ import com.dasi.domain.room.apapter.port.ISessionPort;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IRoomChatService;
 import com.dasi.domain.room.service.IRoomDispatchService;
+import com.dasi.domain.room.service.dispatch.DispatchStrategyFactory;
 import com.dasi.types.constant.Constants;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,9 @@ public class RoomDispatchService implements IRoomDispatchService {
 
     @Resource
     private IDispatchService aiDispatchService;
+
+    @Resource
+    private DispatchStrategyFactory dispatchStrategyFactory;
 
     @Resource
     private ApplicationContext applicationContext;
@@ -123,7 +128,7 @@ public class RoomDispatchService implements IRoomDispatchService {
             atMemberId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getAtMemberId();
         }
 
-        // 解析被 @ 的成员 ID 集合 (以逗号分隔)
+        // 2. 解析被 @ 的成员 ID 集合 (以逗号分隔)
         Set<String> atMemberIds = new HashSet<>();
         if (atMemberId != null && !atMemberId.trim().isEmpty()) {
             String[] ids = atMemberId.split(",");
@@ -134,40 +139,16 @@ public class RoomDispatchService implements IRoomDispatchService {
             }
         }
 
-        // 2. 获取房间内候选 Client
-        List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(roomId);
-        if (clients == null || clients.isEmpty()) return;
+        // 3. 构建调度策略实体 (Domain Entity)
+        DispatchStrategyEntity strategyEntity = DispatchStrategyEntity.builder()
+                .roomId(roomId)
+                .eventType(eventType)
+                .senderId(currentSenderId)
+                .atMemberIds(atMemberIds)
+                .build();
 
-        // 3. 概率性决策逻辑,todo:1，解析atMemberId 进行专项回复 ，2, 仲裁官（智能决策实现仲裁）
-        for (AiChatRoomMemberEntity clientMember : clients) {
-            String clientId = clientMember.getMemberId();
-            if (clientId.equals(currentSenderId)) continue;
-
-            boolean shouldSpeak = false;
-
-            // 优先判断是否被 @，如果被 @，强制命中回答
-            if (atMemberIds.contains(clientId)) {
-                log.info("【领域调度】命中 @ 指定回答：roomId={}, clientId={}", roomId, clientId);
-                shouldSpeak = true;
-            } 
-            // 否则走概率性回答
-            else if (random.nextDouble() < RESPONSE_PROBABILITY) {
-                log.info("【领域调度】命中概率响应：roomId={}, clientId={}", roomId, clientId);
-                shouldSpeak = true;
-            }
-
-            if (shouldSpeak) {
-                // 4. 资源检查与装配
-                String beanName = CLIENT.getBeanName(clientId);
-                if (!applicationContext.containsBean(beanName)) {
-                    log.info("【领域调度】容器中不存在 Bean {} clientID {}，触发装配策略", beanName, clientId);
-                    aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(clientId));
-                }
-
-                // 5. 下达执行指令
-                roomChatService.clientChat(roomId, clientId);
-            }
-        }
+        // 4. 调用决策树工厂执行调度逻辑
+        dispatchStrategyFactory.doDispatch(strategyEntity);
     }
 
 

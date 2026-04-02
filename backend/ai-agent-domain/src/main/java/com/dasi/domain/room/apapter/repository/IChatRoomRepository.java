@@ -3,6 +3,10 @@ package com.dasi.domain.room.apapter.repository;
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.entity.DebateRecordEntity;
+import com.dasi.domain.room.model.entity.DebateSessionEntity;
+import com.dasi.domain.room.model.valobj.DebateContextVO;
+import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
 
 import java.util.List;
 
@@ -93,4 +97,60 @@ public interface IChatRoomRepository {
     String queryExtConfigByRoomId(String roomId);
 
     Boolean queryMemberExistByMemberId(String roomId, String memberId);
+
+    /**
+     * 保存/更新辩论会话
+     * @param session 辩论会话领域对象
+     */
+    void saveDebateSession(DebateSessionEntity session);
+
+    /**
+     * 查询房间内的活跃辩论会话 (status IN ('RUNNING', 'ROUND_END'))
+     * @param roomId 房间ID
+     * @return 活跃会话Entity，若无则返回null
+     */
+    DebateSessionEntity queryActiveDebateSession(String roomId);
+
+    /**
+     * 根据业务ID查询辩论会话
+     * @param sessionId 会话ID
+     * @return 会话Entity
+     */
+    DebateSessionEntity queryDebateSessionBySessionId(String sessionId);
+
+    /**
+     * 乐观锁更新辩论会话
+     * @param session 包含业务ID和version的会话对象
+     * @return 是否更新成功
+     */
+    boolean updateDebateSession(DebateSessionEntity session);
+
+    /**
+     * 保存辩论对话记录
+     * @param record 辩论记录Entity
+     */
+    void saveDebateRecord(DebateRecordEntity record);
+
+    /**
+     * 按轮次查询辩论发言记录
+     * @param sessionId 会话ID
+     * @param roundNumber 轮次号
+     * @return 记录列表
+     */
+    List<DebateRecordEntity> queryDebateRecords(String sessionId, int roundNumber);
+
+    /**
+     * 查询辩论会话上下文信息 (含缓存处理)
+     * @param sessionId 会话ID
+     * @return 辩论上下文 VO
+     */
+    DebateContextVO queryDebateContext(String sessionId);
+
+    /**
+     * 查询用于组装 Prompt 的辩论轮次记录 (JOIN 查询)
+     * @param sessionId 会话ID
+     * @param roundNumber 轮次号
+     * @return 辩论轮次记录列表 VO
+     */
+    List<DebateTurnRecordVO> queryDebateRecordsForPrompt(String sessionId, int roundNumber);
 }

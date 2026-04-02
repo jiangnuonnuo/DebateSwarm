@@ -5,12 +5,21 @@ import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.entity.DebateRecordEntity;
+import com.dasi.domain.room.model.entity.DebateSessionEntity;
+import com.dasi.domain.room.model.valobj.DebateContextVO;
+import com.dasi.domain.room.model.valobj.DebateStatus;
+import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomDao;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomMemberDao;
 import com.dasi.infrastructure.persistent.dao.IAiChatRoomMessageDao;
+import com.dasi.infrastructure.persistent.dao.IAiDebateRecordDao;
+import com.dasi.infrastructure.persistent.dao.IAiDebateSessionDao;
 import com.dasi.infrastructure.persistent.po.AiChatRoom;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMember;
 import com.dasi.infrastructure.persistent.po.AiChatRoomMessage;
+import com.dasi.infrastructure.persistent.po.AiDebateRecord;
+import com.dasi.infrastructure.persistent.po.AiDebateSession;
 import com.dasi.infrastructure.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
@@ -39,11 +48,19 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     private IAiChatRoomMessageDao aiChatRoomMessageDao;
 
     @Resource
+    private IAiDebateSessionDao aiDebateSessionDao;
+
+    @Resource
+    private IAiDebateRecordDao aiDebateRecordDao;
+
+    @Resource
     private RedisUtil redisUtil;
 
     private static final String ROOM_META_KEY = "room_meta:";
     private static final String MEMBER_NAME_KEY = "member_name:";
     private static final String ROOM_CLIENTS_KEY = "room_clients:";
+    private static final String ACTIVE_DEBATE_SESSION_KEY = "active_debate_session:";
+    private static final String DEBATE_CONTEXT_KEY = "debate_context:";
 
     @Override
     public void saveRoom(AiChatRoomEntity roomEntity) {
@@ -296,5 +313,153 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     public Boolean queryMemberExistByMemberId(String roomId, String memberId) {
         AiChatRoomMember aiChatRoomMember = aiChatRoomMemberDao.queryMemberByRoomIdAndMemberId(roomId, memberId);
         return aiChatRoomMember != null ? true : false;
+    }
+
+    @Override
+    public void saveDebateSession(DebateSessionEntity session) {
+        AiDebateSession po = AiDebateSession.builder()
+                .sessionId(session.getSessionId())
+                .roomId(session.getRoomId())
+                .topic(session.getTopic())
+                .arbitratorClientId(session.getArbitratorClientId())
+                .proClientIds(DebateSessionEntity.listToStr(session.getProClientIds()))
+                .conClientIds(DebateSessionEntity.listToStr(session.getConClientIds()))
+                .turnsPerRound(session.getTurnsPerRound())
+                .currentRound(session.getCurrentRound())
+                .currentTurn(session.getCurrentTurn())
+                .roundWinners(DebateSessionEntity.listToStr(session.getRoundWinners()))
+                .status(session.getStatus().getCode())
+                .version(session.getVersion())
+                .build();
+
+        AiDebateSession existing = aiDebateSessionDao.queryBySessionId(session.getSessionId());
+        if (existing == null) {
+            aiDebateSessionDao.insert(po);
+        } else {
+            aiDebateSessionDao.updateWithLock(po);
+        }
+        // 清理缓存
+        redisUtil.deleteByKey(ACTIVE_DEBATE_SESSION_KEY + session.getRoomId());
+        redisUtil.deleteByKey(DEBATE_CONTEXT_KEY + session.getSessionId());
+    }
+
+    @Override
+    public DebateSessionEntity queryActiveDebateSession(String roomId) {
+        String cacheKey = ACTIVE_DEBATE_SESSION_KEY + roomId;
+        return getFromCacheOrDb(cacheKey, DebateSessionEntity.class, () -> {
+            AiDebateSession po = aiDebateSessionDao.queryActiveByRoomId(roomId);
+            if (po == null) return null;
+            return convertToDebateSessionEntity(po);
+        });
+    }
+
+    @Override
+    public DebateSessionEntity queryDebateSessionBySessionId(String sessionId) {
+        AiDebateSession po = aiDebateSessionDao.queryBySessionId(sessionId);
+        if (po == null) return null;
+        return convertToDebateSessionEntity(po);
+    }
+
+    @Override
+    public boolean updateDebateSession(DebateSessionEntity session) {
+        AiDebateSession po = AiDebateSession.builder()
+                .sessionId(session.getSessionId())
+                .topic(session.getTopic())
+                .currentRound(session.getCurrentRound())
+                .currentTurn(session.getCurrentTurn())
+                .roundWinners(DebateSessionEntity.listToStr(session.getRoundWinners()))
+                .status(session.getStatus().getCode())
+                .version(session.getVersion())
+                .build();
+
+        int count = aiDebateSessionDao.updateWithLock(po);
+        if (count > 0) {
+            // 乐观锁更新成功，清理缓存
+            AiDebateSession latest = aiDebateSessionDao.queryBySessionId(session.getSessionId());
+            if (latest != null) {
+                redisUtil.deleteByKey(ACTIVE_DEBATE_SESSION_KEY + latest.getRoomId());
+                redisUtil.deleteByKey(DEBATE_CONTEXT_KEY + session.getSessionId());
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void saveDebateRecord(DebateRecordEntity record) {
+        AiDebateRecord po = AiDebateRecord.builder()
+                .record_id(record.getRecordId())
+                .sessionId(record.getSessionId())
+                .roundNumber(record.getRoundNumber())
+                .turnNumber(record.getTurnNumber())
+                .speakerClientId(record.getSpeakerClientId())
+                .speakerName(record.getSpeakerName())
+                .side(record.getSide())
+                .messageId(record.getMessageId())
+                .arbitratorReasoning(record.getArbitratorReasoning())
+                .build();
+        aiDebateRecordDao.insert(po);
+    }
+
+    @Override
+    public List<DebateRecordEntity> queryDebateRecords(String sessionId, int roundNumber) {
+        List<AiDebateRecord> pos = aiDebateRecordDao.queryBySessionAndRound(sessionId, roundNumber);
+        if (pos == null || pos.isEmpty()) return new ArrayList<>();
+        return pos.stream().map(po -> DebateRecordEntity.builder()
+                .recordId(po.getRecord_id())
+                .sessionId(po.getSessionId())
+                .roundNumber(po.getRoundNumber())
+                .turnNumber(po.getTurnNumber())
+                .speakerClientId(po.getSpeakerClientId())
+                .speakerName(po.getSpeakerName())
+                .side(po.getSide())
+                .messageId(po.getMessageId())
+                .arbitratorReasoning(po.getArbitratorReasoning())
+                .createTime(po.getCreateTime())
+                .build()).collect(Collectors.toList());
+    }
+
+    @Override
+    public DebateContextVO queryDebateContext(String sessionId) {
+        String cacheKey = DEBATE_CONTEXT_KEY + sessionId;
+        return getFromCacheOrDb(cacheKey, DebateContextVO.class, () -> {
+            AiDebateSession po = aiDebateSessionDao.querySessionContext(sessionId);
+            if (po == null) return null;
+            return DebateContextVO.builder()
+                    .topic(po.getTopic())
+                    .proClientIds(DebateSessionEntity.strToList(po.getProClientIds()))
+                    .conClientIds(DebateSessionEntity.strToList(po.getConClientIds()))
+                    .turnsPerRound(po.getTurnsPerRound())
+                    .build();
+        });
+    }
+
+    @Override
+    public List<DebateTurnRecordVO> queryDebateRecordsForPrompt(String sessionId, int roundNumber) {
+        List<AiDebateRecord> pos = aiDebateRecordDao.queryRecordsForPrompt(sessionId, roundNumber);
+        if (pos == null || pos.isEmpty()) return new ArrayList<>();
+        return pos.stream().map(po -> DebateTurnRecordVO.builder()
+                .side(po.getSide())
+                .speakerId(po.getSpeakerClientId())
+                .speakerName(po.getSpeakerName())
+                .content(po.getContent())
+                .build()).collect(Collectors.toList());
+    }
+
+    private DebateSessionEntity convertToDebateSessionEntity(AiDebateSession po) {
+        return DebateSessionEntity.builder()
+                .sessionId(po.getSessionId())
+                .roomId(po.getRoomId())
+                .topic(po.getTopic())
+                .arbitratorClientId(po.getArbitratorClientId())
+                .proClientIds(DebateSessionEntity.strToList(po.getProClientIds()))
+                .conClientIds(DebateSessionEntity.strToList(po.getConClientIds()))
+                .turnsPerRound(po.getTurnsPerRound())
+                .currentRound(po.getCurrentRound())
+                .currentTurn(po.getCurrentTurn())
+                .roundWinners(DebateSessionEntity.strToList(po.getRoundWinners()))
+                .status(DebateStatus.getByCode(po.getStatus()))
+                .version(po.getVersion())
+                .build();
     }
 }

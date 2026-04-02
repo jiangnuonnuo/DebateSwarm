@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+ @Author: xerina
+ @Description: 辩论会话表映射配置
+-->
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiDebateSessionDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiDebateSession">
+        <id column="id" property="id"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="topic" property="topic"/>
+        <result column="arbitrator_client_id" property="arbitratorClientId"/>
+        <result column="pro_client_ids" property="proClientIds"/>
+        <result column="con_client_ids" property="conClientIds"/>
+        <result column="turns_per_round" property="turnsPerRound"/>
+        <result column="current_round" property="currentRound"/>
+        <result column="current_turn" property="currentTurn"/>
+        <result column="round_winners" property="roundWinners"/>
+        <result column="status" property="status"/>
+        <result column="version" property="version"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiDebateSession">
+        INSERT INTO ai_debate_session (
+            session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
+            turns_per_round, current_round, current_turn, status, version
+        )
+        VALUES (
+            #{sessionId}, #{roomId}, #{topic}, #{arbitratorClientId}, #{proClientIds}, #{conClientIds},
+            #{turnsPerRound}, #{currentRound}, #{currentTurn}, #{status}, #{version}
+        )
+    </insert>
+
+    <select id="queryBySessionId" resultMap="dataMap">
+        SELECT session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
+               turns_per_round, current_round, current_turn, round_winners, status, version
+        FROM ai_debate_session
+        WHERE session_id = #{sessionId} AND is_deleted = 0
+    </select>
+
+    <select id="queryActiveByRoomId" resultMap="dataMap">
+        SELECT session_id, status
+        FROM ai_debate_session
+        WHERE room_id = #{roomId} AND status IN ('RUNNING', 'ROUND_END') AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="querySessionContext" resultMap="dataMap">
+        SELECT topic, pro_client_ids, con_client_ids, current_round, turns_per_round
+        FROM ai_debate_session
+        WHERE session_id = #{sessionId} AND is_deleted = 0
+    </select>
+
+    <update id="updateWithLock" parameterType="com.dasi.infrastructure.persistent.po.AiDebateSession">
+        UPDATE ai_debate_session
+        <set>
+            <if test="topic != null">topic = #{topic},</if>
+            <if test="currentRound != null">current_round = #{currentRound},</if>
+            <if test="currentTurn != null">current_turn = #{currentTurn},</if>
+            <if test="roundWinners != null">round_winners = #{roundWinners},</if>
+            <if test="status != null">status = #{status},</if>
+            version = version + 1
+        </set>
+        WHERE session_id = #{sessionId} AND version = #{version} AND is_deleted = 0
+    </update>
+
+    <update id="deleteBySessionId">
+        UPDATE ai_debate_session SET is_deleted = 1
+        WHERE session_id = #{sessionId}
+    </update>
+</mapper>
