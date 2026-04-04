@@ -29,7 +29,9 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -240,6 +242,35 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     }
 
     @Override
+    public List<AiChatRoomMemberEntity> queryClientMembersByIds(String roomId, List<String> clientIds) {
+        if (clientIds == null || clientIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<AiChatRoomMember> pos = aiChatRoomMemberDao.queryClientMembersByIds(roomId, clientIds);
+        if (pos == null || pos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Map<String, AiChatRoomMemberEntity> mapped = pos.stream().map(po -> AiChatRoomMemberEntity.builder()
+                        .roomId(po.getRoomId())
+                        .memberId(po.getMemberId())
+                        .memberType(po.getMemberType())
+                        .memberName(po.getMemberName())
+                        .agentSessionId(po.getAgentSessionId())
+                        .createTime(po.getCreateTime())
+                        .updateTime(po.getUpdateTime())
+                        .build())
+                .collect(Collectors.toMap(AiChatRoomMemberEntity::getMemberId, item -> item, (left, right) -> left, LinkedHashMap::new));
+        List<AiChatRoomMemberEntity> ordered = new ArrayList<>();
+        for (String clientId : clientIds) {
+            AiChatRoomMemberEntity member = mapped.get(clientId);
+            if (member != null) {
+                ordered.add(member);
+            }
+        }
+        return ordered;
+    }
+
+    @Override
     public String queryMemberName(String roomId, String memberId) {
         String cacheKey = MEMBER_NAME_KEY + roomId + ":" + memberId;
         return getFromCacheOrDb(cacheKey, String.class, () -> {
@@ -348,7 +379,7 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .roomId(roomId)
                 .currentStage(state != null && state.getActiveDebateSessionId() != null ? "DEBATE" : "FREE_CHAT")
                 .publicData(state == null ? "{}" : JSON.toJSONString(state))
-                .roundNumber(state == null ? 0 : state.getPendingRoundNumber())
+                .roundNumber(state == null || state.getPendingRoundNumber() == null ? 0 : state.getPendingRoundNumber())
                 .version(version)
                 .build();
         int count = aiChatRoomStateDao.updateStateWithLock(po);
@@ -516,10 +547,16 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
             AiDebateSession po = aiDebateSessionDao.querySessionContext(sessionId);
             if (po == null) return null;
             return DebateContextVO.builder()
+                    .sessionId(po.getSessionId())
+                    .roomId(po.getRoomId())
                     .topic(po.getTopic())
+                    .arbitratorClientId(po.getArbitratorClientId())
                     .proClientIds(DebateSessionEntity.strToList(po.getProClientIds()))
                     .conClientIds(DebateSessionEntity.strToList(po.getConClientIds()))
+                    .currentRound(po.getCurrentRound())
+                    .currentTurn(po.getCurrentTurn())
                     .turnsPerRound(po.getTurnsPerRound())
+                    .status(po.getStatus())
                     .build();
         });
     }

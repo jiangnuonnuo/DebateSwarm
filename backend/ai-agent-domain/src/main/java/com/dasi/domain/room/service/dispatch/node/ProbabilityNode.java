@@ -40,23 +40,27 @@ public class ProbabilityNode extends AbstractDispatchNode {
             return router(strategyEntity, dispatchContext);
         }
 
+        if (random.nextDouble() >= RESPONSE_PROBABILITY) {
+            return router(strategyEntity, dispatchContext);
+        }
+
         List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(strategyEntity.getRoomId());
         if (clients == null || clients.isEmpty()) return router(strategyEntity, dispatchContext);
 
-        for (AiChatRoomMemberEntity clientMember : clients) {
-            String clientId = clientMember.getMemberId();
-            if (clientId.equals(strategyEntity.getSenderId())) continue;
-
-            if (random.nextDouble() < RESPONSE_PROBABILITY) {
-                log.info("【调度决策】ProbabilityNode 命中：clientId={}", clientId);
-                dispatchContext.setDecision(DispatchDecisionVO.builder()
-                        .speakerId(clientId)
-                        .decisionSource("PROBABILITY")
-                        .build());
-                return router(strategyEntity, dispatchContext);
-            }
+        List<AiChatRoomMemberEntity> candidates = clients.stream()
+                .filter(clientMember -> !clientMember.getMemberId().equals(strategyEntity.getSenderId()))
+                .toList();
+        if (candidates.isEmpty()) {
+            return router(strategyEntity, dispatchContext);
         }
 
+        AiChatRoomMemberEntity selected = candidates.get(random.nextInt(candidates.size()));
+        log.info("【调度决策】ProbabilityNode 命中：clientId={}", selected.getMemberId());
+        dispatchContext.setDecision(DispatchDecisionVO.builder()
+                .speakerId(selected.getMemberId())
+                .decisionSource("PROBABILITY")
+                .reasoning(String.format("自由聊天命中，由 %s 随机接话。", selected.getMemberName()))
+                .build());
         return router(strategyEntity, dispatchContext);
     }
 

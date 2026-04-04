@@ -2,10 +2,7 @@ package com.dasi.domain.room.service.chat;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.dasi.domain.ai.service.dispatch.IDispatchService;
 import com.dasi.domain.room.apapter.port.ISessionPort;
-import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
-import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
@@ -16,17 +13,14 @@ import com.dasi.domain.room.service.dispatch.DispatchStrategyFactory;
 import com.dasi.types.constant.Constants;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.stream.Collectors;
-
-import static com.dasi.domain.ai.model.enumeration.AiArmoryType.ARMORY_CHAT;
-import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
 
 /**
  * @BelongsProject: Agent
@@ -46,21 +40,7 @@ public class RoomDispatchService implements IRoomDispatchService {
     private IRoomChatService roomChatService;
 
     @Resource
-    private IChatRoomRepository chatRoomRepository;
-
-    @Resource
-    private IDispatchService aiDispatchService;
-
-    @Resource
     private DispatchStrategyFactory dispatchStrategyFactory;
-
-    @Resource
-    private ApplicationContext applicationContext;
-
-    private final Random random = new Random();
-
-    /** 响应概率 (领域逻辑：暂设 50%) */
-    private static final double RESPONSE_PROBABILITY = 0.5;
 
     @Override
     public void onOpen(String roomId, String username, Object session) {
@@ -129,14 +109,12 @@ public class RoomDispatchService implements IRoomDispatchService {
         }
 
         // 2. 解析被 @ 的成员 ID 集合 (以逗号分隔)
-        Set<String> atMemberIds = new HashSet<>();
+        List<String> atMemberIds = new ArrayList<>();
         if (atMemberId != null && !atMemberId.trim().isEmpty()) {
-            String[] ids = atMemberId.split(",");
-            for (String id : ids) {
-                if (!id.trim().isEmpty()) {
-                    atMemberIds.add(id.trim());
-                }
-            }
+            atMemberIds = Arrays.stream(atMemberId.split(","))
+                    .map(String::trim)
+                    .filter(id -> !id.isEmpty())
+                    .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
         }
 
         // 3. 构建调度策略实体 (Domain Entity)

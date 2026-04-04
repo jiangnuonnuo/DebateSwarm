@@ -1,8 +1,10 @@
 package com.dasi.domain.room.service.debate;
 
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.DebateStatusVO;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
+import com.dasi.domain.room.service.dispatch.DispatchContext;
 
 import java.util.List;
 
@@ -22,5 +24,5 @@ public interface IDebateService {
 
     DebateStatusVO queryDebateStatus(String roomId);
 
-    DispatchDecisionVO handleDebateDispatch(String roomId, String eventType, AiChatRoomMessageEntity lastMessage);
+    DispatchDecisionVO decideNextDispatch(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext);
 }

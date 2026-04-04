@@ -552,8 +552,8 @@ const atSearchText = ref('');
 const selectedAtMembers = ref([]);
 
 const filteredAtMembers = computed(() => {
-    // 可以被 @ 的成员：类型为 CLIENT 或 AGENT
-    const bots = members.value.filter(m => m.memberType === 'CLIENT' || m.memberType === 'AGENT');
+    // 当前聊天室 @ 指定仅支持 CLIENT，保持前后端能力一致
+    const bots = members.value.filter(m => m.memberType === 'CLIENT');
     if (!atSearchText.value) return bots;
     return bots.filter(m => m.memberName.toLowerCase().includes(atSearchText.value.toLowerCase()));
 });
@@ -655,7 +655,7 @@ const msgContextMenuPos = reactive({ x: 0, y: 0 });
 const msgContextMenuMember = ref(null);
 
 const openMsgContextMenu = (msg, event) => {
-    if (msg.senderType !== 'CLIENT' && msg.senderType !== 'AGENT') {
+    if (msg.senderType !== 'CLIENT') {
         showMsgContextMenu.value = false;
         return;
     }

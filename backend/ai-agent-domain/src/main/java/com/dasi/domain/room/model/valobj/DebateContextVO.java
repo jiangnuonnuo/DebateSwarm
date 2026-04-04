@@ -17,8 +17,17 @@ import java.util.List;
 @NoArgsConstructor
 public class DebateContextVO {
 
+    /** 辩论会话ID */
+    private String sessionId;
+
+    /** 房间ID */
+    private String roomId;
+
     /** 辩论主题 */
     private String topic;
+
+    /** 仲裁者 clientId */
+    private String arbitratorClientId;
 
     /** 正方成员列表 */
     private List<String> proClientIds;
@@ -26,7 +35,16 @@ public class DebateContextVO {
     /** 反方成员列表 */
     private List<String> conClientIds;
 
+    /** 当前轮次 */
+    private Integer currentRound;
+
+    /** 当前发言次序 */
+    private Integer currentTurn;
+
     /** 每轮固定对话次数 */
     private Integer turnsPerRound;
+
+    /** 会话状态 */
+    private String status;
 
 }

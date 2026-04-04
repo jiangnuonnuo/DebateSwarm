@@ -105,7 +105,6 @@ public class ClientMemberService extends AbstractRoomMemberService {
                     .replace("{roomDesc}", roomDesc);
 
             // 4. 持久化与强制装配 (覆盖)
-            // 4.1) 更新 DB (通过 Repository 调用，遵循 DDD)
             aiRepository.updateSystenByPromptId(originalPromptVO.getPromptId(), finalPrompt);
 
             // 4.2) 清除 Redis 缓存 (原料刷新)

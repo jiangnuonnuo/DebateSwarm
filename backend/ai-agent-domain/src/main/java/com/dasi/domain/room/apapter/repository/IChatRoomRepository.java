@@ -71,6 +71,11 @@ public interface IChatRoomRepository {
     List<AiChatRoomMemberEntity> queryClientsByRoomId(String roomId);
 
     /**
+     * 按输入顺序精确查询房间内指定的客户端成员
+     */
+    List<AiChatRoomMemberEntity> queryClientMembersByIds(String roomId, List<String> clientIds);
+
+    /**
      * 查询成员在房间的昵称
      */
     String queryMemberName(String roomId, String memberId);

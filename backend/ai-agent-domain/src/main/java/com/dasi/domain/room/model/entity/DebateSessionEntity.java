@@ -2,6 +2,7 @@ package com.dasi.domain.room.model.entity;
 
 import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
+import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,7 +11,9 @@ import lombok.NoArgsConstructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -151,24 +154,62 @@ public class DebateSessionEntity {
         return getSideForClient(clientId) != null;
     }
 
-    public String nextSpeakerByRoundRobin(String lastSpeakerId) {
-        if (proClientIds == null || proClientIds.isEmpty() || conClientIds == null || conClientIds.isEmpty()) {
-            return null;
-        }
+    public boolean canAcceptMentionOverride(String targetClientId) {
+        return isRunning()
+                && targetClientId != null
+                && !targetClientId.isBlank()
+                && validateDebater(targetClientId)
+                && !Objects.equals(arbitratorClientId, targetClientId);
+    }
 
-        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
+    public List<String> listCandidateSpeakerIds(String lastSpeakerId) {
+        List<String> allDebaters = new ArrayList<>(new LinkedHashSet<>(getAllDebaterIds()));
+        if (allDebaters.isEmpty()) {
+            return allDebaters;
+        }
+        if (lastSpeakerId != null && !lastSpeakerId.isBlank() && allDebaters.size() > 1) {
+            allDebaters.remove(lastSpeakerId);
+        }
+        return allDebaters;
+    }
+
+    public boolean validateArbitrationResult(String speakerId, String lastSpeakerId) {
+        return speakerId != null && listCandidateSpeakerIds(lastSpeakerId).contains(speakerId);
+    }
+
+    public String nextSpeakerByRoundRobin(List<DebateTurnRecordVO> roundHistory) {
+        if (proClientIds == null || proClientIds.isEmpty()) {
+            return conClientIds == null || conClientIds.isEmpty() ? null : conClientIds.get(0);
+        }
+        if (conClientIds == null || conClientIds.isEmpty()) {
             return proClientIds.get(0);
         }
 
-        String lastSide = getSideForClient(lastSpeakerId);
-        if ("PRO".equals(lastSide)) {
-            return nextFromSide(conClientIds, lastSpeakerId);
-        }
-        if ("CON".equals(lastSide)) {
-            return nextFromSide(proClientIds, lastSpeakerId);
+        if (roundHistory == null || roundHistory.isEmpty()) {
+            return proClientIds.get(0);
         }
 
-        return proClientIds.get(0);
+        DebateTurnRecordVO latestRecord = roundHistory.get(roundHistory.size() - 1);
+        String lastSide = latestRecord == null ? null : latestRecord.getSide();
+        String targetSide = "PRO".equals(lastSide) ? "CON" : "PRO";
+        List<String> targetMembers = getSideMembers(targetSide);
+        if (targetMembers.isEmpty()) {
+            targetSide = "PRO".equals(targetSide) ? "CON" : "PRO";
+            targetMembers = getSideMembers(targetSide);
+        }
+        if (targetMembers.isEmpty()) {
+            return null;
+        }
+
+        String latestSpeakerOnTargetSide = null;
+        for (int i = roundHistory.size() - 1; i >= 0; i--) {
+            DebateTurnRecordVO record = roundHistory.get(i);
+            if (record != null && targetSide.equals(record.getSide())) {
+                latestSpeakerOnTargetSide = record.getSpeakerId();
+                break;
+            }
+        }
+        return nextFromSide(targetMembers, latestSpeakerOnTargetSide);
     }
 
     public DebateRoundSummaryVO buildRoundSummary(String lastSpeakerId, String lastSpeakerName) {
@@ -189,11 +230,24 @@ public class DebateSessionEntity {
         return DebateStatus.FINISHED.equals(this.status);
     }
 
+    private List<String> getSideMembers(String side) {
+        if ("PRO".equals(side)) {
+            return proClientIds == null ? Collections.emptyList() : new ArrayList<>(proClientIds);
+        }
+        if ("CON".equals(side)) {
+            return conClientIds == null ? Collections.emptyList() : new ArrayList<>(conClientIds);
+        }
+        return Collections.emptyList();
+    }
+
     private String nextFromSide(List<String> sideMembers, String lastSpeakerId) {
         if (sideMembers == null || sideMembers.isEmpty()) {
             return null;
         }
-        List<String> members = new ArrayList<>(sideMembers);
+        List<String> members = new ArrayList<>(new LinkedHashSet<>(sideMembers));
+        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
+            return members.get(0);
+        }
         int currentIndex = members.indexOf(lastSpeakerId);
         if (currentIndex < 0) {
             return members.get(0);

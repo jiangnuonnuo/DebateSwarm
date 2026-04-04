@@ -53,7 +53,8 @@
     </select>
 
     <select id="querySessionContext" resultMap="dataMap">
-        SELECT session_id, topic, pro_client_ids, con_client_ids, current_round, current_turn, turns_per_round, status
+        SELECT session_id, room_id, topic, arbitrator_client_id, pro_client_ids, con_client_ids,
+               current_round, current_turn, turns_per_round, status
         FROM ai_debate_session
         WHERE session_id = #{sessionId} AND is_deleted = 0
     </select>

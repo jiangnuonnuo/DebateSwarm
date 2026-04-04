@@ -50,11 +50,7 @@ public class ArbitratorNode extends AbstractDispatchNode {
         dispatchContext.setDebateSession(activeSession);
         log.info("【调度决策】ArbitratorNode 识别到辩论模式：sessionId={}", activeSession.getSessionId());
 
-        DispatchDecisionVO decision = debateService.handleDebateDispatch(
-                strategyEntity.getRoomId(),
-                strategyEntity.getEventType(),
-                strategyEntity.getCurrentMessage()
-        );
+        DispatchDecisionVO decision = debateService.decideNextDispatch(strategyEntity, dispatchContext);
         if (decision != null) {
             dispatchContext.setDecision(decision);
         } else {

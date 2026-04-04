@@ -28,25 +28,35 @@
     </insert>
 
     <select id="queryMemberByRoomId" resultMap="dataMap">
-        SELECT member_id, member_type, member_name, agent_session_id
+        SELECT room_id, member_id, member_type, member_name, agent_session_id
         FROM ai_chat_room_member
         WHERE room_id = #{roomId} AND is_deleted = 0
     </select>
 
     <select id="queryAgentMemberByRoomId" resultMap="dataMap">
-        SELECT member_id, member_type, member_name, agent_session_id
+        SELECT room_id, member_id, member_type, member_name, agent_session_id
         FROM ai_chat_room_member
         WHERE room_id = #{roomId} AND member_type = 'AGENT' AND is_deleted = 0
     </select>
 
     <select id="queryClientMemberByRoomId" resultMap="dataMap">
-        SELECT member_id, member_type, member_name, agent_session_id
+        SELECT room_id, member_id, member_type, member_name, agent_session_id
         FROM ai_chat_room_member
         WHERE room_id = #{roomId} AND member_type = 'CLIENT' AND is_deleted = 0
     </select>
 
+    <select id="queryClientMembersByIds" resultMap="dataMap">
+        SELECT room_id, member_id, member_type, member_name, agent_session_id
+        FROM ai_chat_room_member
+        WHERE room_id = #{roomId} AND member_type = 'CLIENT' AND is_deleted = 0
+          AND member_id IN
+        <foreach collection="memberIds" item="memberId" open="(" separator="," close=")">
+            #{memberId}
+        </foreach>
+    </select>
+
     <select id="queryMemberByRoomIdAndMemberId" resultMap="dataMap">
-        SELECT member_id, member_type, member_name, agent_session_id
+        SELECT room_id, member_id, member_type, member_name, agent_session_id
         FROM ai_chat_room_member
         WHERE room_id = #{roomId} AND member_id = #{memberId} AND is_deleted = 0
     </select>

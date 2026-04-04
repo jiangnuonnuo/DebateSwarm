@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Set;
+import java.util.List;
 
 /**
  * @Author: xerina
@@ -27,8 +27,8 @@ public class DispatchStrategyEntity {
     /** 当前发言者ID */
     private String senderId;
 
-    /** 被 @ 的成员ID集合 */
-    private Set<String> atMemberIds;
+    /** 被 @ 的成员ID列表(保留用户输入顺序) */
+    private List<String> atMemberIds;
 
     /** 触发当前调度的消息体 */
     private AiChatRoomMessageEntity currentMessage;

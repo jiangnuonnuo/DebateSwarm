@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * @Author: xerina
@@ -35,35 +34,47 @@ public class AtMentionNode extends AbstractDispatchNode {
 
     @Override
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
-        Set<String> atMemberIds = strategyEntity.getAtMemberIds();
+        List<String> atMemberIds = strategyEntity.getAtMemberIds();
         if (atMemberIds == null || atMemberIds.isEmpty()) {
             return router(strategyEntity, dispatchContext);
         }
 
-        DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(strategyEntity.getRoomId());
+        DebateSessionEntity activeSession = dispatchContext.getDebateSession();
+        if (activeSession == null) {
+            activeSession = chatRoomRepository.queryActiveDebateSession(strategyEntity.getRoomId());
+            dispatchContext.setDebateSession(activeSession);
+        }
         if (activeSession != null && DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
             return router(strategyEntity, dispatchContext);
         }
 
-        // 获取房间内候选 Client (确保被 @ 的人确实是 CLIENT 且在房间内)
-        List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(strategyEntity.getRoomId());
+        // 按用户 @ 顺序精确校验，确保命中的人确实是当前房间中的 CLIENT。
+        List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientMembersByIds(strategyEntity.getRoomId(), atMemberIds);
         if (clients == null || clients.isEmpty()) {
             return router(strategyEntity, dispatchContext);
         }
 
+        List<String> legalDebaters = activeSession == null ? null : activeSession.getAllDebaterIds();
         for (AiChatRoomMemberEntity clientMember : clients) {
             String clientId = clientMember.getMemberId();
-            if (clientId.equals(strategyEntity.getSenderId())) continue;
-
-            if (atMemberIds.contains(clientId)) {
-                log.info("【调度决策】AtMentionNode 命中：clientId={}", clientId);
-                dispatchContext.setDecision(DispatchDecisionVO.builder()
-                        .speakerId(clientId)
-                        .decisionSource("AT_MENTION")
-                        .build());
-                // 已产生决策，准备路由
-                break;
+            if (clientId.equals(strategyEntity.getSenderId())) {
+                continue;
             }
+            if (activeSession != null) {
+                if (!activeSession.canAcceptMentionOverride(clientId) || !legalDebaters.contains(clientId)) {
+                    log.info("【调度决策】AtMentionNode 跳过非合法辩手 mention：clientId={}", clientId);
+                    continue;
+                }
+            }
+            log.info("【调度决策】AtMentionNode 命中：clientId={}，roomId={}", clientId , strategyEntity.getRoomId());
+            dispatchContext.setDecision(DispatchDecisionVO.builder()
+                    .speakerId(clientId)
+                    .decisionSource("AT_MENTION")
+                    .reasoning(activeSession == null
+                            ? String.format("用户指定由 %s 进行回复。", clientMember.getMemberName())
+                            : String.format("用户指定由辩手 %s 优先回应。", clientMember.getMemberName()))
+                    .build());
+            break;
         }
 
         return router(strategyEntity, dispatchContext);
