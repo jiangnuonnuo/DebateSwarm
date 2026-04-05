@@ -19,7 +19,7 @@ const showSuccessMeta = (value) => {
                 :class="
                     toast.type === 'success'
                         ? 'border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.04)]'
-                        : 'border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.04)]'
+                        : 'border-[rgba(245,158,11,0.32)] bg-[rgba(245,158,11,0.08)]'
                 "
             >
                 <button
@@ -33,13 +33,13 @@ const showSuccessMeta = (value) => {
                 <div class="flex items-start gap-[10px] px-[12px] py-[10px] pr-[34px]">
                     <div
                         class="mt-[1px] grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full text-[14px] font-bold leading-none text-white"
-                        :class="toast.type === 'success' ? 'bg-[#22c55e]' : 'bg-[#ef4444]'"
+                        :class="toast.type === 'success' ? 'bg-[#22c55e]' : 'bg-[#f59e0b]'"
                     >
-                        {{ toast.type === 'success' ? '✓' : '!' }}
+                        {{ toast.type === 'success' ? '✓' : '·' }}
                     </div>
                     <div class="min-w-0 flex-1">
                         <div class="break-words text-[13px] font-medium leading-[1.45] text-[var(--text-primary)]">
-                            {{ toast.type === 'success' ? '成功：' : '错误：' }}{{ toast.message }}
+                            {{ toast.type === 'success' ? '成功：' : '提示：' }}{{ toast.message }}
                         </div>
                         <div
                             v-if="toast.scope === 'admin' && (showSuccessMeta(toast.operation) || toast.requestPath)"
@@ -62,7 +62,7 @@ const showSuccessMeta = (value) => {
                 </div>
                 <div
                     class="h-[3px] animate-toast-progress"
-                    :class="toast.type === 'success' ? 'bg-[#22c55e]' : 'bg-[#ef4444]'"
+                    :class="toast.type === 'success' ? 'bg-[#22c55e]' : 'bg-[#f59e0b]'"
                     :style="{ animationDuration: `${toast.duration}ms` }"
                 ></div>
             </div>

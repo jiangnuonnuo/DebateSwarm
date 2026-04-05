@@ -1259,12 +1259,16 @@ const handleUpload = async () => {
 <template>
     <section class="grid h-screen grid-rows-[var(--header-height)_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
         <header
-            class="sticky top-0 z-10 h-[var(--header-height)] border-b border-[rgba(15,23,42,0.06)] bg-[var(--surface-3)] backdrop-blur-[6px]"
+            class="sticky top-0 z-10 h-[var(--header-height)] border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.56)] backdrop-blur-[18px]"
         >
             <div
                 class="flex h-full w-full items-center justify-between gap-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))] max-[720px]:pl-[8px] max-[720px]:pr-[calc(8px+var(--scrollbar-w))]"
             >
-                <div class="flex items-center gap-[10px]">
+                <div class="flex items-center gap-[14px]">
+                    <div class="hidden min-[980px]:block">
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Chat Workspace</div>
+                        <div class="mt-[4px] text-[18px] font-bold text-[var(--text-primary)]">对话舞台</div>
+                    </div>
                     <div class="flex items-center gap-[14px] font-semibold">
                         <label class="w-[36px] text-[14px] text-[var(--text-secondary)] text-right">CLIENT</label>
                         <div class="relative min-w-[200px]">
@@ -1405,12 +1409,24 @@ const handleUpload = async () => {
                 class="h-full overflow-y-auto bg-[var(--bg-page)] py-[16px] scroll-smooth [scrollbar-gutter:auto]"
                 @scroll="handleScroll"
             >
-                <div class="mx-auto w-full max-w-[900px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-                    <div class="flex min-h-full w-full flex-col gap-[14px]">
+                <div class="mx-auto w-full max-w-[980px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
+                    <div class="page-hero mb-[14px] flex items-start justify-between gap-[14px] px-[18px] py-[16px] max-[900px]:flex-col">
+                        <div>
+                            <div class="section-kicker">Conversation</div>
+                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">在一个上下文里完成模型、工具与知识库协同</div>
+                            <div class="mt-[8px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">保留原有接口与功能，只把对话工作区整理得更清晰。你可以在顶部快速切换 CLIENT / MCP / RAG，输入区和消息区共用同一套视觉语言。</div>
+                        </div>
+                        <div class="flex flex-wrap gap-[8px]">
+                            <span class="toolbar-chip">CLIENT {{ currentModelLabel }}</span>
+                            <span class="toolbar-chip">MCP {{ currentMcpLabel }}</span>
+                            <span class="toolbar-chip">RAG {{ ragTags.find((t) => t.value === currentRagTag)?.label || '不使用知识库' }}</span>
+                        </div>
+                    </div>
+                    <div class="panel-surface flex min-h-full w-full flex-col gap-[14px] px-[18px] py-[18px]">
                         <div v-if="messageLoading" class="text-[12px] text-[var(--text-secondary)]">加载会话消息中...</div>
                         <div
                             v-if="!messageLoading && messages.length === 0"
-                            class="flex flex-1 items-center justify-center py-[60px] text-[15px] text-[var(--text-secondary)]"
+                            class="empty-state py-[60px] text-[15px]"
                         >
                             当前会话暂无消息
                         </div>
@@ -1425,7 +1441,7 @@ const handleUpload = async () => {
                                     class="relative w-full max-w-[720px] overflow-hidden rounded-[14px] px-[14px] py-[12px] shadow-[0_12px_30px_rgba(27,36,55,0.08)] border"
                                     :class="[
                                         message.error
-                                            ? 'bg-[linear-gradient(135deg,#ffe4e4,#ffd6d6)] border-[#f3b6b6] text-[#b91c1c]'
+                                            ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
                                             : message.role === 'user'
                                                 ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
                                                 : 'bg-white border-[var(--border-color)]',
@@ -1446,14 +1462,14 @@ const handleUpload = async () => {
                                     <div
                                         v-else-if="message.role === 'user' || message.pending"
                                         class="whitespace-pre-wrap break-all leading-[1.6] [overflow-wrap:anywhere]"
-                                        :class="message.error ? 'text-[#d14343]' : ''"
+                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
                                     >
                                         {{ getContent(message) }}
                                     </div>
                                     <div
                                         v-else
                                         class="markdown-body break-words leading-[1.6] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[10px] [&_pre]:bg-[#0f172a] [&_pre]:p-[12px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
-                                        :class="message.error ? 'text-[#d14343]' : ''"
+                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
                                         v-html="renderMarkdown(getContent(message))"
                                     ></div>
                                 </div>
@@ -1489,17 +1505,17 @@ const handleUpload = async () => {
         </div>
 
         <div class="bg-[var(--bg-page)]">
-            <div class="mx-auto flex w-full max-w-[900px] flex-col gap-0 py-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-                <div class="flex flex-col gap-[10px] rounded-[16px] border border-[var(--border-color)] bg-white p-[12px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]">
+            <div class="mx-auto flex w-full max-w-[980px] flex-col gap-0 py-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
+                <div class="panel-surface flex flex-col gap-[10px] rounded-[24px] p-[14px]">
                     <textarea
                         v-model="inputValue"
-                        class="w-full resize-none rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[12px] text-[14px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] disabled:bg-[#f4f6fb]"
+                        class="w-full resize-none rounded-[16px] border border-[var(--border-color)] bg-white px-[14px] py-[12px] text-[14px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] disabled:bg-[#f4f6fb]"
                         rows="3"
                         placeholder="输入问题，Enter 发送，Shift+Enter 换行"
                         :disabled="sending"
                         @keydown="handleKeydown"
                     ></textarea>
-                    <div v-if="sendError" class="text-[12px] text-[var(--text-secondary)]">
+                    <div v-if="sendError" class="notice-inline text-[12px]">
                         {{ sendError }}
                     </div>
                     <div class="flex justify-end gap-[10px]">
@@ -1736,7 +1752,7 @@ const handleUpload = async () => {
                         />
                     </div>
 
-                    <div v-if="uploadForm.error" class="rounded-[8px] bg-[#fff3f3] px-[10px] py-[8px] text-[13px] text-[#d14343]">
+                    <div v-if="uploadForm.error" class="notice-inline text-[13px]">
                         {{ uploadForm.error }}
                     </div>
                 </div>

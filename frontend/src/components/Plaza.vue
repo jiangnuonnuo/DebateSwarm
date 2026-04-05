@@ -339,14 +339,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[1fr_var(--footer-height)] bg-white">
-        <div class="overflow-y-auto py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-            <div class="mx-auto max-w-[1100px] space-y-[16px]">
-                <div class="flex items-center justify-between gap-[12px]">
-                    <h1 class="text-[24px] font-bold">Xerina 灵感广场</h1>
-                </div>
+    <section class="page-shell">
+        <div class="page-body">
+            <div class="page-wrap space-y-[16px]">
+                <section class="page-hero px-[24px] py-[24px] max-[720px]:px-[16px]">
+                    <div class="section-kicker">Plaza</div>
+                    <h1 class="page-title mt-[10px]">灵感广场与模板发现</h1>
+                    <p class="page-subtitle">在广场里搜索、排序、点赞、收藏和评论，然后回到自己的仓库继续 Fork 或编辑。发现页和资产页现在是同一条体验链路。</p>
+                </section>
 
-                <div class="flex w-full max-w-[560px] items-center gap-[8px]">
+                <div class="panel-surface flex w-full max-w-[560px] items-center gap-[8px] px-[14px] py-[12px]">
                     <input
                         v-model="searchText"
                         class="min-w-0 flex-1 rounded-[999px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] text-[14px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
@@ -423,7 +425,7 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div v-if="message" class="text-[13px] text-[var(--text-secondary)]">{{ message }}</div>
+                <div v-if="message" class="notice-inline text-[13px]">{{ message }}</div>
 
                 <div class="grid gap-[14px] sm:grid-cols-2 xl:grid-cols-3">
                     <article

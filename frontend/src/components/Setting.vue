@@ -28,7 +28,7 @@ import Footer from './Footer.vue';
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const isDarkTheme = computed(() => settingsStore.theme === 'dark');
-const activeTab = ref('profile');
+const activeTab = ref('overview');
 
 const pickData = (resp, message = '操作失败') => {
     if (resp && typeof resp === 'object' && Object.prototype.hasOwnProperty.call(resp, 'code')) {
@@ -42,6 +42,36 @@ const pickData = (resp, message = '操作失败') => {
 
 const currentUser = computed(() => authStore.user || { userId: '', username: '访客', role: 'guest' });
 const avatarChar = computed(() => (currentUser.value.username || '访客').slice(0, 1).toUpperCase());
+const settingEntryCards = computed(() => [
+    {
+        key: 'model',
+        title: 'Client / Model 装配',
+        desc: '管理接口地址、模型名、Client 配置和系统提示词。',
+        value: apiList.value.length,
+        valueLabel: '个配置'
+    },
+    {
+        key: 'mcp',
+        title: 'MCP 工具装配',
+        desc: '管理你自己的 SSE / STDIO 工具接入和密钥。',
+        value: mcpList.value.length,
+        valueLabel: '个工具'
+    },
+    {
+        key: 'task',
+        title: 'Task 自动任务',
+        desc: '把常用 MiniAgent 编排成可复用的定时任务。',
+        value: taskList.value.length,
+        valueLabel: '个任务'
+    },
+    {
+        key: 'profile',
+        title: '个人资料',
+        desc: '更新头像、用户名和密码，保持你的工作身份清晰。',
+        value: currentUser.value?.role === 'admin' ? 'Admin' : 'User',
+        valueLabel: '身份'
+    }
+]);
 
 const DEFAULT_AVATAR_URL_PATTERN = /^https?:\/\/avatars\.githubusercontent\.com\/u\/1(?:[/?]|$)/i;
 const currentUserAvatarUrl = computed(() => {
@@ -1181,47 +1211,58 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[1fr_var(--footer-height)] bg-white">
-        <div class="overflow-y-scroll [scrollbar-gutter:stable] py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-            <div class="mx-auto max-w-[1100px] space-y-[16px]">
-                <div class="flex flex-wrap items-center justify-between gap-[12px]">
-                    <div class="flex flex-wrap items-center gap-[28px]">
-                        <h1 class="text-[24px] font-bold text-[var(--text-primary)]">个人中心设置</h1>
-                        <nav class="flex items-center gap-[20px]">
-                            <button
-                                class="border-b-2 px-[2px] pb-[10px] pt-[2px] text-[14px] font-semibold transition"
-                                :class="activeTab === 'profile' ? 'border-[var(--accent-color)] text-[var(--accent-color)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
-                                @click="activeTab = 'profile'"
-                            >
-                                Profile
-                            </button>
-                            <button
-                                class="border-b-2 px-[2px] pb-[10px] pt-[2px] text-[14px] font-semibold transition"
-                                :class="activeTab === 'model' ? 'border-[var(--accent-color)] text-[var(--accent-color)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
-                                @click="activeTab = 'model'"
-                            >
-                                MODEL
-                            </button>
-                            <button
-                                class="border-b-2 px-[2px] pb-[10px] pt-[2px] text-[14px] font-semibold transition"
-                                :class="activeTab === 'mcp' ? 'border-[var(--accent-color)] text-[var(--accent-color)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
-                                @click="activeTab = 'mcp'"
-                            >
-                                MCP
-                            </button>
-                            <button
-                                class="border-b-2 px-[2px] pb-[10px] pt-[2px] text-[14px] font-semibold transition"
-                                :class="activeTab === 'task' ? 'border-[var(--accent-color)] text-[var(--accent-color)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
-                                @click="activeTab = 'task'"
-                            >
-                                TASK
-                            </button>
-                        </nav>
+    <section class="page-shell">
+        <div class="page-body overflow-y-scroll [scrollbar-gutter:stable]">
+            <div class="page-wrap space-y-[16px]">
+                <section class="page-hero px-[24px] py-[24px] max-[720px]:px-[16px]">
+                    <div class="section-kicker">Setting Center</div>
+                    <div class="mt-[10px] flex flex-wrap items-start justify-between gap-[14px]">
+                        <div>
+                            <h1 class="page-title">账号与能力配置中心</h1>
+                            <p class="page-subtitle">把个人资料、Client/MODEL、MCP 和 Task 集中放在同一个入口里。新用户不需要猜“工具装配”藏在哪里，常用配置一眼就能找到。</p>
+                        </div>
+                        <div class="segmented-tabs">
+                            <button class="segmented-tab" :class="activeTab === 'overview' ? 'segmented-tab--active' : ''" @click="activeTab = 'overview'">概览</button>
+                            <button class="segmented-tab" :class="activeTab === 'profile' ? 'segmented-tab--active' : ''" @click="activeTab = 'profile'">Profile</button>
+                            <button class="segmented-tab" :class="activeTab === 'model' ? 'segmented-tab--active' : ''" @click="activeTab = 'model'">MODEL</button>
+                            <button class="segmented-tab" :class="activeTab === 'mcp' ? 'segmented-tab--active' : ''" @click="activeTab = 'mcp'">MCP</button>
+                            <button class="segmented-tab" :class="activeTab === 'task' ? 'segmented-tab--active' : ''" @click="activeTab = 'task'">TASK</button>
+                        </div>
                     </div>
-                </div>
-                <div class="h-[1px] w-full bg-[var(--border-color)]"></div>
+                </section>
 
-                <div v-if="activeTab === 'profile'" class="space-y-[14px]">
+                <div v-if="activeTab === 'overview'" class="space-y-[16px]">
+                    <section class="panel-surface px-[20px] py-[18px]">
+                        <div class="section-title-row">
+                            <div>
+                                <div class="section-kicker">Overview</div>
+                                <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">从这里开始装配你的工作台</div>
+                            </div>
+                        </div>
+                        <div class="mt-[16px] stat-grid">
+                            <button
+                                v-for="card in settingEntryCards"
+                                :key="card.key"
+                                type="button"
+                                class="stat-card text-left transition hover:-translate-y-[2px] hover:border-[rgba(47,124,246,0.24)]"
+                                @click="activeTab = card.key"
+                            >
+                                <div class="section-kicker !tracking-[0.16em]">{{ card.key }}</div>
+                                <div class="mt-[10px] text-[18px] font-semibold text-[var(--text-primary)]">{{ card.title }}</div>
+                                <div class="mt-[8px] text-[13px] leading-[1.65] text-[var(--text-secondary)]">{{ card.desc }}</div>
+                                <div class="mt-[18px] flex items-end justify-between gap-[10px]">
+                                    <div>
+                                        <div class="stat-value text-[2rem]">{{ card.value }}</div>
+                                        <div class="stat-label">{{ card.valueLabel }}</div>
+                                    </div>
+                                    <span class="rounded-full border border-[rgba(47,124,246,0.16)] bg-[rgba(47,124,246,0.08)] px-[10px] py-[5px] text-[12px] font-semibold text-[var(--accent-color)]">进入</span>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <div v-else-if="activeTab === 'profile'" class="panel-surface space-y-[14px] px-[20px] py-[18px]">
                     <div>
                         <div class="mb-[10px] text-[13px] font-semibold text-[var(--text-secondary)]">头像设置</div>
                         <div class="flex flex-wrap items-center gap-[12px]">
@@ -1310,7 +1351,7 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div v-else-if="activeTab === 'model'" class="space-y-[14px]">
+                <div v-else-if="activeTab === 'model'" class="panel-surface space-y-[14px] px-[20px] py-[18px]">
                     <div class="space-y-[10px]">
                         <div class="flex flex-wrap items-center gap-[10px]">
                             <div class="flex w-full items-center gap-[8px] md:w-[360px]">
@@ -1387,7 +1428,7 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div v-else-if="activeTab === 'mcp'" class="space-y-[14px]">
+                <div v-else-if="activeTab === 'mcp'" class="panel-surface space-y-[14px] px-[20px] py-[18px]">
                     <div class="space-y-[10px]">
                         <div class="flex flex-wrap items-center gap-[10px]">
                             <div class="flex w-full items-center gap-[8px] md:w-[360px]">
@@ -1464,7 +1505,7 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div v-else class="space-y-[14px]">
+                <div v-else class="panel-surface space-y-[14px] px-[20px] py-[18px]">
                     <div class="space-y-[10px]">
                         <div class="flex flex-wrap items-center gap-[10px]">
                             <div class="flex w-full items-center gap-[8px] md:w-[360px]">
@@ -1698,7 +1739,7 @@ onBeforeUnmount(() => {
                         </div>
                     </label>
                 </div>
-                <div v-if="mcpError" class="mt-[10px] text-[12px] text-[#ef4444]">{{ mcpError }}</div>
+                    <div v-if="mcpError" class="notice-inline mt-[10px] text-[12px]">{{ mcpError }}</div>
                 <div class="mt-[12px] flex justify-end gap-[8px]">
                     <button class="rounded-[10px] border border-[var(--border-color)] px-[12px] py-[8px] text-[13px]" @click="mcpCreateDialogOpen = false">取消</button>
                     <button
@@ -1752,7 +1793,7 @@ onBeforeUnmount(() => {
                         <input v-model="apiForm.apiKey" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" placeholder="请输入接口密钥" />
                     </label>
                 </div>
-                <div v-if="apiError" class="mt-[10px] text-[12px] text-[#ef4444]">{{ apiError }}</div>
+                    <div v-if="apiError" class="notice-inline mt-[10px] text-[12px]">{{ apiError }}</div>
                 <div class="mt-[12px] flex justify-end gap-[8px]">
                     <button class="rounded-[10px] border border-[var(--border-color)] px-[12px] py-[8px] text-[13px]" @click="apiCreateDialogOpen = false">取消</button>
                     <button
@@ -1884,7 +1925,7 @@ onBeforeUnmount(() => {
                         </div>
                     </label>
                 </div>
-                <div v-if="taskError" class="mt-[10px] text-[12px] text-[#ef4444]">{{ taskError }}</div>
+                    <div v-if="taskError" class="notice-inline mt-[10px] text-[12px]">{{ taskError }}</div>
                 <div class="mt-[12px] flex justify-end gap-[8px]">
                     <button
                         class="rounded-[10px] border border-[var(--border-color)] px-[12px] py-[8px] text-[13px]"
@@ -2003,7 +2044,7 @@ onBeforeUnmount(() => {
                         </div>
                     </label>
                 </div>
-                <div v-if="mcpDialogError" class="mt-[10px] text-[12px] text-[#ef4444]">{{ mcpDialogError }}</div>
+                <div v-if="mcpDialogError" class="notice-inline mt-[10px] text-[12px]">{{ mcpDialogError }}</div>
                 <div class="mt-[12px] flex justify-end gap-[8px]">
                     <button class="rounded-[10px] border border-[var(--border-color)] px-[12px] py-[8px] text-[13px]" @click="mcpDialogOpen = false">取消</button>
                     <button
@@ -2057,7 +2098,7 @@ onBeforeUnmount(() => {
                         <input v-model="apiDialogForm.apiKey" class="rounded-[10px] border border-[var(--border-color)] px-[10px] py-[10px]" />
                     </label>
                 </div>
-                <div v-if="apiDialogError" class="mt-[10px] text-[12px] text-[#ef4444]">{{ apiDialogError }}</div>
+                <div v-if="apiDialogError" class="notice-inline mt-[10px] text-[12px]">{{ apiDialogError }}</div>
                 <div class="mt-[12px] flex justify-end gap-[8px]">
                     <button class="rounded-[10px] border border-[var(--border-color)] px-[12px] py-[8px] text-[13px]" @click="apiDialogOpen = false">取消</button>
                     <button

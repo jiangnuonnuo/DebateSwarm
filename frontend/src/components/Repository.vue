@@ -137,21 +137,23 @@ onMounted(loadRepository);
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[1fr_var(--footer-height)] bg-white">
-        <div class="overflow-y-auto py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-            <div class="mx-auto max-w-[1100px] space-y-[16px]">
-                <header class="flex items-center justify-between gap-[12px]">
-                    <h1 class="text-[24px] font-bold text-[var(--text-primary)]">Xerina 个人仓库</h1>
-                </header>
+    <section class="page-shell">
+        <div class="page-body">
+            <div class="page-wrap space-y-[16px]">
+                <section class="page-hero px-[24px] py-[24px] max-[720px]:px-[16px]">
+                    <div class="section-kicker">Repository</div>
+                    <h1 class="page-title mt-[10px]">你的智能体资产库</h1>
+                    <p class="page-subtitle">把已创建、已添加和已收藏的智能体放到同一个清晰的仓库视图里。查看、继续编辑、删除和回流到模板详情都在这条路径里完成。</p>
+                </section>
 
                 <div
                     v-if="message"
-                    class="mt-[18px] rounded-[14px] border border-[rgba(248,113,113,0.2)] bg-[rgba(254,242,242,0.9)] px-[14px] py-[10px] text-[13px] text-[#b91c1c]"
+                    class="notice-inline"
                 >
                     {{ message }}
                 </div>
 
-                <div class="space-y-[2px]">
+                <div class="panel-surface space-y-[2px] px-[12px] py-[14px]">
                     <section
                         v-for="section in sections"
                         :key="section.key"

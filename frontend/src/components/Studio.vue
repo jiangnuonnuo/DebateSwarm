@@ -118,14 +118,16 @@ onMounted(async () => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[1fr_var(--footer-height)] bg-white">
-        <div class="overflow-y-auto py-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-            <div class="mx-auto max-w-[1100px] space-y-[16px]">
-                <div class="flex items-center justify-between gap-[12px]">
-                    <h1 class="text-[24px] font-bold text-[var(--text-primary)]">MiniAgent Studio</h1>
-                </div>
+    <section class="page-shell">
+        <div class="page-body">
+            <div class="page-wrap space-y-[16px]">
+                <section class="page-hero px-[24px] py-[24px] max-[720px]:px-[16px]">
+                    <div class="section-kicker">Studio</div>
+                    <h1 class="page-title mt-[10px]">组合你的 MiniAgent</h1>
+                    <p class="page-subtitle">把模型、MCP 和执行策略组合成一个可落地的智能体。Studio 现在更像创作台，而不是简单的表单堆叠。</p>
+                </section>
 
-                <div class="space-y-[18px] rounded-[16px] bg-white p-[18px]">
+                <div class="panel-surface space-y-[18px] p-[18px]">
                     <div class="flex min-h-[50px] items-center gap-[12px]">
                         <div class="flex h-[44px] w-[140px] shrink-0 items-center text-[16px] font-semibold tracking-[0.02em] text-[var(--text-secondary)]">MiniAgent 名称</div>
                         <div class="min-w-0 flex-1">
@@ -235,7 +237,7 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <div v-if="message" class="text-[13px] text-[var(--text-secondary)]">{{ message }}</div>
+                <div v-if="message" class="notice-inline text-[13px]">{{ message }}</div>
             </div>
         </div>
 

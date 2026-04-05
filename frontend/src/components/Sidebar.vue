@@ -102,6 +102,7 @@ const isStudioRoute = computed(() => route.path.startsWith('/studio'));
 const isPlazaRoute = computed(() => route.path.startsWith('/plaza'));
 const isRepositoryRoute = computed(() => route.path.startsWith('/repository'));
 const isRoomRoute = computed(() => route.path.startsWith('/room'));
+const isSettingRoute = computed(() => route.path.startsWith('/setting'));
 
 const showChatList = ref(true);
 const showAgentList = ref(true);
@@ -1023,7 +1024,7 @@ const loadProfileResources = async () => {
 
 <template>
     <aside
-        class="flex h-screen flex-col border-r p-[20px] max-[720px]:hidden"
+        class="m-[12px] flex h-[calc(100vh-24px)] flex-col rounded-[32px] border p-[18px] max-[720px]:hidden"
         :class="sidebarShellClass"
     >
         <div class="mb-[12px] pr-[4px]">

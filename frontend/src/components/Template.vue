@@ -252,7 +252,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="relative grid h-screen grid-rows-[1fr_var(--footer-height)] overflow-x-hidden" :style="detailThemeVars">
+    <section class="page-shell relative overflow-x-hidden" :style="detailThemeVars">
         <div class="h-full overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] pt-[24px] pb-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
             <div class="relative mx-auto max-w-[1180px]">
                 <div v-if="detail" class="relative z-[1] space-y-[18px]">

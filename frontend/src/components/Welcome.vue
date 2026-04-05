@@ -166,22 +166,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="welcome-page grid h-screen grid-rows-[1fr_var(--footer-height)] bg-[var(--bg-page)]">
-        <div class="h-full overflow-y-auto bg-[var(--bg-page)]">
-            <div
-                class="mx-auto flex min-h-full w-full flex-col px-[24px] pr-[calc(24px+var(--scrollbar-w))] py-[10px] max-[720px]:px-[12px] max-[720px]:pr-[calc(12px+var(--scrollbar-w))] max-[720px]:py-[10px]"
-            >
-                <div class="welcome-hero-wrap">
-                    <div class="mx-auto w-full max-w-[1320px] pl-[50px] max-[720px]:px-0">
+    <section class="welcome-page page-shell">
+        <div class="page-body">
+            <div class="page-wrap flex min-h-full flex-col gap-[18px]">
+                <section class="page-hero overflow-visible px-[28px] py-[30px] max-[720px]:px-[18px] max-[720px]:py-[20px]">
+                    <div class="section-kicker">Workspace First</div>
+                    <div class="welcome-hero-wrap !mt-[24px]">
                         <div class="welcome-hero">
                             <div class="welcome-hero-inner">
                                 <div class="welcome-mark-block">
                                     <div class="welcome-mark-line" data-text="Mini">Mini</div>
                                     <div class="welcome-mark-line" data-text="Agent">Agent</div>
                                 </div>
-                                <div
-                                    class="welcome-typewriter flex h-[156px] flex-1 flex-col items-start justify-center gap-[6px] overflow-hidden text-[var(--text-primary)] max-[900px]:h-[136px]"
-                                >
+                                <div class="welcome-typewriter flex h-[156px] flex-1 flex-col items-start justify-center gap-[6px] overflow-hidden text-[var(--text-primary)] max-[900px]:h-[136px]">
                                     <div
                                         v-for="(line, idx) in typewriterState.lines"
                                         :key="idx"
@@ -189,39 +186,39 @@ onBeforeUnmount(() => {
                                         :style="{ backgroundImage: 'var(--typewriter-gradient)' }"
                                     >
                                         {{ line }}
-                                        <span
-                                            v-if="typewriterState.playing && idx === typewriterState.lineIndex"
-                                            class="animate-caret text-[var(--accent-color)]"
-                                            >▍</span
-                                        >
+                                        <span v-if="typewriterState.playing && idx === typewriterState.lineIndex" class="animate-caret text-[var(--accent-color)]">▍</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                    <div class="page-subtitle">
+                        从同一个工作台里切换对话、任务、协作房间、工具和个人配置。入口不再分散，开始用、继续用、管理你自己的智能体都在这条路径里完成。
+                    </div>
+                </section>
 
-                <div class="welcome-section-gap"></div>
-
-                <div class="welcome-links-wrap mx-auto w-full max-w-[1060px]">
-                    <div class="grid items-stretch gap-[14px] md:grid-cols-2">
+                <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
+                    <div class="section-title-row">
+                        <div>
+                            <div class="section-kicker">Quick Start</div>
+                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">快速开始</div>
+                        </div>
+                    </div>
+                    <div class="mt-[16px] grid gap-[14px] lg:grid-cols-[1.2fr_1.2fr_0.9fr]">
                         <article
-                            v-for="card in featureCards"
+                            v-for="card in featureCards.slice(0, 3)"
                             :key="card.key"
-                            class="welcome-feature-card group relative flex flex-col overflow-hidden rounded-[18px] border border-[var(--border-color)] bg-[var(--surface-1)] px-[18px] py-[14px] shadow-[var(--shadow-soft)] transition-all duration-300 hover:-translate-y-[2px] hover:border-[var(--accent-color)]"
+                            class="welcome-feature-card group context-card relative flex min-h-[180px] flex-col overflow-hidden px-[18px] py-[16px]"
                         >
                             <div class="welcome-feature-glow pointer-events-none absolute inset-0"></div>
-                            <div class="relative flex flex-col">
-                                <h3 class="mt-[4px] text-[22px] font-bold leading-[1.2] text-[var(--text-primary)] max-[720px]:text-[18px]">
-                                    {{ card.title }}
-                                </h3>
-                                <p class="mt-[8px] overflow-hidden text-ellipsis whitespace-nowrap text-[14px] leading-[1.45] text-[var(--text-secondary)]">
-                                    {{ card.description }}
-                                </p>
+                            <div class="relative flex h-full flex-col">
+                                <div class="section-kicker !tracking-[0.16em]">{{ card.key }}</div>
+                                <h3 class="mt-[10px] text-[24px] font-bold leading-[1.16] text-[var(--text-primary)] max-[720px]:text-[18px]">{{ card.title }}</h3>
+                                <p class="mt-[10px] text-[14px] leading-[1.65] text-[var(--text-secondary)]">{{ card.description }}</p>
                                 <button
                                     v-if="card.route || card.action"
                                     type="button"
-                                    class="mt-[10px] inline-flex w-fit items-center gap-[6px] text-[13px] font-semibold text-[var(--accent-color)]"
+                                    class="mt-auto inline-flex w-fit items-center gap-[6px] rounded-full border border-[rgba(47,124,246,0.16)] bg-[rgba(47,124,246,0.08)] px-[12px] py-[8px] text-[13px] font-semibold text-[var(--accent-color)]"
                                     :class="creatingSessionType ? 'opacity-70' : ''"
                                     :disabled="Boolean(creatingSessionType)"
                                     @click="handleCardClick(card)"
@@ -229,17 +226,44 @@ onBeforeUnmount(() => {
                                     {{ resolveCardCta(card) }}
                                     <span aria-hidden="true">→</span>
                                 </button>
-                                <span
-                                    v-else
-                                    class="mt-[10px] inline-flex w-fit cursor-not-allowed items-center gap-[6px] text-[13px] font-semibold text-[var(--accent-color)] opacity-80"
-                                >
-                                    {{ card.cta }}
-                                    <span aria-hidden="true">→</span>
-                                </span>
                             </div>
                         </article>
                     </div>
-                </div>
+                </section>
+
+                <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
+                    <div class="section-title-row">
+                        <div>
+                            <div class="section-kicker">Explore</div>
+                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">继续工作</div>
+                        </div>
+                    </div>
+                    <div class="mt-[16px] grid items-stretch gap-[14px] md:grid-cols-2 xl:grid-cols-4">
+                        <article
+                            v-for="card in featureCards.slice(3)"
+                            :key="card.key"
+                            class="context-card group relative flex flex-col overflow-hidden px-[18px] py-[16px]"
+                        >
+                            <div class="welcome-feature-glow pointer-events-none absolute inset-0 opacity-80"></div>
+                            <div class="relative flex h-full flex-col">
+                                <div class="section-kicker !tracking-[0.16em]">{{ card.key }}</div>
+                                <h3 class="mt-[10px] text-[18px] font-bold leading-[1.25] text-[var(--text-primary)]">{{ card.title }}</h3>
+                                <p class="mt-[8px] text-[13px] leading-[1.65] text-[var(--text-secondary)]">{{ card.description }}</p>
+                                <button
+                                    v-if="card.route || card.action"
+                                    type="button"
+                                    class="mt-auto inline-flex w-fit items-center gap-[6px] pt-[16px] text-[13px] font-semibold text-[var(--accent-color)]"
+                                    :class="creatingSessionType ? 'opacity-70' : ''"
+                                    :disabled="Boolean(creatingSessionType)"
+                                    @click="handleCardClick(card)"
+                                >
+                                    {{ resolveCardCta(card) }}
+                                    <span aria-hidden="true">→</span>
+                                </button>
+                            </div>
+                        </article>
+                    </div>
+                </section>
             </div>
         </div>
 

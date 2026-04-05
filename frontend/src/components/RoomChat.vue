@@ -1,9 +1,9 @@
 <template>
-    <div class="flex h-full w-full overflow-hidden bg-[#0b1220] text-[#e7ecf4]">
+    <div class="flex h-full w-full overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.16),transparent_26%),linear-gradient(180deg,#08111f_0%,#0b1220_100%)] text-[#e7ecf4]">
         <!-- 左侧：聊天主区域 -->
         <div class="flex flex-1 flex-col min-w-0 relative border-r border-[rgba(255,255,255,0.06)]">
             <!-- 顶部 Header -->
-            <header class="flex h-[64px] items-center justify-between px-6 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(11,18,32,0.8)] backdrop-blur-md z-10">
+            <header class="flex h-[72px] items-center justify-between px-6 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(8,14,26,0.72)] backdrop-blur-xl z-10">
                 <div class="flex flex-col min-w-0">
                     <h2 class="text-lg font-bold truncate text-[#7bc8ff]">{{ currentRoom?.roomName || '聊天室' }}</h2>
                     <p class="text-xs text-[rgba(231,236,244,0.5)] truncate">{{ currentRoom?.roomDesc || '多智能体协同空间' }}</p>
@@ -280,7 +280,7 @@
             </div>
 
             <!-- 输入框 -->
-            <div class="p-4 bg-[rgba(11,18,32,0.5)] border-t border-[rgba(255,255,255,0.06)] relative">
+            <div class="p-4 bg-[rgba(8,14,26,0.44)] border-t border-[rgba(255,255,255,0.06)] backdrop-blur-md relative">
                 <div v-if="showMsgContextMenu"
                      class="fixed bg-[#0f172a] border border-[rgba(255,255,255,0.12)] rounded-xl shadow-2xl z-50 overflow-hidden"
                      :style="{ left: msgContextMenuPos.x + 'px', top: msgContextMenuPos.y + 'px' }"
@@ -309,7 +309,7 @@
                     </ul>
                 </div>
 
-                <div class="max-w-4xl mx-auto relative flex items-end gap-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-2xl p-2 focus-within:border-[#7bc8ff]/50 transition-all shadow-inner">
+                <div class="max-w-4xl mx-auto relative flex items-end gap-3 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.12)] rounded-[22px] p-2 focus-within:border-[#7bc8ff]/50 transition-all shadow-[0_16px_36px_rgba(0,0,0,0.18)]">
                     <textarea ref="inputRef" v-model="inputText" 
                               rows="1"
                               @input="handleInput"

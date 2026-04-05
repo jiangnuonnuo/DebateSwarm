@@ -718,7 +718,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <section class="relative grid h-screen grid-rows-[1fr_var(--footer-height)] overflow-x-hidden" :style="themeVars">
+    <section class="page-shell relative overflow-x-hidden" :style="themeVars">
         <div class="h-full overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] pt-[24px] pb-[24px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
             <div class="relative mx-auto max-w-[1180px]">
                 <div v-if="detail" class="relative z-[1] space-y-[18px]">
@@ -1011,7 +1011,7 @@ onMounted(async () => {
                         <input v-model="modelItemModal.form.apiKey" class="detail-input" />
                     </label>
                 </div>
-                <div v-if="modelItemModal.error" class="mt-[8px] text-[12px] text-[#ef4444]">{{ modelItemModal.error }}</div>
+                <div v-if="modelItemModal.error" class="notice-inline mt-[8px] text-[12px]">{{ modelItemModal.error }}</div>
                 <div class="detail-modal-actions">
                     <button class="detail-btn muted" :disabled="modelItemModal.saving" @click="closeModelItemEdit">取消</button>
                     <button class="detail-btn primary" :disabled="modelItemModal.saving" @click="saveModelItemEdit">{{ modelItemModal.saving ? '保存中...' : '确定' }}</button>
@@ -1088,7 +1088,7 @@ onMounted(async () => {
                 </div>
                 <div v-if="mcpItemModal.paramError" class="mt-[8px] text-[12px] text-[#ef4444]">{{ mcpItemModal.paramError }}</div>
                 <div v-if="mcpItemModal.secretError" class="mt-[4px] text-[12px] text-[#ef4444]">{{ mcpItemModal.secretError }}</div>
-                <div v-if="mcpItemModal.error" class="mt-[4px] text-[12px] text-[#ef4444]">{{ mcpItemModal.error }}</div>
+                <div v-if="mcpItemModal.error" class="notice-inline mt-[4px] text-[12px]">{{ mcpItemModal.error }}</div>
                 <div class="detail-modal-actions">
                     <button class="detail-btn muted" :disabled="mcpItemModal.saving" @click="closeMcpItemEdit">取消</button>
                     <button class="detail-btn primary" :disabled="mcpItemModal.saving" @click="saveMcpItemEdit">{{ mcpItemModal.saving ? '保存中...' : '确定' }}</button>

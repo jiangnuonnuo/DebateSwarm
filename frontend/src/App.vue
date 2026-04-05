@@ -39,12 +39,13 @@ onBeforeUnmount(() => {
 <template>
     <div
         :class="[
-            'grid h-screen min-h-0 overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)]',
+            'relative grid h-screen min-h-0 overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)]',
             hideSidebar
                 ? 'grid-cols-[1fr]'
-                : 'grid-cols-[280px_1fr] max-[960px]:grid-cols-[240px_1fr] max-[720px]:grid-cols-[1fr]'
+                : 'grid-cols-[360px_1fr] max-[1120px]:grid-cols-[320px_1fr] max-[720px]:grid-cols-[1fr]'
         ]"
     >
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.12),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.08),transparent_32%)]"></div>
         <Sidebar v-if="!hideSidebar" />
         <div class="relative min-w-0 min-h-0 overflow-hidden">
             <div class="h-full min-h-0 overflow-y-auto">
