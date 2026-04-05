@@ -5,10 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * @Author: xerina
- * @Description: 辩手执行请求
- * 职责：把本次发言执行和其所属的辩论护栏绑定，避免旧回调污染新会话。
+ * @Description: Client 执行请求
+ * 职责：统一描述一次 client 调用所需的上下文；辩论模式会绑定护栏，自由聊天 Multi-At 会附带批次信息。
  */
 @Data
 @Builder
@@ -39,4 +41,13 @@ public class ClientExecutionRequestVO {
 
     /** 仲裁说明，仅用于日志与审计 */
     private String reasoning;
+
+    /** Multi-At 批次追踪ID */
+    private String batchTraceId;
+
+    /** Multi-At 原始输入顺序 */
+    private Integer orderIndex;
+
+    /** 本次批量 @ 的目标成员列表，仅用于日志与 extData 审计 */
+    private List<String> requestedAtMemberIds;
 }

@@ -12,6 +12,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -54,7 +55,9 @@ public class AtMentionNode extends AbstractDispatchNode {
             return router(strategyEntity, dispatchContext);
         }
 
+        boolean debateMode = activeSession != null;
         List<String> legalDebaters = activeSession == null ? null : activeSession.getAllDebaterIds();
+        List<DispatchDecisionVO> collectedDecisions = new ArrayList<>();
         for (AiChatRoomMemberEntity clientMember : clients) {
             String clientId = clientMember.getMemberId();
             if (clientId.equals(strategyEntity.getSenderId())) {
@@ -66,18 +69,48 @@ public class AtMentionNode extends AbstractDispatchNode {
                     continue;
                 }
             }
-            log.info("【调度决策】AtMentionNode 命中：clientId={}，roomId={}", clientId , strategyEntity.getRoomId());
-            dispatchContext.setDecision(DispatchDecisionVO.builder()
+
+            DispatchDecisionVO decision = DispatchDecisionVO.builder()
                     .speakerId(clientId)
                     .decisionSource("AT_MENTION")
-                    .reasoning(activeSession == null
-                            ? String.format("用户指定由 %s 进行回复。", clientMember.getMemberName())
-                            : String.format("用户指定由辩手 %s 优先回应。", clientMember.getMemberName()))
+                    .reasoning(debateMode
+                            ? String.format("用户指定由辩手 %s 优先回应。", clientMember.getMemberName())
+                            : String.format("用户在同一条消息中指定由 %s 参与回应。", clientMember.getMemberName()))
+                    .orderIndex(collectedDecisions.size())
+                    .multiAt(!debateMode)
                     .sessionId(activeSession == null ? null : activeSession.getSessionId())
                     .roundNumber(activeSession == null ? null : activeSession.getCurrentRound())
                     .sessionVersion(activeSession == null ? null : activeSession.getVersion())
-                    .build());
-            break;
+                    .build();
+
+            if (debateMode) {
+                log.info("【调度决策】AtMentionNode 命中辩论指定：clientId={}，roomId={}", clientId, strategyEntity.getRoomId());
+                dispatchContext.setDecision(decision);
+                break;
+            }
+
+            collectedDecisions.add(decision);
+        }
+
+        if (!debateMode) {
+            if (collectedDecisions.size() == 1) {
+                DispatchDecisionVO singleDecision = DispatchDecisionVO.builder()
+                        .speakerId(collectedDecisions.get(0).getSpeakerId())
+                        .decisionSource(collectedDecisions.get(0).getDecisionSource())
+                        .reasoning(collectedDecisions.get(0).getReasoning())
+                        .multiAt(false)
+                        .build();
+                dispatchContext.setDecision(singleDecision);
+                log.info("【调度决策】AtMentionNode 命中单目标 @：roomId={}, clientId={}",
+                        strategyEntity.getRoomId(), singleDecision.getSpeakerId());
+            } else if (!collectedDecisions.isEmpty()) {
+                dispatchContext.setDecisions(collectedDecisions);
+                dispatchContext.setMultiAtMode(true);
+                log.info("【MULTI_AT_COLLECT】roomId={}, atMemberIds={}, hitClientIds={}",
+                        strategyEntity.getRoomId(),
+                        atMemberIds,
+                        collectedDecisions.stream().map(DispatchDecisionVO::getSpeakerId).toList());
+            }
         }
 
         return router(strategyEntity, dispatchContext);
@@ -86,7 +119,7 @@ public class AtMentionNode extends AbstractDispatchNode {
     @Override
     public StrategyHandler<DispatchStrategyEntity, DispatchContext, String> get(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) {
         // 动态路由：若已产生决策，直跳执行节点；否则继续走仲裁者节点
-        if (dispatchContext.hasDecision()) {
+        if (dispatchContext.hasAnyDecision()) {
             return chatExecutionNode;
         }
         return arbitratorNode;

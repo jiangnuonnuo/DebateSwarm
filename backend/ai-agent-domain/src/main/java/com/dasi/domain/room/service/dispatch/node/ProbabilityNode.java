@@ -36,7 +36,7 @@ public class ProbabilityNode extends AbstractDispatchNode {
     @Override
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
         // 如果已经有决策，直接跳过
-        if (dispatchContext.hasDecision()) {
+        if (dispatchContext.hasAnyDecision()) {
             return router(strategyEntity, dispatchContext);
         }
 
@@ -47,9 +47,11 @@ public class ProbabilityNode extends AbstractDispatchNode {
         List<AiChatRoomMemberEntity> clients = chatRoomRepository.queryClientsByRoomId(strategyEntity.getRoomId());
         if (clients == null || clients.isEmpty()) return router(strategyEntity, dispatchContext);
 
+        // 组装所有的AI client ，然后利用随机数取出随机的clinet进行对话处理
         List<AiChatRoomMemberEntity> candidates = clients.stream()
                 .filter(clientMember -> !clientMember.getMemberId().equals(strategyEntity.getSenderId()))
                 .toList();
+
         if (candidates.isEmpty()) {
             return router(strategyEntity, dispatchContext);
         }

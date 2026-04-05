@@ -40,4 +40,13 @@ public class DispatchDecisionVO {
     /** 当前槽位强制要求的阵营；为空表示首发或全体候选 */
     private String requiredSide;
 
+    /** Multi-At 批次追踪ID，仅自由聊天批量 @ 使用 */
+    private String batchTraceId;
+
+    /** Multi-At 原始输入顺序 */
+    private Integer orderIndex;
+
+    /** 是否属于自由聊天 Multi-At 批次 */
+    private Boolean multiAt;
+
 }

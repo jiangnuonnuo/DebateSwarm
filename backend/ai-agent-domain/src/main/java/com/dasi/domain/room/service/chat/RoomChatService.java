@@ -1,12 +1,12 @@
 package com.dasi.domain.room.service.chat;
 
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.dasi.domain.ai.service.dispatch.IDispatchService;
 import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
-import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
+import com.dasi.domain.room.model.valobj.ClientReplyResultVO;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IContextAssemblerService;
@@ -25,10 +25,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static com.dasi.domain.ai.model.enumeration.AiArmoryType.ARMORY_CHAT;
 import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
 
 /**
@@ -54,8 +56,17 @@ public class RoomChatService implements IRoomChatService {
     @Resource
     private ApplicationContext applicationContext;
 
+    @Resource
+    private IDispatchService dispatchService;
+
+    @Resource
+    private ThreadPoolExecutor threadPoolExecutor;
+
     @Value("${room.debate.speaker-timeout-seconds:90}")
     private long debateSpeakerTimeoutSeconds;
+
+    @Value("${room.chat.multi-at.timeout-seconds:90}")
+    private long multiAtTimeoutSeconds;
 
     /**
      * 前端用户发送来的消息，对消息进行处理记录，然后发送回前端，并且通知agent进行消费
@@ -105,82 +116,81 @@ public class RoomChatService implements IRoomChatService {
         String traceId = request.getDispatchTraceId();
 
         log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}, traceId={}", roomId, clientId, traceId);
-
-        try {
-            String beanName = CLIENT.getBeanName(clientId);
-            if (!applicationContext.containsBean(beanName)) {
-                log.warn("【CHAT_EXECUTE】目标 Client Bean 不存在 roomId={}, clientId={}, beanName={}", roomId, clientId, beanName);
-                publishClientExecutionError(request, "EXECUTION_FAILED", "目标 Client 尚未完成装配，无法执行本次发言。");
-                return;
+        ClientReplyResultVO result = doGenerateClientReply(request, debateSpeakerTimeoutSeconds, "CLIENT_CHAT");
+        if (!result.isSuccess()) {
+            if ("TIMEOUT".equals(result.getErrorType())) {
+                log.warn("【CHAT_EXECUTE】客户端回答超时 roomId={}, clientId={}, traceId={}, timeoutSeconds={}",
+                        roomId, clientId, traceId, debateSpeakerTimeoutSeconds);
+            } else {
+                log.error("【CHAT_EXECUTE】客户端执行失败 roomId={}, clientId={}, traceId={}, errorType={}, errorMessage={}",
+                        roomId, clientId, traceId, result.getErrorType(), result.getErrorMessage());
             }
-
-            // 1. 获取客户端
-            ChatClient client = applicationContext.getBean(beanName, ChatClient.class);
-
-            // 2. 准备基础信息
-            String roomName = chatRoomRepository.queryRoomName(roomId);
-            String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
-
-            // 3. 装配上下文
-            List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName);
-
-            // 4. 限时调用 AI，超时后交由辩论续跑链路处理。
-            String content = invokeWithTimeout(
-                    () -> client.prompt(new Prompt(messages)).call().content(),
-                    debateSpeakerTimeoutSeconds,
-                    "CLIENT_CHAT"
-            );
-
-            if (content == null || content.isBlank()) {
-                log.warn("【CHAT_EXECUTE】客户端回答为空 roomId={}, clientId={}, traceId={}", roomId, clientId, traceId);
-                publishClientExecutionError(request, "EMPTY_RESPONSE", "辩手本次未返回有效内容。");
-                return;
-            }
-
-            // 5. 持久化结果
-            String messageId = "msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-            AiChatRoomMessageEntity aiMsg = AiChatRoomMessageEntity.builder()
-                    .roomId(roomId)
-                    .messageId(messageId)
-                    .senderId(clientId)
-                    .senderName(clientName)
-                    .senderType("CLIENT")
-                    .messageRole("assistant")
-                    .content(content)
-                    .isPreempted(1)
-                    .build();
-
-            contextAssemblerService.recordMessage(aiMsg);
-
-            // 6. 发布事件 (对外广播 CLIENT_MSG + 对内触发信号 CLIENT_MSG_END)
-            eventPublisher.publishExternal(WebSocketEvent.builder()
-                    .roomId(roomId)
-                    .eventType(WebSocketEvent.EventType.CLIENT_MSG)
-                    .payload(aiMsg)
-                    .timestamp(System.currentTimeMillis())
-                    .traceId(traceId) // 携带执行指纹
-                    .build());
-
-            eventPublisher.publishInternal(WebSocketEvent.builder()
-                    .roomId(roomId)
-                    .eventType(WebSocketEvent.EventType.CLIENT_MSG_END)
-                    .payload(aiMsg)
-                    .timestamp(System.currentTimeMillis())
-                    .traceId(traceId) // 携带执行指纹
-                    .build());
-
-            log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, traceId={}, messageId={}", 
-                    roomId, clientId, traceId, messageId);
-
-        } catch (TimeoutException e) {
-            log.warn("【CHAT_EXECUTE】客户端回答超时 roomId={}, clientId={}, traceId={}, timeoutSeconds={}",
-                    roomId, clientId, traceId, debateSpeakerTimeoutSeconds);
-            publishClientExecutionError(request, "TIMEOUT", "辩手本次发言超时，系统将继续推进下一位。");
-        } catch (Exception e) {
-            log.error("【CHAT_EXECUTE】客户端执行失败 roomId={}, clientId={}, traceId={}", 
-                    roomId, clientId, traceId, e);
-            publishClientExecutionError(request, "EXECUTION_FAILED", safeErrorMessage(e));
+            publishClientExecutionError(request, result.getErrorType(), result.getErrorMessage());
+            return;
         }
+
+        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, null);
+        contextAssemblerService.recordMessage(aiMsg);
+
+        eventPublisher.publishExternal(WebSocketEvent.builder()
+                .roomId(roomId)
+                .eventType(WebSocketEvent.EventType.CLIENT_MSG)
+                .payload(aiMsg)
+                .timestamp(System.currentTimeMillis())
+                .traceId(traceId)
+                .build());
+
+        eventPublisher.publishInternal(WebSocketEvent.builder()
+                .roomId(roomId)
+                .eventType(WebSocketEvent.EventType.CLIENT_MSG_END)
+                .payload(aiMsg)
+                .timestamp(System.currentTimeMillis())
+                .traceId(traceId)
+                .build());
+
+        log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, traceId={}, messageId={}",
+                roomId, clientId, traceId, aiMsg.getMessageId());
+    }
+
+    @Override
+    public ClientReplyResultVO generateClientReply(ClientExecutionRequestVO request) {
+        return doGenerateClientReply(request, multiAtTimeoutSeconds, "MULTI_AT_CLIENT_CHAT");
+    }
+
+    @Override
+    public void publishClientReplyResult(ClientReplyResultVO result) {
+        if (result == null) {
+            return;
+        }
+
+        if (!result.isSuccess()) {
+            log.warn("【MULTI_AT_ITEM_FAILED】roomId={}, clientId={}, batchTraceId={}, orderIndex={}, errorType={}",
+                    result.getRoomId(), result.getClientId(), result.getBatchTraceId(), result.getOrderIndex(), result.getErrorType());
+            publishSystemNotice(
+                    result.getRoomId(),
+                    "MULTI_AT_ITEM_FAILED",
+                    String.format("%s 本次未成功响应。", result.getClientName() == null || result.getClientName().isBlank() ? result.getClientId() : result.getClientName()),
+                    buildMultiAtFailureExtData(result)
+            );
+            return;
+        }
+
+        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, buildMultiAtSuccessExtData(result));
+        contextAssemblerService.recordMessage(aiMsg);
+        eventPublisher.publishExternal(WebSocketEvent.<AiChatRoomMessageEntity>builder()
+                .roomId(result.getRoomId())
+                .eventType(WebSocketEvent.EventType.CLIENT_MSG)
+                .payload(aiMsg)
+                .timestamp(System.currentTimeMillis())
+                .traceId(result.getBatchTraceId())
+                .build());
+
+        log.info("【MULTI_AT_PUBLISH】roomId={}, clientId={}, batchTraceId={}, orderIndex={}, latencyMs={}",
+                result.getRoomId(),
+                result.getClientId(),
+                result.getBatchTraceId(),
+                result.getOrderIndex(),
+                calculateLatency(result));
     }
 
     @Override
@@ -210,7 +220,7 @@ public class RoomChatService implements IRoomChatService {
 
     private String invokeWithTimeout(Supplier<String> supplier, long timeoutSeconds, String stage) throws TimeoutException {
         try {
-            return CompletableFuture.supplyAsync(supplier)
+            return CompletableFuture.supplyAsync(supplier, threadPoolExecutor)
                     .orTimeout(timeoutSeconds, TimeUnit.SECONDS)
                     .join();
         } catch (CompletionException e) {
@@ -277,5 +287,123 @@ public class RoomChatService implements IRoomChatService {
             return e.getClass().getSimpleName();
         }
         return message;
+    }
+
+    private ClientReplyResultVO doGenerateClientReply(ClientExecutionRequestVO request, long timeoutSeconds, String stage) {
+        String roomId = request.getRoomId();
+        String clientId = request.getClientId();
+        long startedAt = System.currentTimeMillis();
+        String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
+
+        try {
+            ChatClient client = ensureClientBean(clientId);
+            if (client == null) {
+                return buildFailureResult(request, clientName, "BEAN_MISSING", "目标 Client 尚未完成装配，无法执行本次发言。", startedAt);
+            }
+
+            String roomName = chatRoomRepository.queryRoomName(roomId);
+            List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName);
+            String content = invokeWithTimeout(
+                    () -> client.prompt(new Prompt(messages)).call().content(),
+                    timeoutSeconds,
+                    stage
+            );
+
+            if (content == null || content.isBlank()) {
+                return buildFailureResult(request, clientName, "EMPTY_RESPONSE", "客户端未返回有效内容。", startedAt);
+            }
+
+            return ClientReplyResultVO.builder()
+                    .roomId(roomId)
+                    .clientId(clientId)
+                    .clientName(clientName)
+                    .content(content)
+                    .success(true)
+                    .batchTraceId(request.getBatchTraceId())
+                    .orderIndex(request.getOrderIndex())
+                    .requestedAtMemberIds(request.getRequestedAtMemberIds())
+                    .startedAt(startedAt)
+                    .finishedAt(System.currentTimeMillis())
+                    .build();
+        } catch (TimeoutException e) {
+            return buildFailureResult(request, clientName, "TIMEOUT", "客户端调用超时。", startedAt);
+        } catch (Exception e) {
+            return buildFailureResult(request, clientName, "EXECUTION_FAILED", safeErrorMessage(e), startedAt);
+        }
+    }
+
+    private ChatClient ensureClientBean(String clientId) {
+        String beanName = CLIENT.getBeanName(clientId);
+        if (!applicationContext.containsBean(beanName)) {
+            dispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), java.util.Collections.singleton(clientId));
+        }
+        if (!applicationContext.containsBean(beanName)) {
+            return null;
+        }
+        return applicationContext.getBean(beanName, ChatClient.class);
+    }
+
+    private ClientReplyResultVO buildFailureResult(ClientExecutionRequestVO request, String clientName, String errorType, String errorMessage, long startedAt) {
+        return ClientReplyResultVO.builder()
+                .roomId(request.getRoomId())
+                .clientId(request.getClientId())
+                .clientName(clientName)
+                .success(false)
+                .errorType(errorType)
+                .errorMessage(errorMessage)
+                .batchTraceId(request.getBatchTraceId())
+                .orderIndex(request.getOrderIndex())
+                .requestedAtMemberIds(request.getRequestedAtMemberIds())
+                .startedAt(startedAt)
+                .finishedAt(System.currentTimeMillis())
+                .build();
+    }
+
+    private AiChatRoomMessageEntity buildClientMessage(ClientReplyResultVO result, String extData) {
+        return AiChatRoomMessageEntity.builder()
+                .roomId(result.getRoomId())
+                .messageId("msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                .senderId(result.getClientId())
+                .senderName(result.getClientName())
+                .senderType("CLIENT")
+                .messageRole("assistant")
+                .content(result.getContent())
+                .extData(extData)
+                .isPreempted(1)
+                .build();
+    }
+
+    private String buildMultiAtSuccessExtData(ClientReplyResultVO result) {
+        LinkedHashMap<String, Object> data = new LinkedHashMap<>();
+        data.put("multiAt", true);
+        data.put("batchTraceId", result.getBatchTraceId());
+        data.put("orderIndex", result.getOrderIndex());
+        data.put("requestedAtMemberIds", result.getRequestedAtMemberIds());
+        data.put("startedAt", result.getStartedAt());
+        data.put("finishedAt", result.getFinishedAt());
+        return JSON.toJSONString(data);
+    }
+
+    private String buildMultiAtFailureExtData(ClientReplyResultVO result) {
+        LinkedHashMap<String, Object> data = new LinkedHashMap<>();
+        data.put("noticeType", "MULTI_AT_ITEM_FAILED");
+        data.put("multiAt", true);
+        data.put("batchTraceId", result.getBatchTraceId());
+        data.put("orderIndex", result.getOrderIndex());
+        data.put("clientId", result.getClientId());
+        data.put("clientName", result.getClientName());
+        data.put("errorType", result.getErrorType());
+        data.put("errorMessage", result.getErrorMessage());
+        data.put("requestedAtMemberIds", result.getRequestedAtMemberIds());
+        data.put("startedAt", result.getStartedAt());
+        data.put("finishedAt", result.getFinishedAt());
+        return JSON.toJSONString(data);
+    }
+
+    private long calculateLatency(ClientReplyResultVO result) {
+        if (result.getStartedAt() == null || result.getFinishedAt() == null) {
+            return -1L;
+        }
+        return Math.max(0L, result.getFinishedAt() - result.getStartedAt());
     }
 }

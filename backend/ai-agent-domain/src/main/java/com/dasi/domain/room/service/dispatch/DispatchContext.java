@@ -4,7 +4,9 @@ import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,6 +23,12 @@ public class DispatchContext {
     /** 最终决策结果 */
     private DispatchDecisionVO decision;
 
+    /** Multi-At 批量决策结果 (仅自由聊天模式启用) */
+    private List<DispatchDecisionVO> decisions = new ArrayList<>();
+
+    /** 是否进入 Multi-At 批处理模式 */
+    private boolean multiAtMode;
+
     /** 扩展属性位 */
     private final Map<String, Object> metadata = new HashMap<>();
 
@@ -32,6 +40,20 @@ public class DispatchContext {
      */
     public boolean hasDecision() {
         return decision != null;
+    }
+
+    /**
+     * 是否已经产生批量决策
+     */
+    public boolean hasDecisions() {
+        return decisions != null && !decisions.isEmpty();
+    }
+
+    /**
+     * 是否已有任意可执行决策
+     */
+    public boolean hasAnyDecision() {
+        return hasDecision() || hasDecisions();
     }
 
     /**

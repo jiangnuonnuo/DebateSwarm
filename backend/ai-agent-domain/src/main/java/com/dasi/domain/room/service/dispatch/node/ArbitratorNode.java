@@ -35,7 +35,7 @@ public class ArbitratorNode extends AbstractDispatchNode {
     @Override
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
         // 如果已经有决策 (如来自 @指定)，直接路由
-        if (dispatchContext.hasDecision()) {
+        if (dispatchContext.hasAnyDecision()) {
             return router(strategyEntity, dispatchContext);
         }
 
@@ -63,7 +63,7 @@ public class ArbitratorNode extends AbstractDispatchNode {
     @Override
     public StrategyHandler<DispatchStrategyEntity, DispatchContext, String> get(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) {
         // 动态路由：若已产生决策（仲裁成功），直跳执行节点；否则流向概率回复节点
-        if (dispatchContext.hasDecision()) {
+        if (dispatchContext.hasAnyDecision()) {
             return chatExecutionNode;
         }
         if (dispatchContext.isTerminateChain()) {

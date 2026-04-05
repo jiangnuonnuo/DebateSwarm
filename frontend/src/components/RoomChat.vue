@@ -235,12 +235,12 @@
 
                 <div v-for="msg in messages" :key="msg.messageId">
                     <div v-if="msg.senderType === 'SYSTEM'" class="flex justify-center">
-                        <div class="max-w-[86%] rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-left shadow-sm">
+                        <div :class="systemNoticeCardClass(msg)">
                             <div class="flex items-center justify-between gap-3">
-                                <div class="text-[10px] uppercase tracking-[0.18em] text-[rgba(123,200,255,0.72)]">{{ parseSystemNoticeType(msg) }}</div>
+                                <div class="text-[10px] uppercase tracking-[0.18em]" :class="systemNoticeLabelClass(msg)">{{ parseSystemNoticeType(msg) }}</div>
                                 <div class="text-[10px] text-[rgba(231,236,244,0.35)]">{{ formatTime(msg.createTime) }}</div>
                             </div>
-                            <div class="mt-1 text-xs leading-6 text-[rgba(231,236,244,0.72)]">{{ msg.content }}</div>
+                            <div class="mt-1 text-xs leading-6" :class="systemNoticeContentClass(msg)">{{ msg.content }}</div>
                         </div>
                     </div>
                     <div v-else :class="['flex w-full gap-3', msg.senderType === 'USER' ? 'flex-row-reverse' : 'flex-row']">
@@ -805,7 +805,7 @@ const handleIncomingEvent = (wsEvent) => {
     
     if (eventType === 'USER_MSG' || eventType === 'AGENT_MSG' || eventType === 'CLIENT_MSG' || eventType === 'SYSTEM_NOTICE') {
         roomStore.pushMessage(payload);
-        if (eventType === 'SYSTEM_NOTICE') {
+        if (eventType === 'SYSTEM_NOTICE' && shouldRefreshDebateStatus(payload)) {
             loadDebateStatus();
         }
         scrollToBottom();
@@ -1081,22 +1081,59 @@ const stopDebateFlow = async () => {
     }).catch((e) => toast.show(e.message || '停止辩论失败'));
 };
 
-const parseSystemNoticeType = (msg) => {
+const extractSystemNoticeType = (msg) => {
     try {
         const ext = msg?.extData ? JSON.parse(msg.extData) : null;
-        const noticeType = ext?.noticeType;
-        if (noticeType === 'DEBATE_START') return '辩论开始';
-        if (noticeType === 'HOST_INTRO') return '主持调度';
-        if (noticeType === 'ROUND_END') return '本轮结束';
-        if (noticeType === 'ROUND_WINNER') return '本轮结果';
-        if (noticeType === 'ROUND_NEXT') return '下一轮开始';
-        if (noticeType === 'SPEAKER_ERROR') return '发言异常';
-        if (noticeType === 'SLOT_SKIPPED') return '槽位跳过';
-        if (noticeType === 'DEBATE_STOP') return '辩论结束';
+        return ext?.noticeType || '';
     } catch (e) {
         console.warn('解析系统通知失败', e);
+        return '';
     }
+};
+
+const shouldRefreshDebateStatus = (msg) => {
+    const noticeType = extractSystemNoticeType(msg);
+    return ['DEBATE_START', 'HOST_INTRO', 'ROUND_END', 'ROUND_WINNER', 'ROUND_NEXT', 'SPEAKER_ERROR', 'SLOT_SKIPPED', 'DEBATE_STOP'].includes(noticeType);
+};
+
+const parseSystemNoticeType = (msg) => {
+    const noticeType = extractSystemNoticeType(msg);
+    if (noticeType === 'DEBATE_START') return '辩论开始';
+    if (noticeType === 'HOST_INTRO') return '主持调度';
+    if (noticeType === 'ROUND_END') return '本轮结束';
+    if (noticeType === 'ROUND_WINNER') return '本轮结果';
+    if (noticeType === 'ROUND_NEXT') return '下一轮开始';
+    if (noticeType === 'SPEAKER_ERROR') return '发言异常';
+    if (noticeType === 'SLOT_SKIPPED') return '槽位跳过';
+    if (noticeType === 'DEBATE_STOP') return '辩论结束';
+    if (noticeType === 'MEMBER_JOIN') return '成员入场';
+    if (noticeType === 'MULTI_AT_ITEM_FAILED') return '响应未完成';
     return '系统通知';
+};
+
+const systemNoticeCardClass = (msg) => {
+    const noticeType = extractSystemNoticeType(msg);
+    if (noticeType === 'MEMBER_JOIN') {
+        return 'max-w-[90%] rounded-2xl border border-[#7bc8ff]/18 bg-[linear-gradient(90deg,rgba(123,200,255,0.12),rgba(123,200,255,0.03))] px-4 py-2 text-left shadow-sm';
+    }
+    if (noticeType === 'MULTI_AT_ITEM_FAILED') {
+        return 'max-w-[86%] rounded-xl border border-[rgba(245,158,11,0.16)] bg-[rgba(245,158,11,0.06)] px-3 py-2 text-left shadow-sm';
+    }
+    return 'max-w-[86%] rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-left shadow-sm';
+};
+
+const systemNoticeLabelClass = (msg) => {
+    const noticeType = extractSystemNoticeType(msg);
+    if (noticeType === 'MEMBER_JOIN') return 'text-[#7bc8ff]';
+    if (noticeType === 'MULTI_AT_ITEM_FAILED') return 'text-[#fbbf24]';
+    return 'text-[rgba(123,200,255,0.72)]';
+};
+
+const systemNoticeContentClass = (msg) => {
+    const noticeType = extractSystemNoticeType(msg);
+    if (noticeType === 'MEMBER_JOIN') return 'text-[rgba(231,236,244,0.78)]';
+    if (noticeType === 'MULTI_AT_ITEM_FAILED') return 'text-[rgba(231,236,244,0.68)]';
+    return 'text-[rgba(231,236,244,0.72)]';
 };
 
 const openInvite = (mode) => {
