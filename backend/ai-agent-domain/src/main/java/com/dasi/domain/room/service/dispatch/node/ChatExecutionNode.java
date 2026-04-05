@@ -6,6 +6,7 @@ import com.dasi.domain.ai.service.dispatch.IDispatchService;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
+import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.service.IRoomChatService;
@@ -57,16 +58,19 @@ public class ChatExecutionNode extends AbstractDispatchNode {
                     || !Objects.equals(activeSession.getSessionId(), decision.getSessionId())
                     || !Objects.equals(activeSession.getCurrentRound(), decision.getRoundNumber())
                     || !Objects.equals(activeSession.getVersion(), decision.getSessionVersion())) {
-                log.info("【CHAT_EXECUTE】丢弃过期调度 roomId={}, speakerId={}, sessionId={}, currentSessionId={}",
+                log.info("【STALE_CALLBACK_DROPPED】执行前丢弃过期调度 roomId={}, speakerId={}, sessionId={}, currentSessionId={}, traceId={}",
                         roomId,
                         speakerId,
                         decision.getSessionId(),
-                        activeSession == null ? null : activeSession.getSessionId());
+                        activeSession == null ? null : activeSession.getSessionId(),
+                        decision.getDispatchTraceId());
                 return router(strategyEntity, dispatchContext);
             }
 
+            decision = ensureDebateTrace(decision, activeSession);
             if (!preparePendingDispatch(roomId, activeSession, decision)) {
-                log.info("【CHAT_EXECUTE】调度护栏已变化，放弃执行 roomId={}, speakerId={}", roomId, speakerId);
+                log.info("【STALE_CALLBACK_DROPPED】调度护栏已变化，放弃执行 roomId={}, speakerId={}, traceId={}",
+                        roomId, speakerId, decision.getDispatchTraceId());
                 return router(strategyEntity, dispatchContext);
             }
 
@@ -90,10 +94,22 @@ public class ChatExecutionNode extends AbstractDispatchNode {
             log.warn("【CHAT_EXECUTE】装配后仍未找到 Bean roomId={}, speakerId={}, beanName={}", roomId, speakerId, beanName);
         }
 
-        // 2. 执行下行指令
-        log.info("【CHAT_EXECUTE】执行辩手发言 roomId={}, speakerId={}, source={}",
-                roomId, speakerId, decision.getDecisionSource());
-        roomChatService.clientChat(roomId, speakerId);
+        // 2. 构造执行请求
+        ClientExecutionRequestVO executionRequest = ClientExecutionRequestVO.builder()
+                .roomId(roomId)
+                .clientId(speakerId)
+                .sessionId(activeSession == null ? decision.getSessionId() : activeSession.getSessionId())
+                .roundNumber(activeSession == null ? decision.getRoundNumber() : activeSession.getCurrentRound())
+                .sessionVersion(activeSession == null ? decision.getSessionVersion() : activeSession.getVersion())
+                .dispatchTraceId(decision.getDispatchTraceId())
+                .decisionSource(decision.getDecisionSource())
+                .reasoning(decision.getReasoning())
+                .build();
+
+        // 3. 执行下行指令
+        log.info("【CHAT_EXECUTE】执行辩手发言 roomId={}, speakerId={}, traceId={}, source={}",
+                roomId, speakerId, decision.getDispatchTraceId(), decision.getDecisionSource());
+        roomChatService.clientChat(executionRequest);
 
         return router(strategyEntity, dispatchContext);
     }
@@ -121,6 +137,10 @@ public class ChatExecutionNode extends AbstractDispatchNode {
         state.setDispatchSessionId(activeSession.getSessionId());
         state.setDispatchRound(activeSession.getCurrentRound());
         state.setDispatchVersion(activeSession.getVersion());
+        state.setDispatchTraceId(decision.getDispatchTraceId());
+        if (decision.getRequiredSide() != null && !decision.getRequiredSide().isBlank()) {
+            state.setSlotRequiredSide(decision.getRequiredSide());
+        }
 
         Integer version = state.getVersion() == null ? 0 : state.getVersion();
         boolean saved = chatRoomRepository.saveRoomDebateState(roomId, state, version);
@@ -141,7 +161,24 @@ public class ChatExecutionNode extends AbstractDispatchNode {
         data.put("speakerId", decision.getSpeakerId());
         data.put("reasoning", decision.getReasoning());
         data.put("decisionSource", decision.getDecisionSource());
+        data.put("dispatchTraceId", decision.getDispatchTraceId());
         return JSON.toJSONString(data);
+    }
+
+    private DispatchDecisionVO ensureDebateTrace(DispatchDecisionVO decision, DebateSessionEntity activeSession) {
+        if (decision.getDispatchTraceId() != null && !decision.getDispatchTraceId().isBlank()) {
+            return decision;
+        }
+        return DispatchDecisionVO.builder()
+                .speakerId(decision.getSpeakerId())
+                .decisionSource(decision.getDecisionSource())
+                .reasoning(decision.getReasoning())
+                .sessionId(decision.getSessionId())
+                .roundNumber(decision.getRoundNumber())
+                .sessionVersion(decision.getSessionVersion() == null ? activeSession.getVersion() : decision.getSessionVersion())
+                .dispatchTraceId("trace_" + activeSession.getSessionId() + "_" + activeSession.getCurrentRound() + "_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 10))
+                .requiredSide(decision.getRequiredSide())
+                .build();
     }
 
 }

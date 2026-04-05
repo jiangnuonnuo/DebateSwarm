@@ -52,6 +52,15 @@ public class ArbitrationPromptContextVO {
     /** 当前轮每位辩手的已发言次数 */
     private Map<String, Integer> speakerHistoryStats;
 
+    /** 当前槽位强制要求的阵营；为空表示首发或全体可选 */
+    private String requiredSide;
+
+    /** 当前槽位明确排除的 speakerId 集合 */
+    private List<String> excludedSpeakerIds;
+
+    /** 当前槽位的重试次数 */
+    private Integer slotRetryCount;
+
     private List<DebateMemberStatusVO> proMembers;
 
     private List<DebateMemberStatusVO> conMembers;

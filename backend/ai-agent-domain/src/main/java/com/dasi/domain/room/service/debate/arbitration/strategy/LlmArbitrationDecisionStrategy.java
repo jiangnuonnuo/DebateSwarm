@@ -49,6 +49,9 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             【上一位发言者】
             clientId=%s, side=%s
 
+            【当前槽位要求】
+            requiredSide=%s, slotRetryCount=%d
+
             【正方成员】
             %s
 
@@ -56,6 +59,9 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             %s
 
             【本次允许选择的候选 clientId】
+            %s
+
+            【当前槽位明确排除】
             %s
 
             【优先推荐顺序】
@@ -77,13 +83,16 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             1. 只能从“本次允许选择的候选 clientId”里返回 1 个 speakerId。
             2. speakerId 必须是 clientId，不是 clientName。
             3. 不能返回仲裁者自己，不能返回上一位刚发言的 clientId。
+            4. 若 requiredSide 非空，你只能在该阵营里补位。
+            5. 当前槽位明确排除中的 clientId 已经失败过，不能再次选择。
             4. 只能输出 JSON，不要输出 markdown，不要输出代码块，不要补充解释文字。
 
             决策偏好：
             1. 优先让上一位发言者的对侧阵营回应上一条核心论点。
             2. 在当前候选集中优先选择“优先推荐顺序”更靠前的人。
             3. 如果你没有选择优先推荐顺序中的第一位，需要在 reasoning 中说明原因。
-            4. reasoning 保持一句话，简短清晰。
+            4. 如果当前是失败补位场景，优先为同一方补位。
+            5. reasoning 保持一句话，简短清晰。
 
             只返回一个合法 JSON：
             {"speakerId":"client_xxx","reasoning":"..."}
@@ -128,9 +137,12 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
                 safe(promptContext.getArbitratorClientId()),
                 safe(promptContext.getLastSpeakerClientId()),
                 safe(promptContext.getLastSpeakerSide()),
+                safe(promptContext.getRequiredSide()),
+                defaultNumber(promptContext.getSlotRetryCount()),
                 formatMembers(promptContext.getProMembers()),
                 formatMembers(promptContext.getConMembers()),
                 formatCandidateIds(promptContext.getCandidateSpeakerIds()),
+                formatCandidateIds(promptContext.getExcludedSpeakerIds()),
                 formatCandidateIds(promptContext.getPreferredSpeakerIds()),
                 formatJoinOrder(promptContext.getCandidateJoinOrder()),
                 formatHistoryStats(promptContext.getSpeakerHistoryStats()),

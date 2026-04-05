@@ -1,6 +1,7 @@
 package com.dasi.domain.room.service;
 
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
+import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
 
 /**
  * @BelongsProject: Agent
@@ -18,11 +19,8 @@ public interface IRoomChatService {
 
     /**
      * 客户端发言 (由 DispatchService 调度)
-     *
-     * @param roomId  房间ID
-     * @param clientId 客户端ID (clientId)
      */
-    void clientChat(String roomId, String clientId);
+    void clientChat(ClientExecutionRequestVO request);
 
     /**
      * 广播系统通知并落库

@@ -46,6 +46,9 @@ public class AiChatRoomMessageEntity {
     /** 是否抢占成功发言 */
     private Integer isPreempted;
 
+    /** 调度追踪ID */
+    private String traceId;
+
     /** 发送时间 */
     private LocalDateTime createTime;
 }

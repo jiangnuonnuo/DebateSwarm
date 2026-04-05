@@ -1091,6 +1091,7 @@ const parseSystemNoticeType = (msg) => {
         if (noticeType === 'ROUND_WINNER') return '本轮结果';
         if (noticeType === 'ROUND_NEXT') return '下一轮开始';
         if (noticeType === 'SPEAKER_ERROR') return '发言异常';
+        if (noticeType === 'SLOT_SKIPPED') return '槽位跳过';
         if (noticeType === 'DEBATE_STOP') return '辩论结束';
     } catch (e) {
         console.warn('解析系统通知失败', e);

@@ -27,6 +27,9 @@ public class DispatchStrategyEntity {
     /** 当前发言者ID */
     private String senderId;
 
+    /** 当前事件的调度追踪ID (用于识别是否为过期回调) */
+    private String traceId;
+
     /** 被 @ 的成员ID列表(保留用户输入顺序) */
     private List<String> atMemberIds;
 

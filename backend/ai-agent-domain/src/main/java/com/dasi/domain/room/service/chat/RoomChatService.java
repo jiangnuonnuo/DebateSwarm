@@ -1,10 +1,12 @@
 package com.dasi.domain.room.service.chat;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IContextAssemblerService;
@@ -97,14 +99,18 @@ public class RoomChatService implements IRoomChatService {
     }
 
     @Override
-    public void clientChat(String roomId, String clientId) {
-        log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}", roomId, clientId);
+    public void clientChat(ClientExecutionRequestVO request) {
+        String roomId = request.getRoomId();
+        String clientId = request.getClientId();
+        String traceId = request.getDispatchTraceId();
+
+        log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}, traceId={}", roomId, clientId, traceId);
 
         try {
             String beanName = CLIENT.getBeanName(clientId);
             if (!applicationContext.containsBean(beanName)) {
                 log.warn("【CHAT_EXECUTE】目标 Client Bean 不存在 roomId={}, clientId={}, beanName={}", roomId, clientId, beanName);
-                publishClientExecutionError(roomId, clientId, "EXECUTION_FAILED", "目标 Client 尚未完成装配，无法执行本次发言。");
+                publishClientExecutionError(request, "EXECUTION_FAILED", "目标 Client 尚未完成装配，无法执行本次发言。");
                 return;
             }
 
@@ -126,8 +132,8 @@ public class RoomChatService implements IRoomChatService {
             );
 
             if (content == null || content.isBlank()) {
-                log.warn("【CHAT_EXECUTE】客户端回答为空 roomId={}, clientId={}", roomId, clientId);
-                publishClientExecutionError(roomId, clientId, "EMPTY_RESPONSE", "辩手本次未返回有效内容。");
+                log.warn("【CHAT_EXECUTE】客户端回答为空 roomId={}, clientId={}, traceId={}", roomId, clientId, traceId);
+                publishClientExecutionError(request, "EMPTY_RESPONSE", "辩手本次未返回有效内容。");
                 return;
             }
 
@@ -152,6 +158,7 @@ public class RoomChatService implements IRoomChatService {
                     .eventType(WebSocketEvent.EventType.CLIENT_MSG)
                     .payload(aiMsg)
                     .timestamp(System.currentTimeMillis())
+                    .traceId(traceId) // 携带执行指纹
                     .build());
 
             eventPublisher.publishInternal(WebSocketEvent.builder()
@@ -159,17 +166,20 @@ public class RoomChatService implements IRoomChatService {
                     .eventType(WebSocketEvent.EventType.CLIENT_MSG_END)
                     .payload(aiMsg)
                     .timestamp(System.currentTimeMillis())
+                    .traceId(traceId) // 携带执行指纹
                     .build());
 
-            log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, messageId={}", roomId, clientId, messageId);
+            log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, traceId={}, messageId={}", 
+                    roomId, clientId, traceId, messageId);
 
         } catch (TimeoutException e) {
-            log.warn("【CHAT_EXECUTE】客户端回答超时 roomId={}, clientId={}, timeoutSeconds={}",
-                    roomId, clientId, debateSpeakerTimeoutSeconds);
-            publishClientExecutionError(roomId, clientId, "TIMEOUT", "辩手本次发言超时，系统将继续推进下一位。");
+            log.warn("【CHAT_EXECUTE】客户端回答超时 roomId={}, clientId={}, traceId={}, timeoutSeconds={}",
+                    roomId, clientId, traceId, debateSpeakerTimeoutSeconds);
+            publishClientExecutionError(request, "TIMEOUT", "辩手本次发言超时，系统将继续推进下一位。");
         } catch (Exception e) {
-            log.error("【CHAT_EXECUTE】客户端执行失败 roomId={}, clientId={}", roomId, clientId, e);
-            publishClientExecutionError(roomId, clientId, "EXECUTION_FAILED", safeErrorMessage(e));
+            log.error("【CHAT_EXECUTE】客户端执行失败 roomId={}, clientId={}, traceId={}", 
+                    roomId, clientId, traceId, e);
+            publishClientExecutionError(request, "EXECUTION_FAILED", safeErrorMessage(e));
         }
     }
 
@@ -212,8 +222,12 @@ public class RoomChatService implements IRoomChatService {
         }
     }
 
-    private void publishClientExecutionError(String roomId, String clientId, String errorType, String errorMessage) {
+    private void publishClientExecutionError(ClientExecutionRequestVO request, String errorType, String errorMessage) {
+        String roomId = request.getRoomId();
+        String clientId = request.getClientId();
+        String traceId = request.getDispatchTraceId();
         String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
+
         AiChatRoomMessageEntity errorPayload = AiChatRoomMessageEntity.builder()
                 .roomId(roomId)
                 .messageId("msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
@@ -222,7 +236,7 @@ public class RoomChatService implements IRoomChatService {
                 .senderType("CLIENT")
                 .messageRole("assistant")
                 .content("")
-                .extData(buildClientErrorExtData(errorType, errorMessage))
+                .extData(buildExecutionExtData(request, errorType, errorMessage))
                 .isPreempted(1)
                 .build();
 
@@ -231,14 +245,26 @@ public class RoomChatService implements IRoomChatService {
                 .eventType(WebSocketEvent.EventType.CLIENT_MSG_ERROR)
                 .payload(errorPayload)
                 .timestamp(System.currentTimeMillis())
-                .traceId(errorType)
+                .traceId(traceId) // 携带执行指纹
                 .build());
     }
 
-    private String buildClientErrorExtData(String errorType, String errorMessage) {
+    private String buildExecutionExtData(ClientExecutionRequestVO request, String errorType, String errorMessage) {
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
-        data.put("errorType", errorType);
-        data.put("errorMessage", errorMessage);
+        data.put("dispatchTraceId", request.getDispatchTraceId());
+        data.put("dispatchSessionId", request.getSessionId());
+        data.put("dispatchRound", request.getRoundNumber());
+        data.put("dispatchVersion", request.getSessionVersion());
+        data.put("decisionSource", request.getDecisionSource());
+        if (request.getReasoning() != null && !request.getReasoning().isBlank()) {
+            data.put("decisionReasoning", request.getReasoning());
+        }
+        if (errorType != null) {
+            data.put("errorType", errorType);
+        }
+        if (errorMessage != null) {
+            data.put("errorMessage", errorMessage);
+        }
         return JSON.toJSONString(data);
     }
 

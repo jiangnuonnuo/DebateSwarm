@@ -34,4 +34,10 @@ public class DispatchDecisionVO {
     /** 决策生成时的会话版本 */
     private Integer sessionVersion;
 
+    /** 本次执行链路的唯一追踪ID，用于过滤幽灵回调 */
+    private String dispatchTraceId;
+
+    /** 当前槽位强制要求的阵营；为空表示首发或全体候选 */
+    private String requiredSide;
+
 }

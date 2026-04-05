@@ -170,35 +170,69 @@ public class DebateSessionEntity {
     }
 
     public List<String> listCandidateSpeakerIds(String lastSpeakerId) {
+        return listCandidateSpeakerIds(lastSpeakerId, null, Collections.emptySet());
+    }
+
+    /**
+     * 构造本次可选 speaker 集合。
+     * requiredSide 非空时表示当前槽位必须由该阵营补位；为空时按上一位成功发言者的对侧推进。
+     */
+    public List<String> listCandidateSpeakerIds(String lastSpeakerId, String requiredSide, Set<String> excludedSpeakerIds) {
         List<String> allDebaters = new ArrayList<>(new LinkedHashSet<>(getAllDebaterIds()));
         if (allDebaters.isEmpty()) {
             return allDebaters;
         }
-        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
-            return allDebaters;
+
+        Set<String> excluded = excludedSpeakerIds == null ? Collections.emptySet() : excludedSpeakerIds;
+        String targetSide = resolveRequiredSide(lastSpeakerId, requiredSide);
+
+        List<String> scopedCandidates;
+        if (targetSide == null) {
+            scopedCandidates = allDebaters;
+        } else {
+            scopedCandidates = new ArrayList<>(new LinkedHashSet<>(getSideMembers(targetSide)));
+            if (scopedCandidates.isEmpty()) {
+                scopedCandidates = allDebaters;
+            }
         }
 
-        String lastSpeakerSide = getSideForClient(lastSpeakerId);
-        if (lastSpeakerSide == null) {
-            return removeLastSpeaker(allDebaters, lastSpeakerId);
+        List<String> filtered = scopedCandidates.stream()
+                .filter(clientId -> !excluded.contains(clientId))
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (filtered.isEmpty()) {
+            return filtered;
         }
-
-        String targetSide = "PRO".equals(lastSpeakerSide) ? "CON" : "PRO";
-        List<String> oppositeSideMembers = new ArrayList<>(new LinkedHashSet<>(getSideMembers(targetSide)));
-        if (!oppositeSideMembers.isEmpty()) {
-            return oppositeSideMembers;
+        if (targetSide == null) {
+            return removeLastSpeaker(filtered, lastSpeakerId);
         }
-        return removeLastSpeaker(allDebaters, lastSpeakerId);
+        return filtered;
     }
 
     public boolean validateArbitrationResult(String speakerId, String lastSpeakerId) {
-        return speakerId != null && listCandidateSpeakerIds(lastSpeakerId).contains(speakerId);
+        return validateArbitrationResult(speakerId, lastSpeakerId, null, Collections.emptySet());
+    }
+
+    public boolean validateArbitrationResult(String speakerId,
+                                             String lastSpeakerId,
+                                             String requiredSide,
+                                             Set<String> excludedSpeakerIds) {
+        return speakerId != null
+                && !speakerId.isBlank()
+                && listCandidateSpeakerIds(lastSpeakerId, requiredSide, excludedSpeakerIds).contains(speakerId);
     }
 
     public List<String> listPreferredSpeakerIds(String lastSpeakerId,
                                                 List<DebateTurnRecordVO> roundHistory,
                                                 Map<String, Integer> joinOrderMap) {
-        List<String> candidates = listCandidateSpeakerIds(lastSpeakerId);
+        return listPreferredSpeakerIds(lastSpeakerId, null, Collections.emptySet(), roundHistory, joinOrderMap);
+    }
+
+    public List<String> listPreferredSpeakerIds(String lastSpeakerId,
+                                                String requiredSide,
+                                                Set<String> excludedSpeakerIds,
+                                                List<DebateTurnRecordVO> roundHistory,
+                                                Map<String, Integer> joinOrderMap) {
+        List<String> candidates = listCandidateSpeakerIds(lastSpeakerId, requiredSide, excludedSpeakerIds);
         if (candidates.isEmpty()) {
             return candidates;
         }
@@ -310,6 +344,21 @@ public class DebateSessionEntity {
         List<String> filtered = new ArrayList<>(candidates);
         filtered.remove(lastSpeakerId);
         return filtered.isEmpty() ? candidates : filtered;
+    }
+
+    private String resolveRequiredSide(String lastSpeakerId, String requiredSide) {
+        if ("PRO".equals(requiredSide) || "CON".equals(requiredSide)) {
+            return requiredSide;
+        }
+        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
+            return null;
+        }
+
+        String lastSpeakerSide = getSideForClient(lastSpeakerId);
+        if (lastSpeakerSide == null) {
+            return null;
+        }
+        return "PRO".equals(lastSpeakerSide) ? "CON" : "PRO";
     }
 
     /**

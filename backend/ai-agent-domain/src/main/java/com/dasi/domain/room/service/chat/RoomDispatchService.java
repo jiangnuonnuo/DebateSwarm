@@ -124,6 +124,7 @@ public class RoomDispatchService implements IRoomDispatchService {
                 .roomId(roomId)
                 .eventType(eventType)
                 .senderId(currentSenderId)
+                .traceId(wsEvent.getTraceId())
                 .atMemberIds(atMemberIds)
                 .currentMessage(wsEvent.getPayload() instanceof AiChatRoomMessageEntity ? (AiChatRoomMessageEntity) wsEvent.getPayload() : null)
                 .build();
