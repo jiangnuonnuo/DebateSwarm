@@ -1,6 +1,7 @@
 package com.dasi.domain.room.service.debate;
 
 import com.alibaba.fastjson2.JSON;
+import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
@@ -11,14 +12,13 @@ import com.dasi.domain.room.model.valobj.ArbitrationDecisionResultVO;
 import com.dasi.domain.room.model.valobj.ArbitrationPromptContextVO;
 import com.dasi.domain.room.model.valobj.DebateContextVO;
 import com.dasi.domain.room.model.valobj.DebateMemberStatusVO;
-import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
 import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.model.valobj.DebateStatusVO;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
-import com.dasi.domain.room.service.IRoomChatService;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
+import com.dasi.domain.room.service.IRoomChatService;
 import com.dasi.domain.room.service.debate.arbitration.IDebateArbitrationService;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import com.dasi.types.exception.DependencyConflictException;
@@ -27,6 +27,8 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 public class DebateService implements IDebateService {
 
     private static final int DEFAULT_TURNS_PER_ROUND = 6;
+    private static final int RECORD_REASONING_LIMIT = 96;
 
     @Resource
     private IChatRoomRepository chatRoomRepository;
@@ -54,6 +57,9 @@ public class DebateService implements IDebateService {
 
     @Resource
     private IDebateArbitrationService debateArbitrationService;
+
+    @Resource
+    private IRoomEventPublisher roomEventPublisher;
 
     @Override
     @Transactional
@@ -68,6 +74,8 @@ public class DebateService implements IDebateService {
 
         RoomDebateStateVO state = loadRoomDebateState(roomId);
         state.setArbitratorClientId(clientId);
+        clearRoundState(state);
+        clearPendingDispatch(state);
         persistRoomDebateState(roomId, state);
     }
 
@@ -83,10 +91,8 @@ public class DebateService implements IDebateService {
         RoomDebateStateVO state = loadRoomDebateState(roomId);
         state.setArbitratorClientId(null);
         state.setActiveDebateSessionId(null);
-        state.setPendingRoundNumber(null);
-        state.setPendingRoundTurnCount(null);
-        state.setLastRoundEndedAt(null);
-        state.setLastRoundSummary(null);
+        clearRoundState(state);
+        clearPendingDispatch(state);
         persistRoomDebateState(roomId, state);
     }
 
@@ -127,23 +133,19 @@ public class DebateService implements IDebateService {
         chatRoomRepository.saveDebateSession(session);
 
         state.setActiveDebateSessionId(session.getSessionId());
-        state.setPendingRoundNumber(null);
-        state.setPendingRoundTurnCount(null);
-        state.setLastRoundEndedAt(null);
-        state.setLastRoundSummary(null);
+        clearRoundState(state);
+        clearPendingDispatch(state);
         persistRoomDebateState(roomId, state);
 
-        roomChatService.publishSystemNotice(
-                roomId,
-                "DEBATE_START",
-                String.format("辩论开始：%s。第 %d 轮开始，仲裁者将决定首位发言者。", session.getTopic(), session.getCurrentRound()),
-                buildNoticeExtData("DEBATE_START", session, null, null, true)
-        );
-
-        DispatchDecisionVO decision = arbitrateNextSpeaker(session, null);
-        if (decision != null) {
-            roomChatService.clientChat(roomId, decision.getSpeakerId());
-        }
+        runAfterCommit(() -> {
+            roomChatService.publishSystemNotice(
+                    roomId,
+                    "DEBATE_START",
+                    String.format("辩论开始：%s。第 %d 轮开始，仲裁者将决定首位发言者。", session.getTopic(), session.getCurrentRound()),
+                    buildNoticeExtData("DEBATE_START", session, null, null, false, null)
+            );
+            publishDispatchTrigger(roomId);
+        });
 
         return session.getSessionId();
     }
@@ -157,21 +159,22 @@ public class DebateService implements IDebateService {
         if (!chatRoomRepository.updateDebateSessionStatus(session)) {
             throw new DependencyConflictException("辩论状态已变更，请刷新后重试");
         }
+        advanceSessionVersion(session);
 
         RoomDebateStateVO state = loadRoomDebateState(roomId);
-        state.setPendingRoundNumber(null);
-        state.setPendingRoundTurnCount(null);
+        clearRoundState(state);
+        clearPendingDispatch(state);
         if (state.getLastRoundSummary() != null) {
             state.getLastRoundSummary().setWaitingForWinner(Boolean.FALSE);
         }
         persistRoomDebateState(roomId, state);
 
-        roomChatService.publishSystemNotice(
+        runAfterCommit(() -> roomChatService.publishSystemNotice(
                 roomId,
                 "ROUND_WINNER",
                 String.format("第 %d 轮胜方：%s。", session.getCurrentRound(), "PRO".equals(normalizedWinnerSide) ? "正方" : "反方"),
                 buildWinnerExtData(session, normalizedWinnerSide)
-        );
+        ));
     }
 
     @Override
@@ -182,26 +185,25 @@ public class DebateService implements IDebateService {
         if (!chatRoomRepository.updateDebateSessionStatus(session)) {
             throw new DependencyConflictException("辩论状态已变更，请刷新后重试");
         }
+        advanceSessionVersion(session);
 
         RoomDebateStateVO state = loadRoomDebateState(roomId);
-        state.setPendingRoundNumber(null);
-        state.setPendingRoundTurnCount(null);
+        clearRoundState(state);
+        clearPendingDispatch(state);
         if (state.getLastRoundSummary() != null) {
             state.getLastRoundSummary().setWaitingForWinner(Boolean.FALSE);
         }
         persistRoomDebateState(roomId, state);
 
-        roomChatService.publishSystemNotice(
-                roomId,
-                "ROUND_NEXT",
-                String.format("第 %d 轮开始。", session.getCurrentRound()),
-                buildNoticeExtData("ROUND_NEXT", session, null, null, false)
-        );
-
-        DispatchDecisionVO decision = arbitrateNextSpeaker(session, null);
-        if (decision != null) {
-            roomChatService.clientChat(roomId, decision.getSpeakerId());
-        }
+        runAfterCommit(() -> {
+            roomChatService.publishSystemNotice(
+                    roomId,
+                    "ROUND_NEXT",
+                    String.format("第 %d 轮开始。", session.getCurrentRound()),
+                    buildNoticeExtData("ROUND_NEXT", session, null, null, false, null)
+            );
+            publishDispatchTrigger(roomId);
+        });
     }
 
     @Override
@@ -209,6 +211,7 @@ public class DebateService implements IDebateService {
     public void stopDebate(String roomId) {
         ensureRoomExists(roomId);
         RoomDebateStateVO state = loadRoomDebateState(roomId);
+
         DebateSessionEntity session = null;
         if (state.getActiveDebateSessionId() != null && !state.getActiveDebateSessionId().isBlank()) {
             session = chatRoomRepository.queryDebateSessionBySessionId(state.getActiveDebateSessionId());
@@ -221,23 +224,21 @@ public class DebateService implements IDebateService {
             if (!chatRoomRepository.updateDebateSessionStatus(session)) {
                 throw new DependencyConflictException("辩论状态已变更，请刷新后重试");
             }
+            advanceSessionVersion(session);
         }
 
         state.setActiveDebateSessionId(null);
-        state.setPendingRoundNumber(null);
-        state.setPendingRoundTurnCount(null);
-        state.setLastRoundEndedAt(null);
-        if (state.getLastRoundSummary() != null) {
-            state.getLastRoundSummary().setWaitingForWinner(Boolean.FALSE);
-        }
+        clearRoundState(state);
+        clearPendingDispatch(state);
+        state.setLastRoundSummary(null);
         persistRoomDebateState(roomId, state);
 
-        roomChatService.publishSystemNotice(
+        runAfterCommit(() -> roomChatService.publishSystemNotice(
                 roomId,
                 "DEBATE_STOP",
                 "辩论已结束，房间恢复自由聊天。",
                 buildSimpleExtData("DEBATE_STOP", roomId)
-        );
+        ));
     }
 
     @Override
@@ -263,7 +264,7 @@ public class DebateService implements IDebateService {
                     .waitingForWinner(state.waitingForWinner())
                     .pendingRoundNumber(state.getPendingRoundNumber())
                     .lastRoundSummary(state.getLastRoundSummary())
-                    .roundWinners(new ArrayList<>())
+                    .roundWinners(new LinkedHashMap<>())
                     .proMembers(new ArrayList<>())
                     .conMembers(new ArrayList<>())
                     .build();
@@ -281,7 +282,7 @@ public class DebateService implements IDebateService {
                 .currentRound(session.getCurrentRound())
                 .currentTurn(session.getCurrentTurn())
                 .turnsPerRound(session.getTurnsPerRound())
-                .roundWinners(new ArrayList<>(session.safeRoundWinners()))
+                .roundWinners(buildRoundWinnerMap(session.safeRoundWinners()))
                 .arbitratorClientId(session.getArbitratorClientId())
                 .arbitratorName(nameMap.get(session.getArbitratorClientId()))
                 .waitingForWinner(state.waitingForWinner())
@@ -295,46 +296,72 @@ public class DebateService implements IDebateService {
     @Override
     @Transactional
     public DispatchDecisionVO decideNextDispatch(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) {
-        if (strategyEntity == null || !WebSocketEvent.EventType.CLIENT_MSG_END.equals(strategyEntity.getEventType())) {
+        if (strategyEntity == null) {
+            return null;
+        }
+
+        String eventType = strategyEntity.getEventType();
+        if (!WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)
+                && !WebSocketEvent.EventType.CLIENT_MSG_ERROR.equals(eventType)
+                && !WebSocketEvent.EventType.DEBATE_DISPATCH_TRIGGER.equals(eventType)) {
             return null;
         }
 
         String roomId = strategyEntity.getRoomId();
-        AiChatRoomMessageEntity lastMessage = strategyEntity.getCurrentMessage();
         DebateSessionEntity session = dispatchContext == null ? null : dispatchContext.getDebateSession();
         if (session == null) {
             session = chatRoomRepository.queryActiveDebateSession(roomId);
         }
-        if (session == null || !session.isRunning() || lastMessage == null) {
-            return null;
-        }
-        if (!session.validateDebater(lastMessage.getSenderId())) {
-            log.info("【辩论调度】忽略非辩手消息 roomId={}, senderId={}", roomId, lastMessage.getSenderId());
+        if (session == null || !session.isRunning()) {
+            log.info("【ARBITRATOR_DECIDE】无活跃辩论可继续 roomId={}, eventType={}", roomId, eventType);
             return null;
         }
 
-        DebateRecordEntity record = DebateRecordEntity.builder()
-                .recordId(buildRecordId())
-                .sessionId(session.getSessionId())
-                .roomId(roomId)
-                .roundNumber(session.getCurrentRound())
-                .turnNumber((session.getCurrentTurn() == null ? 0 : session.getCurrentTurn()) + 1)
-                .speakerClientId(lastMessage.getSenderId())
-                .speakerName(lastMessage.getSenderName())
-                .side(session.getSideForClient(lastMessage.getSenderId()))
-                .messageId(lastMessage.getMessageId())
-                .arbitratorReasoning("仲裁者已在上一轮调度中选定该辩手")
-                .build();
-        chatRoomRepository.saveDebateRecord(record);
+        RoomDebateStateVO state = loadRoomDebateState(roomId);
+        if (!Objects.equals(state.getActiveDebateSessionId(), session.getSessionId())) {
+            log.info("【ARBITRATOR_DECIDE】房间运行态已变更，放弃旧调度 roomId={}, sessionId={}, activeSessionId={}",
+                    roomId, session.getSessionId(), state.getActiveDebateSessionId());
+            return null;
+        }
+
+        if (WebSocketEvent.EventType.DEBATE_DISPATCH_TRIGGER.equals(eventType)) {
+            return arbitrateNextSpeaker(session, null);
+        }
+
+        AiChatRoomMessageEntity lastMessage = strategyEntity.getCurrentMessage();
+        if (lastMessage == null || !session.validateDebater(lastMessage.getSenderId())) {
+            log.info("【ARBITRATOR_DECIDE】忽略非辩手或空消息 roomId={}, eventType={}", roomId, eventType);
+            return null;
+        }
+        if (!isExpectedSpeaker(state, lastMessage.getSenderId())) {
+            log.info("【ARBITRATOR_DECIDE】忽略过期或越权辩手回流 roomId={}, senderId={}, pendingSpeakerId={}",
+                    roomId, lastMessage.getSenderId(), state.getPendingSpeakerId());
+            return null;
+        }
+
+        if (WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)) {
+            saveDebateRecord(session, roomId, state, lastMessage);
+        } else {
+            final DebateSessionEntity currentSession = session;
+            final AiChatRoomMessageEntity failedMessage = lastMessage;
+            runAfterCommit(() -> roomChatService.publishSystemNotice(
+                    roomId,
+                    "SPEAKER_ERROR",
+                    String.format("辩手 %s 本次发言执行失败，本轮将继续推进下一位发言者。", failedMessage.getSenderName()),
+                    buildSpeakerErrorExtData(currentSession, failedMessage)
+            ));
+        }
 
         session.recordTurnFinished();
+        clearPendingDispatch(state);
+
         if (session.isRoundComplete()) {
             session.finishCurrentRound();
             if (!chatRoomRepository.updateDebateSessionStatus(session)) {
                 throw new DependencyConflictException("辩论状态已变更，请刷新后重试");
             }
+            advanceSessionVersion(session);
 
-            RoomDebateStateVO state = loadRoomDebateState(roomId);
             state.setActiveDebateSessionId(session.getSessionId());
             state.setPendingRoundNumber(session.getCurrentRound());
             state.setPendingRoundTurnCount(session.getCurrentTurn());
@@ -342,18 +369,23 @@ public class DebateService implements IDebateService {
             state.setLastRoundSummary(session.buildRoundSummary(lastMessage.getSenderId(), lastMessage.getSenderName()));
             persistRoomDebateState(roomId, state);
 
-            roomChatService.publishSystemNotice(
+            final DebateSessionEntity currentSession = session;
+            final AiChatRoomMessageEntity roundEndMessage = lastMessage;
+            runAfterCommit(() -> roomChatService.publishSystemNotice(
                     roomId,
                     "ROUND_END",
-                    String.format("第 %d 轮辩论已结束，共完成 %d 次发言，请宣布本轮胜方。", session.getCurrentRound(), session.getCurrentTurn()),
-                    buildNoticeExtData("ROUND_END", session, lastMessage.getSenderId(), null, true)
-            );
+                    String.format("第 %d 轮辩论已结束，共完成 %d 次发言，请宣布本轮胜方。", currentSession.getCurrentRound(), currentSession.getCurrentTurn()),
+                    buildNoticeExtData("ROUND_END", currentSession, roundEndMessage.getSenderId(), null, true, null)
+            ));
             return null;
         }
 
         if (!chatRoomRepository.updateDebateSessionProgress(session)) {
             throw new DependencyConflictException("辩论进度已变更，请刷新后重试");
         }
+        advanceSessionVersion(session);
+        state.setActiveDebateSessionId(session.getSessionId());
+        persistRoomDebateState(roomId, state);
         return arbitrateNextSpeaker(session, lastMessage);
     }
 
@@ -497,9 +529,53 @@ public class DebateService implements IDebateService {
                         LinkedHashMap::new));
     }
 
+    private Map<String, Integer> buildJoinOrderMap(String roomId, List<String> candidateIds) {
+        if (candidateIds == null || candidateIds.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Set<String> candidateSet = new LinkedHashSet<>(candidateIds);
+        Map<String, Integer> joinOrderMap = new LinkedHashMap<>();
+        int index = 1;
+        for (AiChatRoomMemberEntity member : chatRoomRepository.queryClientsByRoomId(roomId)) {
+            if (candidateSet.contains(member.getMemberId()) && !joinOrderMap.containsKey(member.getMemberId())) {
+                joinOrderMap.put(member.getMemberId(), index++);
+            }
+        }
+        for (String candidateId : candidateIds) {
+            joinOrderMap.putIfAbsent(candidateId, index++);
+        }
+        return joinOrderMap;
+    }
+
+    private Map<String, Integer> buildSpeakerHistoryStats(List<DebateTurnRecordVO> roundHistory) {
+        if (roundHistory == null || roundHistory.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        for (DebateTurnRecordVO record : roundHistory) {
+            if (record == null || record.getSpeakerId() == null) {
+                continue;
+            }
+            stats.merge(record.getSpeakerId(), 1, Integer::sum);
+        }
+        return stats;
+    }
+
+    private Map<String, String> buildRoundWinnerMap(List<String> winners) {
+        Map<String, String> winnerMap = new LinkedHashMap<>();
+        if (winners == null || winners.isEmpty()) {
+            return winnerMap;
+        }
+        for (int i = 0; i < winners.size(); i++) {
+            winnerMap.put(String.valueOf(i + 1), winners.get(i));
+        }
+        return winnerMap;
+    }
+
     private DispatchDecisionVO arbitrateNextSpeaker(DebateSessionEntity session, AiChatRoomMessageEntity triggerMessage) {
         ArbitrationPromptContextVO promptContext = buildArbitrationPromptContext(session, triggerMessage);
         if (promptContext.getCandidateSpeakerIds() == null || promptContext.getCandidateSpeakerIds().isEmpty()) {
+            log.info("【ARBITRATOR_DECIDE】当前无合法候选可继续发言 roomId={}, sessionId={}", session.getRoomId(), session.getSessionId());
             return null;
         }
 
@@ -508,17 +584,22 @@ public class DebateService implements IDebateService {
             throw new DependencyConflictException("仲裁结果非法，未命中候选集");
         }
 
-        roomChatService.publishSystemNotice(
+        log.info("【ARBITRATOR_DECIDE】仲裁完成 roomId={}, sessionId={}, round={}, turn={}, speakerId={}, source={}, candidates={}",
                 session.getRoomId(),
-                "HOST_INTRO",
-                result.getReasoning(),
-                buildNoticeExtData("HOST_INTRO", session, result.getSpeakerId(), result.getReasoning(), false, result.getDecisionSource())
-        );
+                session.getSessionId(),
+                session.getCurrentRound(),
+                session.getCurrentTurn(),
+                result.getSpeakerId(),
+                result.getDecisionSource(),
+                promptContext.getCandidateSpeakerIds());
 
         return DispatchDecisionVO.builder()
                 .speakerId(result.getSpeakerId())
                 .decisionSource(result.getDecisionSource())
                 .reasoning(result.getReasoning())
+                .sessionId(session.getSessionId())
+                .roundNumber(session.getCurrentRound())
+                .sessionVersion(session.getVersion())
                 .build();
     }
 
@@ -535,6 +616,10 @@ public class DebateService implements IDebateService {
 
         String lastSpeakerClientId = triggerMessage == null ? null : triggerMessage.getSenderId();
         String lastSpeakerName = triggerMessage == null ? null : triggerMessage.getSenderName();
+        List<String> candidateSpeakerIds = session.listCandidateSpeakerIds(lastSpeakerClientId);
+        Map<String, Integer> candidateJoinOrder = buildJoinOrderMap(session.getRoomId(), candidateSpeakerIds);
+        List<String> preferredSpeakerIds = session.listPreferredSpeakerIds(lastSpeakerClientId, roundHistory, candidateJoinOrder);
+
         return ArbitrationPromptContextVO.builder()
                 .roomId(session.getRoomId())
                 .sessionId(session.getSessionId())
@@ -545,7 +630,11 @@ public class DebateService implements IDebateService {
                 .turnsPerRound(session.getTurnsPerRound())
                 .lastSpeakerClientId(lastSpeakerClientId)
                 .lastSpeakerName(lastSpeakerName)
-                .candidateSpeakerIds(session.listCandidateSpeakerIds(lastSpeakerClientId))
+                .lastSpeakerSide(session.getSideForClient(lastSpeakerClientId))
+                .candidateSpeakerIds(candidateSpeakerIds)
+                .preferredSpeakerIds(preferredSpeakerIds)
+                .candidateJoinOrder(candidateJoinOrder)
+                .speakerHistoryStats(buildSpeakerHistoryStats(roundHistory))
                 .proMembers(toMemberStatusVO(session.getProClientIds(), clientNameMap))
                 .conMembers(toMemberStatusVO(session.getConClientIds(), clientNameMap))
                 .roundHistory(roundHistory)
@@ -553,8 +642,90 @@ public class DebateService implements IDebateService {
                 .build();
     }
 
-    private String buildNoticeExtData(String noticeType, DebateSessionEntity session, String speakerId, String reasoning, boolean waitingForWinner) {
-        return buildNoticeExtData(noticeType, session, speakerId, reasoning, waitingForWinner, null);
+    private void saveDebateRecord(DebateSessionEntity session, String roomId, RoomDebateStateVO state, AiChatRoomMessageEntity lastMessage) {
+        DebateRecordEntity record = DebateRecordEntity.builder()
+                .recordId(buildRecordId())
+                .sessionId(session.getSessionId())
+                .roomId(roomId)
+                .roundNumber(session.getCurrentRound())
+                .turnNumber((session.getCurrentTurn() == null ? 0 : session.getCurrentTurn()) + 1)
+                .speakerClientId(lastMessage.getSenderId())
+                .speakerName(lastMessage.getSenderName())
+                .side(session.getSideForClient(lastMessage.getSenderId()))
+                .messageId(lastMessage.getMessageId())
+                .arbitratorReasoning(buildRecordReasoning(state))
+                .build();
+        chatRoomRepository.saveDebateRecord(record);
+    }
+
+    private boolean isExpectedSpeaker(RoomDebateStateVO state, String speakerId) {
+        if (speakerId == null || speakerId.isBlank()) {
+            return false;
+        }
+        if (state == null || state.getPendingSpeakerId() == null || state.getPendingSpeakerId().isBlank()) {
+            return true;
+        }
+        return Objects.equals(state.getPendingSpeakerId(), speakerId);
+    }
+
+    private String buildRecordReasoning(RoomDebateStateVO state) {
+        if (state == null) {
+            return "系统已完成本次辩手调度。";
+        }
+        String source = state.getPendingDecisionSource();
+        String reasoning = state.getPendingDecisionReasoning();
+        String summary = switch (source == null ? "" : source) {
+            case "AT_MENTION" -> "用户指定优先回应";
+            case "ROUND_ROBIN_FALLBACK" -> "仲裁降级轮转补位";
+            case "PROBABILITY" -> "自由聊天随机命中";
+            default -> "仲裁者已完成本次调度";
+        };
+        if (reasoning == null || reasoning.isBlank()) {
+            return summary;
+        }
+        String result = summary + "：" + reasoning;
+        return result.length() > RECORD_REASONING_LIMIT ? result.substring(0, RECORD_REASONING_LIMIT) : result;
+    }
+
+    private void clearPendingDispatch(RoomDebateStateVO state) {
+        state.setPendingSpeakerId(null);
+        state.setPendingTurnNumber(null);
+        state.setPendingDecisionSource(null);
+        state.setPendingDecisionReasoning(null);
+        state.setDispatchSessionId(null);
+        state.setDispatchRound(null);
+        state.setDispatchVersion(null);
+    }
+
+    private void clearRoundState(RoomDebateStateVO state) {
+        state.setPendingRoundNumber(null);
+        state.setPendingRoundTurnCount(null);
+        state.setLastRoundEndedAt(null);
+    }
+
+    private void advanceSessionVersion(DebateSessionEntity session) {
+        session.setVersion((session.getVersion() == null ? 0 : session.getVersion()) + 1);
+    }
+
+    private void publishDispatchTrigger(String roomId) {
+        roomEventPublisher.publishInternal(WebSocketEvent.builder()
+                .roomId(roomId)
+                .eventType(WebSocketEvent.EventType.DEBATE_DISPATCH_TRIGGER)
+                .timestamp(System.currentTimeMillis())
+                .build());
+    }
+
+    private void runAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 
     private String buildNoticeExtData(String noticeType, DebateSessionEntity session, String speakerId, String reasoning, boolean waitingForWinner, String decisionSource) {
@@ -578,7 +749,20 @@ public class DebateService implements IDebateService {
         data.put("sessionId", session.getSessionId());
         data.put("roundNumber", session.getCurrentRound());
         data.put("winnerSide", winnerSide);
-        data.put("roundWinners", session.safeRoundWinners());
+        data.put("roundWinners", buildRoundWinnerMap(session.safeRoundWinners()));
+        return JSON.toJSONString(data);
+    }
+
+    private String buildSpeakerErrorExtData(DebateSessionEntity session, AiChatRoomMessageEntity lastMessage) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("noticeType", "SPEAKER_ERROR");
+        data.put("sessionId", session.getSessionId());
+        data.put("roundNumber", session.getCurrentRound());
+        data.put("currentTurn", session.getCurrentTurn());
+        data.put("speakerId", lastMessage.getSenderId());
+        data.put("speakerName", lastMessage.getSenderName());
+        data.put("errorType", extractErrorType(lastMessage.getExtData()));
+        data.put("errorMessage", extractErrorMessage(lastMessage.getExtData()));
         return JSON.toJSONString(data);
     }
 
@@ -587,5 +771,21 @@ public class DebateService implements IDebateService {
         data.put("noticeType", noticeType);
         data.put("roomId", roomId);
         return JSON.toJSONString(data);
+    }
+
+    private String extractErrorType(String extData) {
+        try {
+            return extData == null ? "EXECUTION_FAILED" : JSON.parseObject(extData).getString("errorType");
+        } catch (Exception e) {
+            return "EXECUTION_FAILED";
+        }
+    }
+
+    private String extractErrorMessage(String extData) {
+        try {
+            return extData == null ? "执行失败" : JSON.parseObject(extData).getString("errorMessage");
+        } catch (Exception e) {
+            return "执行失败";
+        }
     }
 }

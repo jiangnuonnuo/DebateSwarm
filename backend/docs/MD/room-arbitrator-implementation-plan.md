@@ -1,151 +1,240 @@
-# 仲裁者辩论赛 - 完整实现蓝图 v5 (开发者级文档)
+# 仲裁辩论回滚后修复实施蓝图
 
-## 一、 核心目标与设计原则
-*   **目标**: 重构 `RoomDispatchService` 的调度逻辑，引入基于规则树的智能决策系统，支持“仲裁者”主持的自动辩论赛模式。
-*   **双模式支持**: 房间支持“自由聊天”与“仲裁辩论”两种模式。系统实时判断当前模式并采取对应调度策略。
-*   **核心组件**:
-    *   **规则树**: 采用 `StrategyRouter` 模式，通过节点路由实现优先级决策。
-    *   **工厂入口**: `DispatchStrategyFactory` 负责上下文生命周期管理与路由启动。
-    *   **仓储收敛**: 在 `IChatRoomRepository` 中追加辩论持久化方法，不另设仓储层。
+## 1. 当前问题定位
 
----
+当前代码回滚后，仲裁辩论链路存在 6 个关键问题：
 
-## 二、 数据库表结构设计 (SQL)
-在 `docs/mysql/table-struction.sql` 中追加以下 DDL：
+1. `startDebate` / `startNextRound` 直接调用 `clientChat`，首发与下一轮首发没有经过 `dispatch` 规则树。
+2. 仲裁候选规则过宽，LLM 只排除上一位 speaker，没有严格收口到“对侧阵营候选 + clientId 精确命中”。
+3. `clientChat` 空响应、超时、Bean 缺失时只打日志，不发内部续跑事件，导致一位辩手失败后整轮停住。
+4. `stopDebate` 只改状态，没有调度护栏，路上的旧决策仍可能继续执行。
+5. `DebateSessionEntity` 的派生 getter 参与了 Redis 序列化，旧缓存中的 `finished/running/allDebaterIds` 会导致反序列化失败。
+6. 前端辩论面板显隐被状态强绑，无法真正收起；`ROUND_END` 没有弹窗裁决入口；系统通知视觉权重过高，影响观察主辩论流。
 
-```sql
-CREATE TABLE ai_debate_session (
-  id                   bigint       PRIMARY KEY AUTO_INCREMENT,
-  session_id           varchar(64)  NOT NULL COMMENT '辩论会话业务ID (debate_xxx)',
-  room_id              varchar(64)  NOT NULL COMMENT '关联房间ID',
-  topic                varchar(512) NOT NULL COMMENT '辩论主题',
-  arbitrator_client_id varchar(64)  NOT NULL COMMENT '仲裁者 CLIENT ID',
-  pro_client_ids       varchar(512) NOT NULL COMMENT '正方ID列表(逗号分隔)',
-  con_client_ids       varchar(512) NOT NULL COMMENT '反方ID列表(逗号分隔)',
-  turns_per_round      int          NOT NULL DEFAULT 6 COMMENT '每轮对话次数',
-  current_round        int          NOT NULL DEFAULT 0,
-  current_turn         int          NOT NULL DEFAULT 0,
-  round_winners        varchar(255) DEFAULT NULL COMMENT '胜方记录(PRO,CON,...)',
-  status               varchar(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/RUNNING/ROUND_END/FINISHED',
-  version              int          NOT NULL DEFAULT 0,
-  create_time          datetime     DEFAULT CURRENT_TIMESTAMP,
-  update_time          datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_session_id (session_id),
-  INDEX idx_room_status (room_id, status)
-) COMMENT='辩论会话表';
+## 2. 本轮修复目标
 
-CREATE TABLE ai_debate_record (
-  id                   bigint       PRIMARY KEY AUTO_INCREMENT,
-  record_id            varchar(64)  NOT NULL COMMENT '记录业务ID (dr_xxx)',
-  session_id           varchar(64)  NOT NULL COMMENT '关联辩论会话ID',
-  round_number         int          NOT NULL,
-  turn_number          int          NOT NULL,
-  speaker_client_id    varchar(64)  NOT NULL,
-  side                 varchar(10)  NOT NULL COMMENT 'PRO/CON',
-  message_id           varchar(64)  NULL,
-  arbitrator_reasoning varchar(100) NOT NULL COMMENT '仲裁理由(50字内)',
-  create_time          datetime     DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_record_id (record_id),
-  INDEX idx_session_round (session_id, round_number)
-) COMMENT='辩论对话记录表';
+本轮修复后的目标能力：
+
+- 用户可设置仲裁者 `clientId`
+- 用户可指定正反方 `clientId`
+- 开始辩论后，首位辩手与后续辩手都必须通过 `dispatch` 规则树选出并执行
+- 首轮第一位发言者由仲裁者自由选择
+- 从第二手开始，只允许上一位发言者的对侧阵营进入候选集
+- 单个 `client` 超时、空响应、装配失败时，本轮依然能继续推进
+- `ROUND_END` 后前端弹窗裁决胜方
+- 停止辩论后，后续旧调度必须被完全切断
+
+## 3. 后端主链设计
+
+### 3.1 统一调度入口
+
+- 新增内部事件：
+  - `DEBATE_DISPATCH_TRIGGER`
+  - `CLIENT_MSG_ERROR`
+- `RoomDispatchService.dispatchNextSpeaker(...)` 统一支持：
+  - `USER_MSG`
+  - `CLIENT_MSG_END`
+  - `CLIENT_MSG_ERROR`
+  - `DEBATE_DISPATCH_TRIGGER`
+- 规则树职责：
+  - `AtMentionNode`：只处理用户显式 `@`
+  - `ArbitratorNode`：只识别辩论模式并调用 `debateService.decideNextDispatch(...)`
+  - `ProbabilityNode`：只处理自由聊天
+  - `ChatExecutionNode`：唯一允许执行 `clientChat(roomId, clientId)` 的节点
+
+### 3.2 DebateService 收口
+
+- `startDebate` / `startNextRound`
+  - 不再直接 `clientChat`
+  - 事务提交后发布 `DEBATE_DISPATCH_TRIGGER`
+- `decideNextDispatch(...)`
+  - 只处理 `CLIENT_MSG_END`、`CLIENT_MSG_ERROR`、`DEBATE_DISPATCH_TRIGGER`
+  - `CLIENT_MSG_END`
+    - 记录 `ai_debate_record`
+    - 推进 turn
+    - 到达 `turnsPerRound` 则进入 `ROUND_END`
+    - 未结束则继续仲裁下一位
+  - `CLIENT_MSG_ERROR`
+    - 记一条系统通知
+    - 本次机会计入 turn
+    - 未结束则继续仲裁下一位
+    - 已结束则进入 `ROUND_END`
+  - `DEBATE_DISPATCH_TRIGGER`
+    - 只负责首发仲裁或下一轮首发仲裁
+
+### 3.3 仲裁候选规则
+
+- 所有身份只认 `clientId`
+- 首轮首发：
+  - 候选集 = 全部合法辩手
+- 第二手开始：
+  - 候选集 = 上一位发言者对侧阵营辩手
+- 同阵营内部优先级：
+  1. 本轮未发言者优先
+  2. 发言次数少者优先
+  3. 入房更早者优先
+  4. `clientId` 兜底稳定排序
+- `ArbitrationPromptContextVO` 增加：
+  - `candidateSpeakerIds`
+  - `preferredSpeakerIds`
+  - `candidateJoinOrder`
+  - `lastSpeakerClientId`
+  - `lastSpeakerSide`
+  - `speakerHistoryStats`
+
+### 3.4 仲裁提示词与校验
+
+- LLM 只能返回：
+
+```json
+{"speakerId":"client_xxx","reasoning":"..."}
 ```
 
----
+- Prompt 明确硬约束：
+  - 只能返回候选 `clientId`
+  - 不能返回 `clientName`
+  - 不能返回仲裁者自己
+  - 不能返回上一位 speaker
+- Prompt 明确偏好：
+  - 优先回应上一条核心论点
+  - 优先 `preferredSpeakerIds` 中更靠前的人
+  - 若不选优先第一位，必须说明原因
+- 后端硬校验：
+  - `speakerId` 非空
+  - `speakerId` 命中候选集
+  - `speakerId` 属于当前活跃 session
+- 失败降级：
+  - 自动使用 `preferredSpeakerIds` 第一位
 
-## 三、 规则树设计流转图 (Mermaid)
+### 3.5 执行鲁棒性
 
-```mermaid
-graph TD
-    subgraph "RoomDispatchService (Trigger)"
-        A[dispatchNextSpeaker] --> B(DispatchStrategyFactory.doDispatch)
-    end
+- `RoomChatService.clientChat(...)`
+  - 明确区分：
+    - `TIMEOUT`
+    - `EMPTY_RESPONSE`
+    - `EXECUTION_FAILED`
+  - 失败时只发内部 `CLIENT_MSG_ERROR`，不让链路静默中断
+- 超时配置：
+  - `room.debate.arbitrator-timeout-seconds=45`
+  - `room.debate.speaker-timeout-seconds=90`
+- `ChatExecutionNode`
+  - 执行前先校验：
+    - session 是否仍活跃
+    - 当前决策的 `sessionId / round / version` 是否仍匹配
+  - 落 `pendingSpeakerId / pendingTurnNumber / pendingDecisionReasoning / pendingDecisionSource`
+  - 再发 `HOST_INTRO`
+  - 最后才执行 `clientChat`
 
-    subgraph "DispatchStrategyFactory (Factory)"
-        B --> C[Init DispatchContext]
-        C --> D[DispatchRootNode.router]
-    end
+### 3.6 停止辩论与 Redis 修复
 
-    subgraph "Decision Tree (Nodes)"
-        D --> E{AtMentionNode}
-        E -- "@命中" --> I(EndNode)
-        E -- "未命中" --> F{ArbitratorNode}
-        
-        F -- "非辩论模式" --> G{ProbabilityNode}
-        F -- "辩论模式" --> H[Arbitrator LLM Decision]
-        H --> I
-        
-        G -- "命中/未命中" --> I
-    end
+- `DebateSessionEntity`
+  - 类级忽略未知字段
+  - `getAllDebaterIds()` / `isRunning()` / `isFinished()` 显式不参与序列化
+- `ChatRoomRepository.queryActiveDebateSession(roomId)`
+  - Redis 反序列化失败后删除坏缓存
+  - 回源数据库并重建干净缓存
+- `RoomDebateStateVO` 增加调度护栏字段：
+  - `pendingSpeakerId`
+  - `pendingTurnNumber`
+  - `pendingDecisionSource`
+  - `pendingDecisionReasoning`
+  - `dispatchSessionId`
+  - `dispatchRound`
+  - `dispatchVersion`
+- `stopDebate(roomId)` 固定顺序：
+  1. session 置 `FINISHED`
+  2. 清空 `activeDebateSessionId`
+  3. 清空全部 `pending*`
+  4. 清空轮次待裁决快照
+  5. after-commit 发送 `DEBATE_STOP`
 
-    subgraph "EndNode (Executor)"
-        I --> K{Context has Decision?}
-        K -- "Yes" --> L[Execute: roomChatService.clientChat]
-        K -- "No" --> M[Log & Terminate]
-    end
-```
+## 4. 前端设计修正
 
----
+### 4.1 面板显隐
 
-## 四、 五阶段详细实现规划
+- `showDebatePanel` 作为唯一显隐开关
+- 有活跃辩论时只自动展开一次
+- 用户手动收起后，普通状态刷新不再强制打开
+- `DEBATE_STOP` 后自动收起
 
-### 阶段 1: 基础设施与持久化增强 (Infrastructure)
-*   **PO (Persistent Objects)**:
-    *   `AiDebateSession.java`: 对应 `ai_debate_session` 表。
-    *   `AiDebateRecord.java`: 对应 `ai_debate_record` 表。
-*   **DAO (MyBatis Mapper)**:
-    *   `IAiDebateSessionDao.java`: 提供 `insert`, `queryActiveByRoomId`, `updateWithLock`。
-    *   `IAiDebateRecordDao.java`: 提供 `insert`, `queryBySessionAndRound`。
-*   **Repository (Contract & Implementation)**:
-    *   `IChatRoomRepository.java`: 追加辩论方法定义。
-    *   `ChatRoomRepository.java`: 实现上述方法，转换 PO 为领域 Entity。
+### 4.2 ROUND_END 裁决弹窗
 
-### 阶段 2: 规则树引擎构建 (Rule Tree Engine)
-*   **VO (Value Objects)**:
-    *   `DispatchRequest.java`: `roomId`, `eventType`, `atMemberIds`, `senderId`。
-    *   `DispatchContext.java`: **内部管理**，包含 `DispatchDecision` 和 `DebateSessionEntity` (缓存用)。
-*   **Nodes (StrategyRouter Implementation)**:
-    *   `AbstractDispatchNode.java`: 继承 `AbstractMultiThreadStrategyRouter`，提供通用工具。
-    *   `AtMentionNode.java`: 检查 `@`。命中则设置决策并路由至 `EndNode`。
-    *   `ArbitratorNode.java`: **关键节点**。判断 `context.getDebateSession()` 是否存在且活跃。若无，路由至 `ProbabilityNode`。
-    *   `ProbabilityNode.java`: 50% 概率响应。路由至 `EndNode`。
-    *   `EndNode.java`: **强制汇聚点**。执行 `roomChatService.clientChat`。
-*   **Factory**:
-    *   `DispatchStrategyFactory.java`: 负责 `context` 初始化并启动 `RootNode`。
+- `waitingForWinner=true` 时自动弹窗
+- 操作：
+  - `判定正方胜`
+  - `判定反方胜`
+  - `稍后处理`
+- 弹窗去重键：
+  - `sessionId + roundNumber`
+- 页面刷新后，如当前仍处于 `ROUND_END`，弹窗应恢复
 
-### 阶段 3: 辩论领域逻辑实现 (Domain Business)
-*   **Entity (Domain Logic)**:
-    *   `DebateSessionEntity.java`: 封装业务逻辑，如 `isRoundEnd()`, `advanceTurn()`, `getSideForClient()`。
-*   **Service**:
-    *   `IDebateService.java` & `DebateService.java`:
-        *   `startDebate()`: 校验房间仲裁者，创建 Session。
-        *   `recordTurn()`: 记录发言并更新 Session 进度。
-        *   `declareWinner()`: 用户 API 触发，标记胜方。
+### 4.3 消息流布局
 
-### 阶段 4: 仲裁者 LLM 与 API 接入 (LLM & API)
-*   **Prompt 模板**: `resources/prompt/system-prompt/debate-dispatch-template.txt`。
-*   **ArbitratorNode LLM 逻辑**:
-    *   调用 `debateService.buildPromptContext()` 组装上下文。
-    *   解析 LLM 返回的 JSON (speaker, reasoning)。
-*   **Controller**:
-    *   `ChatRoomController.java`: 新增 `/chat-room/debate/start`, `/stop`, `/winner`, `/status` 接口。
+- 主消息流优先展示用户与辩手发言
+- 系统通知与主持调度消息改为弱化样式：
+  - 小字号
+  - 轻边框
+  - 不再用居中高亮大卡片
+- `HOST_INTRO` 保留，但降视觉权重，不抢主辩论内容
 
-### 阶段 5: 集成验证与鲁棒性 (Verification)
-*   **防死循环**: 严格校验 `currentTurn < turnsPerRound`。
-*   **降级策略**: LLM 解析失败或超时，`ArbitratorNode` 自动降级为正反方轮替逻辑。
-*   **并发控制**: 房间状态 `debate_session_id` 确保单房间单会话。
+## 5. 日志与注释规范
 
----
+- 统一日志阶段标签：
+  - `DEBATE_START`
+  - `ARBITRATOR_DECIDE`
+  - `HOST_DISPATCH`
+  - `CHAT_EXECUTE`
+  - `CLIENT_MSG_END`
+  - `CLIENT_MSG_ERROR`
+  - `ROUND_END`
+  - `ROUND_WINNER`
+  - `DEBATE_STOP`
+- 关键日志必须打印：
+  - `roomId`
+  - `sessionId`
+  - `currentRound`
+  - `currentTurn`
+  - `speakerId`
+  - `decisionSource`
+  - `candidateSpeakerIds`
+  - `pendingSpeakerId`
+- 注释只写在：
+  - 领域状态机
+  - 规则树入口
+  - 仲裁决策
+  - 执行护栏
+- 注释解释“为什么”和“不变量”，不重复代码动作
 
-## 五、 文件路径与职责清单 (开发者直达)
+## 6. 验证标准
 
-| 文件路径 | 职责 |
-| :--- | :--- |
-| `domain/room/model/entity/DebateSessionEntity.java` | 辩论会话领域对象，含状态机流转逻辑 |
-| `domain/room/model/valobj/DispatchContext.java` | 规则树内部上下文，存放决策结果 |
-| `domain/room/service/dispatch/DispatchStrategyFactory.java` | 规则树唯一入口，负责路由启动 |
-| `domain/room/service/dispatch/node/AtMentionNode.java` | 处理 @ 指定回复优先级节点 |
-| `domain/room/service/dispatch/node/ArbitratorNode.java` | 模式判断与仲裁者 LLM 调度节点 |
-| `domain/room/service/dispatch/node/EndNode.java` | 决策执行节点，调用 clientChat |
-| `domain/room/service/debate/DebateService.java` | 辩论生命周期管理领域服务 |
-| `infrastructure/repository/ChatRoomRepository.java` | 辩论数据的持久化与 Entity 转换 |
-| `trigger/controller/ChatRoomController.java` | 暴露 REST 接口供用户控制赛程 |
+### 6.1 后端
+
+- `startDebate` / `startNextRound` 不再直接 `clientChat`
+- 所有辩论发言都经过 `dispatch` 规则树
+- `CLIENT_MSG_END` 后能继续仲裁下一位
+- `CLIENT_MSG_ERROR` 不会卡死整轮
+- Redis 中存在旧字段 `finished/running/allDebaterIds` 时仍能恢复 session
+- `stopDebate` 后不得再产生新的主持调度和后续发言
+
+### 6.2 前端
+
+- 辩论面板可以手动关闭
+- `ROUND_END` 自动弹出裁决弹窗
+- 刷新页面后弹窗可恢复
+- `DEBATE_STOP` 后面板与弹窗都关闭
+- 系统通知不会再压住主辩论消息流
+
+### 6.3 编译
+
+- 后端：
+  - `mvn -o -f backend\\pom.xml -pl ai-agent-domain,ai-agent-trigger -am -DskipTests compile`
+  - `mvn -o -f backend\\pom.xml -pl ai-agent-infrastructure -am -DskipTests compile`
+- 前端：
+  - `npm run build`
+
+## 7. 本轮默认约束
+
+- 本轮不处理 WebSocket 身份鉴权
+- 每轮胜方继续由用户手动裁决
+- 模型调用只延长超时，不做自动重试
+- `room` 领域继续保持单仓储，不拆 `DebateRepository`

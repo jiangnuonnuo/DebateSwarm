@@ -437,11 +437,20 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     @Override
     public DebateSessionEntity queryActiveDebateSession(String roomId) {
         String cacheKey = ACTIVE_DEBATE_SESSION_KEY + roomId;
-        return getFromCacheOrDb(cacheKey, DebateSessionEntity.class, () -> {
-            AiDebateSession po = aiDebateSessionDao.queryActiveSessionHeaderByRoomId(roomId);
-            if (po == null) return null;
-            return convertToDebateSessionEntity(po);
-        });
+        DebateSessionEntity cacheResult = redisUtil.getValue(cacheKey, DebateSessionEntity.class);
+        if (cacheResult != null) {
+            return cacheResult;
+        }
+
+        // 反序列化失败时 redisUtil 会返回 null，这里统一删掉脏缓存后回源数据库重建。
+        redisUtil.deleteByKey(cacheKey);
+        AiDebateSession po = aiDebateSessionDao.queryActiveSessionHeaderByRoomId(roomId);
+        if (po == null) {
+            return null;
+        }
+        DebateSessionEntity entity = convertToDebateSessionEntity(po);
+        redisUtil.setValue(cacheKey, entity);
+        return entity;
     }
 
     @Override

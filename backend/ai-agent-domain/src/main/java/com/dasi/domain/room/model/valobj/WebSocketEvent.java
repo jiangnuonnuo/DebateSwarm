@@ -33,10 +33,14 @@ public class WebSocketEvent<T> {
         String CLIENT_MSG = "CLIENT_MSG";
         /** 客户端回答结束 (下行) */
         String CLIENT_MSG_END = "CLIENT_MSG_END";
+        /** 客户端执行失败 (仅内部续跑) */
+        String CLIENT_MSG_ERROR = "CLIENT_MSG_ERROR";
         /** 智能体流式输出 (下行) */
         String AGENT_MSG = "AGENT_MSG";
         /** 智能体回答结束 (下行) */
         String AGENT_MSG_END = "AGENT_MSG_END";
+        /** 辩论赛内部调度触发 (仅内部使用) */
+        String DEBATE_DISPATCH_TRIGGER = "DEBATE_DISPATCH_TRIGGER";
         /** 场景/系统通知 (下行) */
         String SYSTEM_NOTICE = "SYSTEM_NOTICE";
         /** 错误提醒 */

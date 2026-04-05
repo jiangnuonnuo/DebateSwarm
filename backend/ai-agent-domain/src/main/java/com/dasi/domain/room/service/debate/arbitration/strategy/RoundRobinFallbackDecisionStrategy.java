@@ -36,6 +36,10 @@ public class RoundRobinFallbackDecisionStrategy implements IArbitrationDecisionS
     }
 
     private String pickNextSpeaker(ArbitrationPromptContextVO promptContext) {
+        if (promptContext.getPreferredSpeakerIds() != null && !promptContext.getPreferredSpeakerIds().isEmpty()) {
+            return promptContext.getPreferredSpeakerIds().get(0);
+        }
+
         List<DebateTurnRecordVO> roundHistory = promptContext.getRoundHistory();
         if (roundHistory == null || roundHistory.isEmpty()) {
             return firstClientId(promptContext.getProMembers());

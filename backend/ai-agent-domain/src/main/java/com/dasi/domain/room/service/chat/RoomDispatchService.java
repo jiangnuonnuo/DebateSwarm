@@ -94,9 +94,11 @@ public class RoomDispatchService implements IRoomDispatchService {
         String eventType = wsEvent.getEventType();
         String roomId = wsEvent.getRoomId();
 
-        // 领域逻辑：只对“用户发言”或“客户端发言完成”信号感兴趣
+        // 领域逻辑：只对用户发言、辩手发言结果和辩论内部调度触发信号感兴趣。
         if (!WebSocketEvent.EventType.USER_MSG.equals(eventType)
-                && !WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)) {
+                && !WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)
+                && !WebSocketEvent.EventType.CLIENT_MSG_ERROR.equals(eventType)
+                && !WebSocketEvent.EventType.DEBATE_DISPATCH_TRIGGER.equals(eventType)) {
             return;
         }
 
@@ -125,6 +127,8 @@ public class RoomDispatchService implements IRoomDispatchService {
                 .atMemberIds(atMemberIds)
                 .currentMessage(wsEvent.getPayload() instanceof AiChatRoomMessageEntity ? (AiChatRoomMessageEntity) wsEvent.getPayload() : null)
                 .build();
+
+        log.info("【调度决策】接收事件 roomId={}, eventType={}, senderId={}", roomId, eventType, currentSenderId);
 
         // 4. 调用决策树工厂执行调度逻辑
         dispatchStrategyFactory.doDispatch(strategyEntity);

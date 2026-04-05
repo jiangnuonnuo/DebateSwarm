@@ -25,4 +25,13 @@ public class DispatchDecisionVO {
     /** 决策理由 (仲裁模式下由 LLM 生成) */
     private String reasoning;
 
+    /** 决策对应的辩论会话 */
+    private String sessionId;
+
+    /** 决策生成时的轮次 */
+    private Integer roundNumber;
+
+    /** 决策生成时的会话版本 */
+    private Integer sessionVersion;
+
 }

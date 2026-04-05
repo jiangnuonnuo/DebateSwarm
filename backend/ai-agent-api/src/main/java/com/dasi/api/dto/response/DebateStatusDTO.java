@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -28,7 +29,7 @@ public class DebateStatusDTO implements Serializable {
 
     private Integer turnsPerRound;
 
-    private List<String> roundWinners;
+    private Map<String, String> roundWinners;
 
     private String arbitratorClientId;
 

@@ -19,6 +19,20 @@ public class RoomDebateStateVO {
 
     private Integer pendingRoundTurnCount;
 
+    private String pendingSpeakerId;
+
+    private Integer pendingTurnNumber;
+
+    private String pendingDecisionSource;
+
+    private String pendingDecisionReasoning;
+
+    private String dispatchSessionId;
+
+    private Integer dispatchRound;
+
+    private Integer dispatchVersion;
+
     private Long lastRoundEndedAt;
 
     private DebateRoundSummaryVO lastRoundSummary;

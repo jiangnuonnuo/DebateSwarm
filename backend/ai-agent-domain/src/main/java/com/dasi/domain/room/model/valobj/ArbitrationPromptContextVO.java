@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @Author: xerina
@@ -38,6 +39,18 @@ public class ArbitrationPromptContextVO {
 
     /** 本轮可选的发言者 clientId 列表 */
     private List<String> candidateSpeakerIds;
+
+    /** 在当前候选集中更推荐优先尝试的 speakerId 顺序 */
+    private List<String> preferredSpeakerIds;
+
+    /** 候选人入房顺序，值越小表示越早进入房间 */
+    private Map<String, Integer> candidateJoinOrder;
+
+    /** 上一位发言者阵营 */
+    private String lastSpeakerSide;
+
+    /** 当前轮每位辩手的已发言次数 */
+    private Map<String, Integer> speakerHistoryStats;
 
     private List<DebateMemberStatusVO> proMembers;
 

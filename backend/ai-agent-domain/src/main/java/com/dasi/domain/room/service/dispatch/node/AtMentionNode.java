@@ -73,6 +73,9 @@ public class AtMentionNode extends AbstractDispatchNode {
                     .reasoning(activeSession == null
                             ? String.format("用户指定由 %s 进行回复。", clientMember.getMemberName())
                             : String.format("用户指定由辩手 %s 优先回应。", clientMember.getMemberName()))
+                    .sessionId(activeSession == null ? null : activeSession.getSessionId())
+                    .roundNumber(activeSession == null ? null : activeSession.getCurrentRound())
+                    .sessionVersion(activeSession == null ? null : activeSession.getVersion())
                     .build());
             break;
         }

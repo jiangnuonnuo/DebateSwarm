@@ -1,5 +1,6 @@
 package com.dasi.domain.room.service.chat;
 
+import com.alibaba.fastjson2.JSON;
 import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
@@ -13,11 +14,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
 
@@ -43,6 +51,9 @@ public class RoomChatService implements IRoomChatService {
 
     @Resource
     private ApplicationContext applicationContext;
+
+    @Value("${room.debate.speaker-timeout-seconds:90}")
+    private long debateSpeakerTimeoutSeconds;
 
     /**
      * 前端用户发送来的消息，对消息进行处理记录，然后发送回前端，并且通知agent进行消费
@@ -87,11 +98,17 @@ public class RoomChatService implements IRoomChatService {
 
     @Override
     public void clientChat(String roomId, String clientId) {
-        log.info("【群聊服务】客户端响应触发 roomId={}, clientId={}", roomId, clientId);
+        log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}", roomId, clientId);
 
         try {
-            // 1. 获取客户端
             String beanName = CLIENT.getBeanName(clientId);
+            if (!applicationContext.containsBean(beanName)) {
+                log.warn("【CHAT_EXECUTE】目标 Client Bean 不存在 roomId={}, clientId={}, beanName={}", roomId, clientId, beanName);
+                publishClientExecutionError(roomId, clientId, "EXECUTION_FAILED", "目标 Client 尚未完成装配，无法执行本次发言。");
+                return;
+            }
+
+            // 1. 获取客户端
             ChatClient client = applicationContext.getBean(beanName, ChatClient.class);
 
             // 2. 准备基础信息
@@ -101,13 +118,16 @@ public class RoomChatService implements IRoomChatService {
             // 3. 装配上下文
             List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName);
 
-            // 4. 同步调用 AI
-            String content = client.prompt(new Prompt(messages))
-                    .call()
-                    .content();
+            // 4. 限时调用 AI，超时后交由辩论续跑链路处理。
+            String content = invokeWithTimeout(
+                    () -> client.prompt(new Prompt(messages)).call().content(),
+                    debateSpeakerTimeoutSeconds,
+                    "CLIENT_CHAT"
+            );
 
-            if (content == null || content.isEmpty()) {
-                log.warn("【群聊服务】客户端回答为空 roomId={}, clientId={}", roomId, clientId);
+            if (content == null || content.isBlank()) {
+                log.warn("【CHAT_EXECUTE】客户端回答为空 roomId={}, clientId={}", roomId, clientId);
+                publishClientExecutionError(roomId, clientId, "EMPTY_RESPONSE", "辩手本次未返回有效内容。");
                 return;
             }
 
@@ -141,10 +161,15 @@ public class RoomChatService implements IRoomChatService {
                     .timestamp(System.currentTimeMillis())
                     .build());
 
-            log.info("【群聊服务】客户端回答结束 roomId={}, clientId={}", roomId, clientId);
+            log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, messageId={}", roomId, clientId, messageId);
 
+        } catch (TimeoutException e) {
+            log.warn("【CHAT_EXECUTE】客户端回答超时 roomId={}, clientId={}, timeoutSeconds={}",
+                    roomId, clientId, debateSpeakerTimeoutSeconds);
+            publishClientExecutionError(roomId, clientId, "TIMEOUT", "辩手本次发言超时，系统将继续推进下一位。");
         } catch (Exception e) {
-            log.error("【群聊服务】客户端执行失败 roomId={}, clientId={}", roomId, clientId, e);
+            log.error("【CHAT_EXECUTE】客户端执行失败 roomId={}, clientId={}", roomId, clientId, e);
+            publishClientExecutionError(roomId, clientId, "EXECUTION_FAILED", safeErrorMessage(e));
         }
     }
 
@@ -171,5 +196,60 @@ public class RoomChatService implements IRoomChatService {
                 .timestamp(System.currentTimeMillis())
                 .traceId(noticeType)
                 .build());
+    }
+
+    private String invokeWithTimeout(Supplier<String> supplier, long timeoutSeconds, String stage) throws TimeoutException {
+        try {
+            return CompletableFuture.supplyAsync(supplier)
+                    .orTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                    .join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TimeoutException timeoutException) {
+                throw timeoutException;
+            }
+            throw new IllegalStateException("阶段执行失败: " + stage, cause == null ? e : cause);
+        }
+    }
+
+    private void publishClientExecutionError(String roomId, String clientId, String errorType, String errorMessage) {
+        String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
+        AiChatRoomMessageEntity errorPayload = AiChatRoomMessageEntity.builder()
+                .roomId(roomId)
+                .messageId("msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                .senderId(clientId)
+                .senderName(clientName)
+                .senderType("CLIENT")
+                .messageRole("assistant")
+                .content("")
+                .extData(buildClientErrorExtData(errorType, errorMessage))
+                .isPreempted(1)
+                .build();
+
+        eventPublisher.publishInternal(WebSocketEvent.<AiChatRoomMessageEntity>builder()
+                .roomId(roomId)
+                .eventType(WebSocketEvent.EventType.CLIENT_MSG_ERROR)
+                .payload(errorPayload)
+                .timestamp(System.currentTimeMillis())
+                .traceId(errorType)
+                .build());
+    }
+
+    private String buildClientErrorExtData(String errorType, String errorMessage) {
+        LinkedHashMap<String, Object> data = new LinkedHashMap<>();
+        data.put("errorType", errorType);
+        data.put("errorMessage", errorMessage);
+        return JSON.toJSONString(data);
+    }
+
+    private String safeErrorMessage(Exception e) {
+        if (e == null) {
+            return "未知执行错误";
+        }
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            return e.getClass().getSimpleName();
+        }
+        return message;
     }
 }

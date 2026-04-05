@@ -11,9 +11,9 @@
                 <div class="flex items-center gap-3">
                     <button @click="showDebatePanel = !showDebatePanel"
                             class="px-3 py-2 rounded-lg border border-[rgba(123,200,255,0.28)] text-xs font-medium text-[#7bc8ff] hover:bg-[#7bc8ff]/10 transition-all"
-                            :class="debatePanelVisible ? 'bg-[#7bc8ff]/10' : ''"
+                            :class="showDebatePanel ? 'bg-[#7bc8ff]/10' : ''"
                             title="辩论面板">
-                        {{ debatePanelVisible ? '收起辩论' : '辩论面板' }}
+                        {{ showDebatePanel ? '收起辩论' : '辩论面板' }}
                     </button>
                     <button @click="showMemberDrawer = !showMemberDrawer" 
                             class="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-all relative"
@@ -30,7 +30,7 @@
             </header>
 
             <section v-if="debatePanelVisible"
-                     class="px-6 py-4 border-b border-[rgba(255,255,255,0.06)] bg-[linear-gradient(135deg,rgba(123,200,255,0.08),rgba(20,32,58,0.82))]">
+                     class="px-4 py-3 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(14,22,37,0.92)] backdrop-blur-sm">
                 <div class="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
                     <div class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(8,14,26,0.72)] p-4 space-y-4">
                         <div class="flex items-start justify-between gap-4">
@@ -200,16 +200,10 @@
                                 开始辩论
                             </button>
                             <button v-if="waitingForWinner"
-                                    @click="declareDebateWinner('PRO')"
+                                    @click="showWinnerModal = true"
                                     :disabled="debateLoading"
                                     class="px-4 py-2 rounded-xl bg-[#38bdf8] text-[#07121d] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                                正方胜
-                            </button>
-                            <button v-if="waitingForWinner"
-                                    @click="declareDebateWinner('CON')"
-                                    :disabled="debateLoading"
-                                    class="px-4 py-2 rounded-xl bg-[#f59e0b] text-[#1d1204] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                                反方胜
+                                裁决本轮胜方
                             </button>
                             <button v-if="canStartNextRound"
                                     @click="startDebateNextRound"
@@ -241,10 +235,12 @@
 
                 <div v-for="msg in messages" :key="msg.messageId">
                     <div v-if="msg.senderType === 'SYSTEM'" class="flex justify-center">
-                        <div class="max-w-[82%] rounded-2xl border border-[rgba(123,200,255,0.16)] bg-[rgba(123,200,255,0.08)] px-4 py-3 text-center shadow-sm">
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-[#7bc8ff]">{{ parseSystemNoticeType(msg) }}</div>
-                            <div class="mt-1 text-sm leading-relaxed text-[#d7e8ff]">{{ msg.content }}</div>
-                            <div class="mt-2 text-[10px] text-[rgba(231,236,244,0.42)]">{{ formatTime(msg.createTime) }}</div>
+                        <div class="max-w-[86%] rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-left shadow-sm">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="text-[10px] uppercase tracking-[0.18em] text-[rgba(123,200,255,0.72)]">{{ parseSystemNoticeType(msg) }}</div>
+                                <div class="text-[10px] text-[rgba(231,236,244,0.35)]">{{ formatTime(msg.createTime) }}</div>
+                            </div>
+                            <div class="mt-1 text-xs leading-6 text-[rgba(231,236,244,0.72)]">{{ msg.content }}</div>
                         </div>
                     </div>
                     <div v-else :class="['flex w-full gap-3', msg.senderType === 'USER' ? 'flex-row-reverse' : 'flex-row']">
@@ -398,6 +394,36 @@
             </aside>
         </transition>
 
+        <div v-if="showWinnerModal"
+             class="fixed inset-0 z-40 grid place-items-center bg-[rgba(0,0,0,0.55)] backdrop-blur-sm p-4"
+             @click.self="dismissWinnerModal">
+            <div class="w-full max-w-md rounded-3xl border border-[rgba(255,255,255,0.1)] bg-[#0f172a] shadow-2xl overflow-hidden">
+                <div class="px-6 py-5 border-b border-[rgba(255,255,255,0.06)]">
+                    <p class="text-[11px] uppercase tracking-[0.22em] text-[rgba(123,200,255,0.78)]">ROUND END</p>
+                    <h3 class="mt-2 text-lg font-semibold text-[#e7ecf4]">请选择本轮胜方</h3>
+                    <p class="mt-2 text-sm text-[rgba(231,236,244,0.58)]">
+                        第 {{ debateStatus?.pendingRoundNumber || debateStatus?.currentRound || 0 }} 轮已结束，你可以现在裁决，或稍后处理。
+                    </p>
+                </div>
+                <div class="px-6 py-5 space-y-3">
+                    <button @click="declareDebateWinner('PRO')"
+                            :disabled="debateLoading"
+                            class="w-full px-4 py-3 rounded-2xl bg-[#38bdf8] text-[#07121d] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        判定正方胜
+                    </button>
+                    <button @click="declareDebateWinner('CON')"
+                            :disabled="debateLoading"
+                            class="w-full px-4 py-3 rounded-2xl bg-[#f59e0b] text-[#1d1204] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        判定反方胜
+                    </button>
+                    <button @click="dismissWinnerModal"
+                            class="w-full px-4 py-3 rounded-2xl border border-[rgba(255,255,255,0.1)] text-sm text-[rgba(231,236,244,0.78)] hover:bg-[rgba(255,255,255,0.04)] transition-all">
+                        稍后处理
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- 邀请弹窗 -->
         <div v-if="showInviteModal" class="fixed inset-0 z-50 grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-md p-4" @click.self="showInviteModal = false">
             <div class="w-full max-w-lg bg-[#0f172a] rounded-3xl border border-[rgba(255,255,255,0.1)] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -473,6 +499,9 @@ const inputText = ref('');
 const showMemberDrawer = ref(false);
 const showInviteModal = ref(false);
 const showDebatePanel = ref(false);
+const debatePanelInitialized = ref(false);
+const showWinnerModal = ref(false);
+const winnerModalToken = ref('');
 const loadingHistory = ref(false);
 const hasMoreHistory = ref(true);
 const socketReady = ref(false);
@@ -491,7 +520,7 @@ const inviteList = computed(() => (inviteMode.value === 'client' ? availableClie
 const isDebateRunning = computed(() => ['RUNNING', 'ROUND_END'].includes(debateStatus.value?.status || ''));
 const waitingForWinner = computed(() => Boolean(debateStatus.value?.waitingForWinner));
 const canStartNextRound = computed(() => Boolean(isDebateRunning.value && !waitingForWinner.value && debateStatus.value?.status === 'ROUND_END'));
-const debatePanelVisible = computed(() => Boolean(showDebatePanel.value || debateStatus.value?.sessionId || debateStatus.value?.arbitratorClientId));
+const debatePanelVisible = computed(() => Boolean(showDebatePanel.value));
 const debateClientOptions = computed(() => clientMembers.value.map(item => ({
     id: item.memberId,
     name: item.memberName
@@ -530,7 +559,7 @@ const debateRoundResultLabel = computed(() => {
     if (currentRound && winners[String(currentRound)]) {
         return winners[String(currentRound)] === 'PRO' ? '本轮正方获胜' : '本轮反方获胜';
     }
-    if (waitingForWinner.value) return '等待仲裁者裁决';
+    if (waitingForWinner.value) return '等待用户裁决';
     if (Object.keys(winners).length > 0) return '已有轮次结果';
     return '暂无结果';
 });
@@ -886,6 +915,41 @@ const syncDebateFormFromStatus = (status) => {
     }
 };
 
+const buildWinnerModalKey = (status) => {
+    if (!status?.waitingForWinner) return '';
+    const roundNumber = status.pendingRoundNumber || status.currentRound || 0;
+    if (!status.sessionId || !roundNumber) return '';
+    return `${status.sessionId}:${roundNumber}`;
+};
+
+const syncDebatePanelState = (status) => {
+    const hasActiveDebate = Boolean(status?.sessionId || status?.waitingForWinner);
+    if (hasActiveDebate && !debatePanelInitialized.value) {
+        showDebatePanel.value = true;
+        debatePanelInitialized.value = true;
+    }
+    if (!hasActiveDebate && !(status?.arbitratorClientId)) {
+        debatePanelInitialized.value = false;
+    }
+};
+
+const syncWinnerModalState = (status) => {
+    const modalKey = buildWinnerModalKey(status);
+    if (!modalKey) {
+        showWinnerModal.value = false;
+        winnerModalToken.value = '';
+        return;
+    }
+    if (winnerModalToken.value !== modalKey) {
+        winnerModalToken.value = modalKey;
+        showWinnerModal.value = true;
+    }
+};
+
+const dismissWinnerModal = () => {
+    showWinnerModal.value = false;
+};
+
 const loadDebateStatus = async () => {
     if (!roomId.value) return;
     try {
@@ -893,10 +957,13 @@ const loadDebateStatus = async () => {
         if (res.code === 200) {
             debateStatus.value = res.data || null;
             syncDebateFormFromStatus(debateStatus.value);
+            syncDebatePanelState(debateStatus.value);
+            syncWinnerModalState(debateStatus.value);
         }
     } catch (e) {
         console.error('加载辩论状态失败', e);
         debateStatus.value = null;
+        showWinnerModal.value = false;
     }
 };
 
@@ -986,6 +1053,7 @@ const declareDebateWinner = async (winnerSide) => {
         if (res.code !== 200) {
             throw new Error(res.info || '宣布胜方失败');
         }
+        showWinnerModal.value = false;
         toast.show(`已宣布${winnerSide === 'PRO' ? '正方' : '反方'}获胜`);
     }).catch((e) => toast.show(e.message || '宣布胜方失败'));
 };
@@ -1006,6 +1074,9 @@ const stopDebateFlow = async () => {
         if (res.code !== 200) {
             throw new Error(res.info || '停止辩论失败');
         }
+        showDebatePanel.value = false;
+        showWinnerModal.value = false;
+        winnerModalToken.value = '';
         toast.show('辩论已结束');
     }).catch((e) => toast.show(e.message || '停止辩论失败'));
 };
@@ -1019,6 +1090,7 @@ const parseSystemNoticeType = (msg) => {
         if (noticeType === 'ROUND_END') return '本轮结束';
         if (noticeType === 'ROUND_WINNER') return '本轮结果';
         if (noticeType === 'ROUND_NEXT') return '下一轮开始';
+        if (noticeType === 'SPEAKER_ERROR') return '发言异常';
         if (noticeType === 'DEBATE_STOP') return '辩论结束';
     } catch (e) {
         console.warn('解析系统通知失败', e);
@@ -1140,6 +1212,10 @@ watch(roomId, (newId) => {
     if (newId) {
         roomStore.setCurrentRoomId(newId);
         hasMoreHistory.value = true;
+        showDebatePanel.value = false;
+        debatePanelInitialized.value = false;
+        showWinnerModal.value = false;
+        winnerModalToken.value = '';
         loadMembers();
         loadHistory(true);
         loadDebateStatus();

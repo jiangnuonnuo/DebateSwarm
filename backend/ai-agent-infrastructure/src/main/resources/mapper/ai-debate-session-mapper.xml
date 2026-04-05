@@ -49,6 +49,7 @@
                turns_per_round, current_round, current_turn, round_winners, status, version
         FROM ai_debate_session
         WHERE room_id = #{roomId} AND status IN ('RUNNING', 'ROUND_END') AND is_deleted = 0
+        ORDER BY update_time DESC, id DESC
         LIMIT 1
     </select>
 

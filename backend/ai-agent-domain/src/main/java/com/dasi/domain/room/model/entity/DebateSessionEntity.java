@@ -1,5 +1,7 @@
 package com.dasi.domain.room.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
@@ -10,10 +12,13 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -24,6 +29,7 @@ import java.util.stream.Collectors;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DebateSessionEntity {
     /** 辩论会话业务ID (debate_xxx) */
     private String sessionId;
@@ -139,6 +145,7 @@ public class DebateSessionEntity {
     /**
      * 获取所有辩手 ID 列表 (正方 + 反方)
      */
+    @JsonIgnore
     public List<String> getAllDebaterIds() {
         List<String> all = new ArrayList<>();
         if (proClientIds != null) all.addAll(proClientIds);
@@ -167,14 +174,50 @@ public class DebateSessionEntity {
         if (allDebaters.isEmpty()) {
             return allDebaters;
         }
-        if (lastSpeakerId != null && !lastSpeakerId.isBlank() && allDebaters.size() > 1) {
-            allDebaters.remove(lastSpeakerId);
+        if (lastSpeakerId == null || lastSpeakerId.isBlank()) {
+            return allDebaters;
         }
-        return allDebaters;
+
+        String lastSpeakerSide = getSideForClient(lastSpeakerId);
+        if (lastSpeakerSide == null) {
+            return removeLastSpeaker(allDebaters, lastSpeakerId);
+        }
+
+        String targetSide = "PRO".equals(lastSpeakerSide) ? "CON" : "PRO";
+        List<String> oppositeSideMembers = new ArrayList<>(new LinkedHashSet<>(getSideMembers(targetSide)));
+        if (!oppositeSideMembers.isEmpty()) {
+            return oppositeSideMembers;
+        }
+        return removeLastSpeaker(allDebaters, lastSpeakerId);
     }
 
     public boolean validateArbitrationResult(String speakerId, String lastSpeakerId) {
         return speakerId != null && listCandidateSpeakerIds(lastSpeakerId).contains(speakerId);
+    }
+
+    public List<String> listPreferredSpeakerIds(String lastSpeakerId,
+                                                List<DebateTurnRecordVO> roundHistory,
+                                                Map<String, Integer> joinOrderMap) {
+        List<String> candidates = listCandidateSpeakerIds(lastSpeakerId);
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+
+        Set<String> spokenSpeakerIds = roundHistory == null ? Collections.emptySet() : roundHistory.stream()
+                .map(DebateTurnRecordVO::getSpeakerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, Long> speakCountMap = roundHistory == null ? Collections.emptyMap() : roundHistory.stream()
+                .filter(record -> record.getSpeakerId() != null)
+                .collect(Collectors.groupingBy(DebateTurnRecordVO::getSpeakerId, Collectors.counting()));
+
+        return candidates.stream()
+                .sorted(Comparator
+                        .comparing((String clientId) -> spokenSpeakerIds.contains(clientId) ? 1 : 0)
+                        .thenComparing(clientId -> speakCountMap.getOrDefault(clientId, 0L))
+                        .thenComparing(clientId -> joinOrderMap == null ? Integer.MAX_VALUE : joinOrderMap.getOrDefault(clientId, Integer.MAX_VALUE))
+                        .thenComparing(clientId -> clientId))
+                .collect(Collectors.toList());
     }
 
     public String nextSpeakerByRoundRobin(List<DebateTurnRecordVO> roundHistory) {
@@ -222,10 +265,12 @@ public class DebateSessionEntity {
                 .build();
     }
 
+    @JsonIgnore
     public boolean isRunning() {
         return DebateStatus.RUNNING.equals(this.status);
     }
 
+    @JsonIgnore
     public boolean isFinished() {
         return DebateStatus.FINISHED.equals(this.status);
     }
@@ -253,6 +298,18 @@ public class DebateSessionEntity {
             return members.get(0);
         }
         return members.get((currentIndex + 1) % members.size());
+    }
+
+    private List<String> removeLastSpeaker(List<String> candidates, String lastSpeakerId) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (lastSpeakerId == null || lastSpeakerId.isBlank() || candidates.size() <= 1) {
+            return candidates;
+        }
+        List<String> filtered = new ArrayList<>(candidates);
+        filtered.remove(lastSpeakerId);
+        return filtered.isEmpty() ? candidates : filtered;
     }
 
     /**

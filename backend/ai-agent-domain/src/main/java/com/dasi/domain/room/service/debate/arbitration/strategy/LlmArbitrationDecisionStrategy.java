@@ -15,6 +15,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,8 +34,8 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
 
     private static final String PROMPT_TEMPLATE =
             """
-            你现在是聊天室辩论赛的仲裁者，你的职责不是直接发言，而是决定下一位应该发言的 clientId。
-            你必须严格基于给定候选集返回 JSON，不能返回候选集之外的 clientId。
+            你现在是聊天室辩论赛的仲裁者，你的职责不是直接发言，而是只输出下一位应该发言的 clientId。
+            你必须严格遵守候选集限制，不能返回名字，不能返回候选集之外的 clientId，不能返回仲裁者自己。
 
             【辩题】
             %s
@@ -45,10 +46,25 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             【仲裁者】
             %s
 
+            【上一位发言者】
+            clientId=%s, side=%s
+
             【正方成员】
             %s
 
             【反方成员】
+            %s
+
+            【本次允许选择的候选 clientId】
+            %s
+
+            【优先推荐顺序】
+            %s
+
+            【候选人入房顺序】
+            %s
+
+            【当前轮发言统计】
             %s
 
             【当前轮历史】
@@ -57,14 +73,17 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             【最近房间消息】
             %s
 
-            【本次允许选择的候选 clientId】
-            %s
+            决策硬约束：
+            1. 只能从“本次允许选择的候选 clientId”里返回 1 个 speakerId。
+            2. speakerId 必须是 clientId，不是 clientName。
+            3. 不能返回仲裁者自己，不能返回上一位刚发言的 clientId。
+            4. 只能输出 JSON，不要输出 markdown，不要输出代码块，不要补充解释文字。
 
-            决策要求：
-            1. 只能从给定候选 clientId 中选择下一位发言者。
-            2. 优先保持辩论平衡和话题延续性。
-            3. reasoning 要简短清晰，直接说明为什么让该 clientId 发言。
-            4. 不要输出 markdown，不要解释，不要代码块。
+            决策偏好：
+            1. 优先让上一位发言者的对侧阵营回应上一条核心论点。
+            2. 在当前候选集中优先选择“优先推荐顺序”更靠前的人。
+            3. 如果你没有选择优先推荐顺序中的第一位，需要在 reasoning 中说明原因。
+            4. reasoning 保持一句话，简短清晰。
 
             只返回一个合法 JSON：
             {"speakerId":"client_xxx","reasoning":"..."}
@@ -107,11 +126,16 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
                 defaultNumber(promptContext.getCurrentTurn()),
                 defaultNumber(promptContext.getTurnsPerRound()),
                 safe(promptContext.getArbitratorClientId()),
+                safe(promptContext.getLastSpeakerClientId()),
+                safe(promptContext.getLastSpeakerSide()),
                 formatMembers(promptContext.getProMembers()),
                 formatMembers(promptContext.getConMembers()),
+                formatCandidateIds(promptContext.getCandidateSpeakerIds()),
+                formatCandidateIds(promptContext.getPreferredSpeakerIds()),
+                formatJoinOrder(promptContext.getCandidateJoinOrder()),
+                formatHistoryStats(promptContext.getSpeakerHistoryStats()),
                 formatRoundHistory(promptContext.getRoundHistory()),
-                formatRecentConversation(promptContext.getRecentConversation()),
-                promptContext.getCandidateSpeakerIds() == null ? "[]" : JSON.toJSONString(promptContext.getCandidateSpeakerIds())
+                formatRecentConversation(promptContext.getRecentConversation())
         );
     }
 
@@ -148,6 +172,18 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
                         safe(message.getSenderId()),
                         safe(message.getContent())))
                 .collect(Collectors.joining("\n"));
+    }
+
+    private String formatCandidateIds(List<String> candidateIds) {
+        return candidateIds == null || candidateIds.isEmpty() ? "[]" : JSON.toJSONString(candidateIds);
+    }
+
+    private String formatJoinOrder(Map<String, Integer> joinOrderMap) {
+        return joinOrderMap == null || joinOrderMap.isEmpty() ? "{}" : JSON.toJSONString(joinOrderMap);
+    }
+
+    private String formatHistoryStats(Map<String, Integer> historyStats) {
+        return historyStats == null || historyStats.isEmpty() ? "{}" : JSON.toJSONString(historyStats);
     }
 
     private String normalizeJson(String rawResponse) {

@@ -4,7 +4,12 @@ import com.dasi.domain.room.model.valobj.ArbitrationDecisionResultVO;
 import com.dasi.domain.room.model.valobj.ArbitrationPromptContextVO;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @Author: xerina
@@ -20,14 +25,20 @@ public class ArbitrationDecisionStrategyFactory {
     @Resource
     private RoundRobinFallbackDecisionStrategy roundRobinFallbackDecisionStrategy;
 
+    @Value("${room.debate.arbitrator-timeout-seconds:45}")
+    private long arbitratorTimeoutSeconds;
+
     public ArbitrationDecisionResultVO decide(ArbitrationPromptContextVO promptContext) {
         try {
-            ArbitrationDecisionResultVO result = llmArbitrationDecisionStrategy.decide(promptContext);
+            ArbitrationDecisionResultVO result = CompletableFuture
+                    .supplyAsync(() -> llmArbitrationDecisionStrategy.decide(promptContext))
+                    .orTimeout(arbitratorTimeoutSeconds, TimeUnit.SECONDS)
+                    .join();
             validate(promptContext, result);
             return result;
         } catch (Exception e) {
             log.warn("【辩论仲裁】LLM 决策失败，降级轮转策略：sessionId={}, reason={}",
-                    promptContext.getSessionId(), e.getMessage());
+                    promptContext.getSessionId(), unwrapMessage(e));
             return roundRobinFallbackDecisionStrategy.decide(promptContext);
         }
     }
@@ -45,5 +56,15 @@ public class ArbitrationDecisionStrategyFactory {
         if (result.getReasoning() == null || result.getReasoning().isBlank()) {
             result.setReasoning("请下一位候选辩手继续围绕当前观点展开回应。");
         }
+    }
+
+    private String unwrapMessage(Exception e) {
+        Throwable cause = e;
+        if (e instanceof CompletionException completionException && completionException.getCause() != null) {
+            cause = completionException.getCause();
+        }
+        return cause == null || cause.getMessage() == null || cause.getMessage().isBlank()
+                ? e.getClass().getSimpleName()
+                : cause.getMessage();
     }
 }

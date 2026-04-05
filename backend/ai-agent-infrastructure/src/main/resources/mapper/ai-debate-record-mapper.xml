@@ -37,7 +37,7 @@
     <select id="queryRecordsForPrompt" resultMap="dataMap">
         SELECT r.side, r.speaker_client_id, r.speaker_name, m.content
         FROM ai_debate_record r
-        LEFT JOIN ai_chat_room_message m ON r.message_id = m.message_id
+        LEFT JOIN ai_chat_room_message m ON r.message_id = m.message_id AND m.is_deleted = 0
         WHERE r.session_id = #{sessionId} AND r.round_number = #{roundNumber} AND r.is_deleted = 0
         ORDER BY r.turn_number ASC
     </select>
