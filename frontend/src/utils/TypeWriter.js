@@ -1,6 +1,6 @@
 export const DEFAULT_TYPEWRITER_SEGMENTS = [
     [
-        '你好，我是 Dasi！',
+        '你好，我是 Xerina！',
         '欢迎来到 MiniAgent 系统，',
         '快点使用我的专用智能体来处理任务吧～'
     ],

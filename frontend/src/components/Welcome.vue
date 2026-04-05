@@ -49,10 +49,10 @@ const featureCards = [
     },
     {
         key: 'room',
-        title: '群聊空间',
-        description: '进入多智能体协同空间，体验 A2A 闭环对话。',
+        title: '多智能体协作空间 (Room)',
+        description: '基于 Xerina 核心调度域，支持多智能体自动辩论、协作逻辑与流式交互。',
         cta: '立即进入',
-        route: '/room/lobby' // 默认跳转到一个大厅或者第一个房间
+        route: '/room/lobby'
     },
     {
         key: 'studio',

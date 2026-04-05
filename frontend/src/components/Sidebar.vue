@@ -1035,7 +1035,7 @@ const loadProfileResources = async () => {
                 <div
                     class="h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[15px] border border-[rgba(255,255,255,0.2)] bg-[radial-gradient(120%_120%_at_0%_0%,rgba(111,125,255,0.2),rgba(83,197,255,0.1))] transition-transform duration-200 group-hover:scale-[1.04]"
                 >
-                    <img :src="logoImg" alt="Logo" class="h-full w-full object-cover block" />
+                    <img :src="logoImg" alt="Logo" class="h-full w-full object-cover object-top block" />
                 </div>
                 <div class="flex min-w-0 flex-col gap-[4px]">
                     <div class="flex items-center gap-[8px]">
@@ -1346,7 +1346,7 @@ const loadProfileResources = async () => {
                         v-if="currentUserAvatarUrl && showSidebarAvatarImage"
                         :src="currentUserAvatarUrl"
                         alt="User Avatar"
-                        class="h-full w-full rounded-full object-cover"
+                        class="h-full w-full rounded-full object-cover object-top"
                         @error="showSidebarAvatarImage = false"
                     />
                     <span v-else>{{ avatarChar }}</span>

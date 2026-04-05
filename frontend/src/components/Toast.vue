@@ -15,11 +15,11 @@ const showSuccessMeta = (value) => {
             <div
                 v-for="toast in toasts"
                 :key="toast.id"
-                class="pointer-events-auto relative overflow-hidden rounded-[12px] border bg-[var(--surface-1)] shadow-[0_10px_24px_rgba(15,23,42,0.18)]"
+                class="pointer-events-auto relative overflow-hidden rounded-[12px] border shadow-[0_10px_24px_rgba(15,23,42,0.18)]"
                 :class="
                     toast.type === 'success'
-                        ? 'border-[rgba(34,197,94,0.3)]'
-                        : 'border-[rgba(239,68,68,0.3)]'
+                        ? 'border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.04)]'
+                        : 'border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.04)]'
                 "
             >
                 <button

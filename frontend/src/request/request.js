@@ -307,7 +307,9 @@ http.interceptors.response.use(
                     requestPath: requestMeta.requestPath
                 });
             } else if (!isAppToastExcludedPath(requestMeta.path)) {
-                notifyAppSuccess(successMessage);
+                // 如果后端返回了具体的成功信息，优先使用
+                const displayMessage = (body && body.info) || successMessage;
+                notifyAppSuccess(displayMessage);
             }
         }
 
