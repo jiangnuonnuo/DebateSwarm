@@ -23,6 +23,7 @@ import { normalizeError, notifyAppError } from '../request/request';
 import { applyStreamToken, createStreamAccumulator, parseThinkText } from '../utils/StringUtil';
 import { areMessageListsEqual, createStableRecordId, toSafeTimestamp } from '../utils/MessageRenderUtil';
 import { useAgentStore, useChatStore, useSettingsStore, useWelcomeLaunchStore } from '../router/pinia';
+import CompanionPet from './CompanionPet.vue';
 import Footer from './Footer.vue';
 
 const router = useRouter();
@@ -261,6 +262,22 @@ const messages = computed(() => chatStore.currentMessages);
 const currentChatSessionId = computed(() => chatStore.currentChat?.sessionId || '');
 const sending = computed(() => chatStore.sending);
 const userMessageCount = computed(() => messages.value.filter((item) => item.role === 'user').length);
+const currentChatTitle = computed(() => chatStore.currentChat?.title || '对话舞台');
+const currentRagLabel = computed(() => ragTags.value.find((item) => item.value === currentRagTag.value)?.label || '不使用知识库');
+const uploadTagLabel = computed(() => ragTags.value.find((item) => item.value === uploadForm.selectedTag)?.label || '选择标签');
+const chatLimitReached = computed(() => userMessageCount.value >= 20);
+const currentChatSubtitle = computed(() => {
+    if (sending.value) {
+        return '回答正在生成中，你仍然可以在右侧调整知识库和工具装配。';
+    }
+    if (messageLoading.value) {
+        return '正在同步当前会话消息，让上下文保持最新。';
+    }
+    if (!messages.value.length) {
+        return '先在右侧完成 CLIENT、工具和知识库装配，再开始这次对话。';
+    }
+    return `当前会话共 ${messages.value.length} 条消息，用户已发送 ${userMessageCount.value} 条。`;
+});
 
 const handleScroll = () => {
     const el = messageScrollRef.value;
@@ -1257,284 +1274,333 @@ const handleUpload = async () => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[var(--header-height)_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
-        <header
-            class="sticky top-0 z-10 h-[var(--header-height)] border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.56)] backdrop-blur-[18px]"
-        >
-            <div
-                class="flex h-full w-full items-center justify-between gap-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))] max-[720px]:pl-[8px] max-[720px]:pr-[calc(8px+var(--scrollbar-w))]"
-            >
-                <div class="flex items-center gap-[14px]">
-                    <div class="hidden min-[980px]:block">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Chat Workspace</div>
-                        <div class="mt-[4px] text-[18px] font-bold text-[var(--text-primary)]">对话舞台</div>
+    <section class="grid h-screen grid-rows-[auto_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
+        <header class="sticky top-0 z-10 border-b border-[rgba(148,163,184,0.14)] bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(241,247,255,0.84))] backdrop-blur-[18px]">
+            <div class="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-[18px] px-[24px] py-[20px] max-[960px]:flex-col max-[720px]:px-[12px]">
+                <div class="min-w-0 flex-1">
+                    <div class="section-kicker">Chat Workspace</div>
+                    <div class="mt-[10px] text-[clamp(28px,3vw,38px)] font-bold leading-[1.02] text-[var(--text-primary)]">{{ currentChatTitle }}</div>
+                    <div class="mt-[10px] max-w-[760px] text-[14px] leading-[1.8] text-[var(--text-secondary)]">
+                        {{ currentChatSubtitle }}
                     </div>
-                    <div class="flex items-center gap-[14px] font-semibold">
-                        <label class="w-[36px] text-[14px] text-[var(--text-secondary)] text-right">CLIENT</label>
-                        <div class="relative min-w-[200px]">
-                            <div
-                                ref="modelSelectRef"
-                                class="inline-flex min-h-[36px] w-full items-center justify-between gap-[10px] rounded-[12px] border border-[var(--border-color)] bg-white px-[12px] py-[8px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]"
-                                :class="models.length === 0 || isClientLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
-                                @click="toggleModelDropdown"
-                            >
-                                <span class="inline-flex items-center gap-[8px]">
-                                    <span class="font-bold text-[var(--text-primary)]">{{ currentModelLabel }}</span>
-                                    <span
-                                        v-if="isClientLocked"
-                                        class="rounded-full border border-[rgba(148,163,184,0.22)] bg-[rgba(241,245,249,0.95)] px-[8px] py-[2px] text-[11px] font-semibold text-[var(--text-secondary)]"
-                                    >
-                                        已锁定
-                                    </span>
-                                </span>
-                                <span
-                                    class="caret transition-transform duration-150"
-                                    :class="modelDropdownOpen ? 'caret-open' : 'caret-closed'"
-                                />
-                            </div>
-                            <div
-                                v-if="modelDropdownOpen && models.length > 0"
-                                class="absolute left-0 top-[calc(100%+6px)] z-[15] w-full rounded-[12px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_18px_40px_rgba(15,23,42,0.12)] max-h-[240px] overflow-y-auto"
-                            >
-                                <div
-                                    v-for="item in models"
-                                    :key="item.value"
-                                    class="flex cursor-pointer items-center justify-between rounded-[10px] px-[12px] py-[10px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                    :class="item.value === currentModel ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                    @click.stop="selectModel(item.value)"
-                                >
-                                    <span>{{ item.label }}</span>
-                                    <span v-if="item.value === currentModel" class="text-[13px]">✓</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-[6px] font-semibold">
-                        <label class="w-[36px] text-[14px] text-[var(--text-secondary)] text-right">MCP</label>
-                        <div class="relative min-w-[200px]">
-                            <div
-                                ref="mcpSelectRef"
-                                class="inline-flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-[10px] rounded-[12px] border border-[var(--border-color)] bg-white px-[12px] py-[8px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]"
-                                @click="toggleMcpDropdown"
-                            >
-                                <span class="font-bold text-[var(--text-primary)]">{{ currentMcpLabel }}</span>
-                                <span
-                                    class="caret transition-transform duration-150"
-                                    :class="mcpDropdownOpen ? 'caret-open' : 'caret-closed'"
-                                />
-                            </div>
-                            <div
-                                v-if="mcpDropdownOpen"
-                                class="absolute left-0 top-[calc(100%+6px)] z-[15] w-full rounded-[12px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_18px_40px_rgba(15,23,42,0.12)] max-h-[240px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                                @click.stop
-                            >
-                                <div
-                                    v-if="mcpTools.length === 0"
-                                    class="flex items-center justify-between rounded-[10px] px-[12px] py-[10px] text-[var(--text-secondary)]"
-                                >
-                                    <span>暂无工具</span>
-                                </div>
-                                <div
-                                    v-for="item in mcpTools"
-                                    :key="item.value"
-                                    class="flex cursor-pointer items-center justify-between rounded-[10px] px-[12px] py-[10px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                    :class="selectedMcpIds.includes(item.value) ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                    @click.stop="toggleMcpSelection(item.value)"
-                                >
-                                    <span>{{ item.label }}</span>
-                                    <span v-if="selectedMcpIds.includes(item.value)" class="text-[13px]">✓</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-[6px] font-semibold">
-                        <label class="w-[36px] text-[14px] text-[var(--text-secondary)] text-right">RAG</label>
-                        <div class="relative min-w-[200px]">
-                            <div
-                                ref="ragSelectRef"
-                                class="inline-flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-[10px] rounded-[12px] border border-[var(--border-color)] bg-white px-[12px] py-[8px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]"
-                                @click="toggleRagDropdown"
-                            >
-                                <span class="font-bold text-[var(--text-primary)]">
-                                    {{ ragTags.find((t) => t.value === currentRagTag)?.label || '不使用知识库' }}
-                                </span>
-                                <span
-                                    class="caret transition-transform duration-150"
-                                    :class="ragDropdownOpen ? 'caret-open' : 'caret-closed'"
-                                />
-                            </div>
-                            <div
-                                v-if="ragDropdownOpen"
-                                class="absolute left-0 top-[calc(100%+6px)] z-[15] w-full rounded-[12px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_18px_40px_rgba(15,23,42,0.12)] max-h-[240px] overflow-y-auto"
-                            >
-                                <div
-                                    v-for="item in ragTags"
-                                    :key="item.value || 'empty'"
-                                    class="flex cursor-pointer items-center justify-between rounded-[10px] px-[12px] py-[10px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                    :class="item.value === currentRagTag ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                    @click.stop="selectRag(item.value)"
-                                >
-                                    <span>{{ item.label }}</span>
-                                    <span v-if="item.value === currentRagTag" class="text-[13px]">✓</span>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="mt-[14px] flex flex-wrap gap-[8px]">
+                        <span class="conversation-pill">
+                            <span>CLIENT</span>
+                            <strong>{{ currentModelLabel }}</strong>
+                        </span>
+                        <span class="conversation-pill">
+                            <span>MCP</span>
+                            <strong>{{ currentMcpLabel }}</strong>
+                        </span>
+                        <span class="conversation-pill">
+                            <span>RAG</span>
+                            <strong>{{ currentRagLabel }}</strong>
+                        </span>
                     </div>
                 </div>
-
-                <div class="flex justify-end gap-[10px] max-[720px]:flex-wrap">
-                    <button
-                        class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] font-bold leading-[1.1] text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc]"
-                        type="button"
-                        @click="openUpload"
-                    >
-                        上传知识库
-                    </button>
-                    <button
-                        class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95"
-                        type="button"
-                        @click="openSettings"
-                    >
-                        回答设置
-                    </button>
+                <div class="flex items-start gap-[12px] max-[960px]:w-full max-[960px]:justify-between">
+                    <CompanionPet label="chat" />
+                    <div class="flex flex-wrap justify-end gap-[10px]">
+                        <button
+                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[rgba(148,163,184,0.16)] bg-white/90 px-[16px] py-[10px] text-[14px] font-semibold text-[var(--text-primary)] transition-all duration-200 hover:border-[rgba(47,124,246,0.22)] hover:bg-white"
+                            type="button"
+                            @click="openUpload"
+                        >
+                            上传知识库
+                        </button>
+                        <button
+                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[16px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95"
+                            type="button"
+                            @click="openSettings"
+                        >
+                            回答设置
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>
 
         <div class="overflow-hidden bg-[var(--bg-page)]">
-            <div
-                ref="messageScrollRef"
-                class="h-full overflow-y-auto bg-[var(--bg-page)] py-[16px] scroll-smooth [scrollbar-gutter:auto]"
-                @scroll="handleScroll"
-            >
-                <div class="mx-auto w-full max-w-[980px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-                    <div class="page-hero mb-[14px] flex items-start justify-between gap-[14px] px-[18px] py-[16px] max-[900px]:flex-col">
-                        <div>
-                            <div class="section-kicker">Conversation</div>
-                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">在一个上下文里完成模型、工具与知识库协同</div>
-                            <div class="mt-[8px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">保留原有接口与功能，只把对话工作区整理得更清晰。你可以在顶部快速切换 CLIENT / MCP / RAG，输入区和消息区共用同一套视觉语言。</div>
-                        </div>
-                        <div class="flex flex-wrap gap-[8px]">
-                            <span class="toolbar-chip">CLIENT {{ currentModelLabel }}</span>
-                            <span class="toolbar-chip">MCP {{ currentMcpLabel }}</span>
-                            <span class="toolbar-chip">RAG {{ ragTags.find((t) => t.value === currentRagTag)?.label || '不使用知识库' }}</span>
-                        </div>
-                    </div>
-                    <div class="panel-surface flex min-h-full w-full flex-col gap-[14px] px-[18px] py-[18px]">
-                        <div v-if="messageLoading" class="text-[12px] text-[var(--text-secondary)]">加载会话消息中...</div>
-                        <div
-                            v-if="!messageLoading && messages.length === 0"
-                            class="empty-state py-[60px] text-[15px]"
-                        >
-                            当前会话暂无消息
-                        </div>
-                        <div
-                            v-for="message in messages"
-                            :key="message.id"
-                            class="flex w-full"
-                            :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-                        >
-                            <div class="flex max-w-full min-w-0 flex-col gap-[6px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
-                                <div
-                                    class="relative w-full max-w-[720px] overflow-hidden rounded-[14px] px-[14px] py-[12px] shadow-[0_12px_30px_rgba(27,36,55,0.08)] border"
-                                    :class="[
-                                        message.error
-                                            ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
-                                            : message.role === 'user'
-                                                ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
-                                                : 'bg-white border-[var(--border-color)]',
-                                        message.pending ? 'border-dashed' : 'border-solid'
-                                    ]"
-                                >
+            <div class="mx-auto grid h-full max-w-[1440px] grid-cols-[minmax(0,1fr)_340px] gap-[18px] px-[24px] py-[18px] max-[1279px]:grid-cols-1 max-[720px]:px-[12px]">
+                <div class="panel-surface flex min-h-0 flex-col overflow-hidden rounded-[30px]">
+                    <div
+                        ref="messageScrollRef"
+                        class="flex-1 overflow-y-auto px-[24px] py-[24px] scroll-smooth [scrollbar-gutter:auto] max-[720px]:px-[14px]"
+                        @scroll="handleScroll"
+                    >
+                        <div class="mx-auto flex w-full max-w-[1120px] flex-col gap-[18px]">
+                            <div v-if="messageLoading" class="notice-inline">加载会话消息中...</div>
+                            <div v-else-if="messages.length === 0" class="empty-state min-h-[360px] text-[15px]">
+                                这里还没有消息。先在右侧完成装配，然后开始一次更完整的对话。
+                            </div>
+                            <div
+                                v-for="message in messages"
+                                :key="message.id"
+                                class="flex w-full"
+                                :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+                            >
+                                <div class="flex max-w-[96%] gap-[12px]" :class="message.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
                                     <div
-                                        v-if="message.pending && message.role === 'assistant' && !message.content"
-                                        class="inline-flex items-center gap-[8px]"
+                                        class="hidden h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[16px] border text-[13px] font-bold shadow-[0_10px_20px_rgba(15,23,42,0.08)] sm:flex"
+                                        :class="
+                                            message.role === 'user'
+                                                ? 'border-[rgba(47,124,246,0.2)] bg-[var(--bubble-user-bg)] text-[var(--accent-color)]'
+                                                : 'border-[rgba(148,163,184,0.16)] bg-white text-[var(--text-primary)]'
+                                        "
                                     >
-                                        <div class="inline-flex items-center gap-[4px]">
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
+                                        {{ message.role === 'user' ? 'YOU' : 'AI' }}
+                                    </div>
+                                    <div class="flex min-w-0 max-w-[860px] flex-col gap-[8px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
+                                        <div class="flex items-center gap-[8px] px-[4px] text-[12px] font-semibold text-[var(--text-secondary)]">
+                                            <span>{{ message.role === 'user' ? '你的提问' : '模型回答' }}</span>
+                                            <span v-if="message.pending" class="rounded-full bg-[rgba(47,124,246,0.08)] px-[8px] py-[2px] text-[11px] text-[var(--accent-color)]">进行中</span>
+                                            <span v-if="message.error" class="rounded-full bg-[rgba(148,163,184,0.14)] px-[8px] py-[2px] text-[11px] text-[var(--notice-text)]">未完成</span>
                                         </div>
-                                        <div class="text-[13px] text-[var(--text-secondary)]">思考中</div>
-                                    </div>
-                                    <div
-                                        v-else-if="message.role === 'user' || message.pending"
-                                        class="whitespace-pre-wrap break-all leading-[1.6] [overflow-wrap:anywhere]"
-                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                    >
-                                        {{ getContent(message) }}
-                                    </div>
-                                    <div
-                                        v-else
-                                        class="markdown-body break-words leading-[1.6] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[10px] [&_pre]:bg-[#0f172a] [&_pre]:p-[12px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
-                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                        v-html="renderMarkdown(getContent(message))"
-                                    ></div>
-                                </div>
-                                <div
-                                    class="relative flex items-center gap-[6px]"
-                                    :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-                                >
-                                    <button
-                                        type="button"
-                                        class="flex h-[22px] w-[22px] items-center justify-center rounded-[6px] border border-[rgba(15,23,42,0.1)] bg-white text-[var(--text-secondary)] shadow-[0_6px_16px_rgba(15,23,42,0.12)] transition-colors duration-150 hover:text-[var(--accent-color)] disabled:cursor-not-allowed disabled:opacity-60"
-                                        :disabled="!getContent(message)"
-                                        aria-label="复制"
-                                        @click.stop="handleCopy(message)"
-                                    >
-                                        <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
-                                            <path d="M8 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
-                                            <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                        </svg>
-                                    </button>
-                                    <div
-                                        v-if="copiedMessageId === message.id"
-                                        class="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[6px] border border-[rgba(15,23,42,0.1)] bg-white px-[8px] py-[4px] text-[12px] text-[var(--text-secondary)] shadow-[0_8px_20px_rgba(15,23,42,0.12)]"
-                                        :class="message.role === 'user' ? 'right-[30px]' : 'left-[30px]'"
-                                    >
-                                        已复制
+                                        <div
+                                            class="relative w-full overflow-hidden rounded-[24px] border px-[18px] py-[16px] shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+                                            :class="[
+                                                message.error
+                                                    ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
+                                                    : message.role === 'user'
+                                                        ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
+                                                        : 'bg-white/95 border-[rgba(148,163,184,0.16)]',
+                                                message.pending ? 'border-dashed' : 'border-solid'
+                                            ]"
+                                        >
+                                            <div
+                                                v-if="message.pending && message.role === 'assistant' && !message.content"
+                                                class="inline-flex items-center gap-[8px]"
+                                            >
+                                                <div class="inline-flex items-center gap-[4px]">
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
+                                                </div>
+                                                <div class="text-[13px] text-[var(--text-secondary)]">思考中</div>
+                                            </div>
+                                            <div
+                                                v-else-if="message.role === 'user' || message.pending"
+                                                class="whitespace-pre-wrap break-all text-[15px] leading-[1.8] [overflow-wrap:anywhere]"
+                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                            >
+                                                {{ getContent(message) }}
+                                            </div>
+                                            <div
+                                                v-else
+                                                class="markdown-body break-words text-[15px] leading-[1.8] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[14px] [&_pre]:bg-[#0f172a] [&_pre]:p-[14px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
+                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                                v-html="renderMarkdown(getContent(message))"
+                                            ></div>
+                                        </div>
+                                        <div class="relative flex items-center gap-[6px]" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+                                            <button
+                                                type="button"
+                                                class="flex h-[28px] w-[28px] items-center justify-center rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white text-[var(--text-secondary)] shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-colors duration-150 hover:text-[var(--accent-color)] disabled:cursor-not-allowed disabled:opacity-60"
+                                                :disabled="!getContent(message)"
+                                                aria-label="复制"
+                                                @click.stop="handleCopy(message)"
+                                            >
+                                                <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                    <path d="M8 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
+                                                    <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                                </svg>
+                                            </button>
+                                            <div
+                                                v-if="copiedMessageId === message.id"
+                                                class="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white px-[10px] py-[6px] text-[12px] text-[var(--text-secondary)] shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                                                :class="message.role === 'user' ? 'right-[38px]' : 'left-[38px]'"
+                                            >
+                                                已复制
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <aside class="panel-surface flex min-h-0 flex-col overflow-visible rounded-[30px]">
+                    <div class="flex-1 overflow-y-auto px-[18px] py-[18px]">
+                        <div class="space-y-[14px]">
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">模型装配</div>
+                                <div class="conversation-side-subtitle">CLIENT 决定当前回答的来源。开始发送后，当前会话会锁定已选模型。</div>
+                                <div class="mt-[14px] space-y-[10px]">
+                                    <div class="relative">
+                                        <button
+                                            ref="modelSelectRef"
+                                            type="button"
+                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all"
+                                            :class="models.length === 0 || isClientLocked ? 'cursor-not-allowed opacity-70' : 'hover:border-[rgba(47,124,246,0.22)]'"
+                                            @click="toggleModelDropdown"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Client</span>
+                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentModelLabel }}</span>
+                                            </span>
+                                            <span class="caret transition-transform duration-150" :class="modelDropdownOpen ? 'caret-open' : 'caret-closed'" />
+                                        </button>
+                                        <div
+                                            v-if="modelDropdownOpen && models.length > 0"
+                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)]"
+                                        >
+                                            <div
+                                                v-for="item in models"
+                                                :key="item.value"
+                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
+                                                :class="item.value === currentModel ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
+                                                @click.stop="selectModel(item.value)"
+                                            >
+                                                <span class="truncate">{{ item.label }}</span>
+                                                <span v-if="item.value === currentModel" class="text-[13px]">✓</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-if="isClientLocked" class="notice-inline text-[12px]">
+                                        该会话已开始发送消息，当前 CLIENT 已锁定。
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">工具与知识</div>
+                                <div class="conversation-side-subtitle">让工具、知识库和上传入口都回到一个右侧舱里，顶部不再堆满选择器。</div>
+                                <div class="mt-[14px] space-y-[10px]">
+                                    <div class="relative">
+                                        <button
+                                            ref="mcpSelectRef"
+                                            type="button"
+                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all hover:border-[rgba(47,124,246,0.22)]"
+                                            @click="toggleMcpDropdown"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">MCP</span>
+                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentMcpLabel }}</span>
+                                            </span>
+                                            <span class="caret transition-transform duration-150" :class="mcpDropdownOpen ? 'caret-open' : 'caret-closed'" />
+                                        </button>
+                                        <div
+                                            v-if="mcpDropdownOpen"
+                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
+                                            @click.stop
+                                        >
+                                            <div
+                                                v-if="mcpTools.length === 0"
+                                                class="rounded-[12px] px-[12px] py-[11px] text-[13px] text-[var(--text-secondary)]"
+                                            >
+                                                暂无工具
+                                            </div>
+                                            <div
+                                                v-for="item in mcpTools"
+                                                :key="item.value"
+                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
+                                                :class="selectedMcpIds.includes(item.value) ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
+                                                @click.stop="toggleMcpSelection(item.value)"
+                                            >
+                                                <span class="truncate">{{ item.label }}</span>
+                                                <span v-if="selectedMcpIds.includes(item.value)" class="text-[13px]">✓</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="relative">
+                                        <button
+                                            ref="ragSelectRef"
+                                            type="button"
+                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all hover:border-[rgba(47,124,246,0.22)]"
+                                            @click="toggleRagDropdown"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Knowledge</span>
+                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentRagLabel }}</span>
+                                            </span>
+                                            <span class="caret transition-transform duration-150" :class="ragDropdownOpen ? 'caret-open' : 'caret-closed'" />
+                                        </button>
+                                        <div
+                                            v-if="ragDropdownOpen"
+                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
+                                        >
+                                            <div
+                                                v-for="item in ragTags"
+                                                :key="item.value || 'empty'"
+                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
+                                                :class="item.value === currentRagTag ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
+                                                @click.stop="selectRag(item.value)"
+                                            >
+                                                <span class="truncate">{{ item.label }}</span>
+                                                <span v-if="item.value === currentRagTag" class="text-[13px]">✓</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">当前状态</div>
+                                <div class="conversation-side-subtitle">这里不再用警报式红框，而是用更中性的说明来表达当前上下文。</div>
+                                <div class="mt-[14px] grid gap-[10px]">
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Messages</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ messages.length }} 条</div>
+                                    </div>
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User Turns</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ userMessageCount }}/20</div>
+                                    </div>
+                                    <div v-if="!currentModel" class="notice-inline text-[12px]">
+                                        还没有选择 CLIENT，发送前请先完成模型装配。
+                                    </div>
+                                    <div v-else-if="!isAtBottom" class="notice-inline text-[12px]">
+                                        当前不在消息底部，继续滚动可查看最新回答。
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
 
         <div class="bg-[var(--bg-page)]">
-            <div class="mx-auto flex w-full max-w-[980px] flex-col gap-0 py-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-                <div class="panel-surface flex flex-col gap-[10px] rounded-[24px] p-[14px]">
+            <div class="mx-auto flex w-full max-w-[1440px] flex-col gap-0 px-[24px] pb-[12px] max-[720px]:px-[12px]">
+                <div class="panel-surface flex flex-col gap-[12px] rounded-[30px] p-[16px]">
                     <textarea
                         v-model="inputValue"
-                        class="w-full resize-none rounded-[16px] border border-[var(--border-color)] bg-white px-[14px] py-[12px] text-[14px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] disabled:bg-[#f4f6fb]"
-                        rows="3"
+                        class="conversation-textarea min-h-[120px] disabled:bg-[#f4f6fb]"
+                        rows="4"
                         placeholder="输入问题，Enter 发送，Shift+Enter 换行"
                         :disabled="sending"
                         @keydown="handleKeydown"
                     ></textarea>
-                    <div v-if="sendError" class="notice-inline text-[12px]">
+                    <div v-if="sendError" class="notice-inline text-[13px]">
                         {{ sendError }}
                     </div>
-                    <div class="flex justify-end gap-[10px]">
-                        <button
-                            class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] font-bold leading-[1.1] text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            :disabled="!sending"
-                            @click="handleStop"
-                        >
-                            停止生成
-                        </button>
-                        <button
-                            class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            :disabled="sending || !inputValue.trim() || userMessageCount >= 20"
-                            @click="sendMessage"
-                        >
-                            {{ sending ? '生成中…' : '发送' }}
-                        </button>
+                    <div v-else-if="chatLimitReached" class="notice-inline text-[13px]">
+                        当前会话已达到 20 条用户消息上限，请新建会话继续。
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-[12px]">
+                        <div class="text-[12px] leading-[1.7] text-[var(--text-secondary)]">
+                            Enter 发送，Shift+Enter 换行。右侧仍可继续切换工具和知识库。
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-[10px]">
+                            <button
+                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[rgba(148,163,184,0.18)] bg-white px-[16px] py-[10px] text-[14px] font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70"
+                                type="button"
+                                :disabled="!sending"
+                                @click="handleStop"
+                            >
+                                停止生成
+                            </button>
+                            <button
+                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[18px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                                type="button"
+                                :disabled="sending || !inputValue.trim() || chatLimitReached"
+                                @click="sendMessage"
+                            >
+                                {{ sending ? '生成中…' : '发送' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1671,7 +1737,7 @@ const handleUpload = async () => {
                                     @click.stop="toggleUploadRagDropdown"
                                 >
                                     <span class="font-bold text-[var(--text-primary)]">
-                                        {{ ragTags.find((t) => t.value === uploadForm.selectedTag)?.label || '选择标签' }}
+                                        {{ uploadTagLabel }}
                                     </span>
                                     <span
                                         class="text-[var(--text-secondary)] transition-transform duration-200"

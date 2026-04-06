@@ -19,6 +19,7 @@ import { formatMcpJson } from '../utils/StringUtil';
 import { areCardListsEqual, areMessageListsEqual, createStableRecordId, toSafeTimestamp } from '../utils/MessageRenderUtil';
 import { useAgentSettingsStore, useAgentStore, useChatStore, useSettingsStore, useWelcomeLaunchStore } from '../router/pinia';
 import { getStrategyTone } from '../utils/StrategyTone';
+import CompanionPet from './CompanionPet.vue';
 import Footer from './Footer.vue';
 
 const router = useRouter();
@@ -301,6 +302,20 @@ const messages = computed(() => agentStore.currentMessages);
 const cards = computed(() => agentStore.currentCards);
 const sending = computed(() => agentStore.sending);
 const userMessageCount = computed(() => messages.value.filter((item) => item.role === 'user').length);
+const workLimitReached = computed(() => userMessageCount.value >= 3);
+const currentSessionTitle = computed(() => agentStore.currentSession?.title || '智能体工作台');
+const workSubtitle = computed(() => {
+    if (sending.value) {
+        return '执行过程与最终回答正在联动刷新，右侧仍可查看当前智能体与参数设置。';
+    }
+    if (messageLoading.value) {
+        return '正在同步当前会话的执行卡片和回答内容。';
+    }
+    if (!cards.value.length && !messages.value.length) {
+        return '先在右侧选择 MiniAgent，再发起一次任务，让过程卡片和结果面板一起工作。';
+    }
+    return `当前会话包含 ${cards.value.length} 张执行卡片，已累计 ${messages.value.length} 条回答记录。`;
+});
 
 const handleLeftScroll = () => {
     const el = leftScrollRef.value;
@@ -796,255 +811,298 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[var(--header-height)_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
-        <header
-            class="sticky top-0 z-10 h-[var(--header-height)] border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.56)] backdrop-blur-[18px]"
-        >
-            <div
-                class="flex h-full w-full items-center justify-between gap-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))] max-[720px]:pl-[8px] max-[720px]:pr-[calc(8px+var(--scrollbar-w))]"
-            >
-                <div class="flex items-center gap-[14px]">
-                    <div class="hidden min-[980px]:block">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Work Workspace</div>
-                        <div class="mt-[4px] text-[18px] font-bold text-[var(--text-primary)]">执行与回答联动</div>
+    <section class="grid h-screen grid-rows-[auto_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
+        <header class="sticky top-0 z-10 border-b border-[rgba(148,163,184,0.14)] bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(241,247,255,0.84))] backdrop-blur-[18px]">
+            <div class="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-[18px] px-[24px] py-[20px] max-[960px]:flex-col max-[720px]:px-[12px]">
+                <div class="min-w-0 flex-1">
+                    <div class="section-kicker">Work Workspace</div>
+                    <div class="mt-[10px] text-[clamp(28px,3vw,38px)] font-bold leading-[1.02] text-[var(--text-primary)]">{{ currentSessionTitle }}</div>
+                    <div class="mt-[10px] max-w-[780px] text-[14px] leading-[1.8] text-[var(--text-secondary)]">
+                        {{ workSubtitle }}
                     </div>
-                    <div class="flex items-center gap-[14px] font-semibold">
-                        <label class="w-[72px] text-[14px] text-[var(--text-secondary)] text-right">MiniAgent</label>
-                        <div class="relative min-w-[220px]">
-                            <div
-                                ref="agentSelectRef"
-                                class="inline-flex min-h-[36px] w-full items-center justify-between gap-[10px] rounded-[12px] border border-[var(--border-color)] bg-white px-[12px] py-[8px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]"
-                                :class="agentOptions.length === 0 || isAgentLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'"
-                                @click="toggleAgentDropdown"
-                            >
-                                <span class="inline-flex items-center gap-[8px]">
-                                    <span class="font-bold text-[var(--text-primary)]">{{ currentAgentLabel }}</span>
-                                    <span
-                                        v-if="isAgentLocked"
-                                        class="rounded-full border border-[rgba(148,163,184,0.22)] bg-[rgba(241,245,249,0.95)] px-[8px] py-[2px] text-[11px] font-semibold text-[var(--text-secondary)]"
-                                    >
-                                        已锁定
-                                    </span>
-                                </span>
-                                <span
-                                    class="caret transition-transform duration-150"
-                                    :class="agentDropdownOpen ? 'caret-open' : 'caret-closed'"
-                                />
-                            </div>
-                            <div
-                                v-if="agentDropdownOpen && agentOptions.length > 0"
-                                class="absolute left-0 top-[calc(100%+6px)] z-[15] w-full rounded-[12px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_18px_40px_rgba(15,23,42,0.12)] max-h-[240px] overflow-y-auto"
-                            >
-                                <div
-                                    v-for="item in agentOptions"
-                                    :key="item.value"
-                                    class="flex cursor-pointer items-center justify-between rounded-[10px] px-[12px] py-[10px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                    :class="item.value === currentAgentId ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                    @click.stop="selectAgent(item.value)"
-                                >
-                                    <span>{{ item.label }}</span>
-                                    <span v-if="item.value === currentAgentId" class="text-[13px]">✓</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div v-if="currentAgentTypeLabel" class="inline-flex items-center gap-[8px]">
-                            <span
-                                class="inline-flex h-[28px] items-center rounded-full border px-[12px] text-[12px] font-bold uppercase tracking-[0.08em]"
-                                :style="{
-                                    borderColor: currentAgentTone.badgeBorder,
-                                    backgroundColor: currentAgentTone.badgeBg,
-                                    color: currentAgentTone.badgeText
-                                }"
-                            >
-                                {{ currentAgentTypeLabel }}
-                            </span>
-                            <div class="group relative inline-flex items-center">
-                                <button
-                                    type="button"
-                                    class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-[rgba(148,163,184,0.55)] bg-[rgba(148,163,184,0.14)] text-[12px] font-bold text-[#94a3b8] transition-colors duration-150 hover:border-[rgba(148,163,184,0.78)] hover:bg-[rgba(148,163,184,0.2)]"
-                                    aria-label="查看智能体描述"
-                                >
-                                    ?
-                                </button>
-                                <div
-                                    class="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[20] w-[260px] -translate-x-1/2 rounded-[10px] border border-[var(--border-color)] bg-[var(--surface-1)] px-[10px] py-[8px] text-[12px] leading-[1.5] text-[var(--text-secondary)] opacity-0 shadow-[0_12px_30px_rgba(15,23,42,0.12)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-                                >
-                                    {{ currentAgentDesc }}
-                                </div>
-                            </div>
-                        </div>
+                    <div class="mt-[14px] flex flex-wrap gap-[8px]">
+                        <span class="conversation-pill">
+                            <span>MiniAgent</span>
+                            <strong>{{ currentAgentLabel }}</strong>
+                        </span>
+                        <span v-if="currentAgentTypeLabel" class="conversation-pill">
+                            <span>Strategy</span>
+                            <strong>{{ currentAgentTypeLabel }}</strong>
+                        </span>
                     </div>
                 </div>
-
-                <div class="flex justify-end gap-[10px] max-[720px]:flex-wrap">
-                    <button
-                        class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95"
-                        type="button"
-                        @click="openSettings"
-                    >
-                        回答设置
-                    </button>
+                <div class="flex items-start gap-[12px] max-[960px]:w-full max-[960px]:justify-between">
+                    <CompanionPet label="work" />
+                    <div class="flex flex-wrap justify-end gap-[10px]">
+                        <button
+                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[16px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95"
+                            type="button"
+                            @click="openSettings"
+                        >
+                            回答设置
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>
 
         <div class="overflow-hidden bg-[var(--bg-page)]">
-            <div class="mx-auto h-full max-w-[1220px] px-[24px] py-[16px] pr-[calc(24px+var(--scrollbar-w))] max-[720px]:px-[12px] max-[720px]:pr-[calc(12px+var(--scrollbar-w))]">
-                <div class="page-hero mb-[14px] flex items-start justify-between gap-[14px] px-[18px] py-[16px] max-[900px]:flex-col">
-                    <div>
-                        <div class="section-kicker">Execution Stage</div>
-                        <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">执行过程和最终回答放在同一工作面</div>
-                        <div class="mt-[8px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">左侧追踪过程卡片，右侧查看最终回答。布局仍兼容原逻辑，但不再是生硬分裂的双白板。</div>
-                    </div>
-                    <div class="flex flex-wrap gap-[8px]">
-                        <span class="toolbar-chip">MiniAgent {{ currentAgentLabel }}</span>
-                        <span v-if="currentAgentTypeLabel" class="toolbar-chip">{{ currentAgentTypeLabel }}</span>
-                    </div>
-                </div>
-                <div class="panel-surface grid h-[calc(100%-104px)] grid-cols-[1fr_auto_1fr] gap-0 overflow-hidden max-[980px]:h-full">
-                <div
-                    ref="leftScrollRef"
-                    class="flex h-full flex-col overflow-y-auto py-[16px] pl-[24px] pr-[12px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                    @scroll="handleLeftScroll"
-                >
-                    <div class="flex flex-1 flex-col gap-[12px]">
-                        <div v-if="messageLoading" class="text-[12px] text-[var(--text-secondary)]">
-                            加载会话消息中...
-                        </div>
+            <div class="mx-auto grid h-full max-w-[1440px] grid-cols-[minmax(0,1fr)_320px] gap-[18px] px-[24px] py-[18px] max-[1279px]:grid-cols-1 max-[720px]:px-[12px]">
+                <div class="panel-surface flex min-h-0 flex-col overflow-hidden rounded-[30px]">
+                    <div class="grid min-h-0 flex-1 grid-cols-[1.08fr_0.92fr] max-[1080px]:grid-cols-1">
                         <div
-                            v-for="card in cards"
-                            :key="card.id"
-                            class="rounded-[14px] border border-[var(--border-color)] bg-white px-[14px] py-[12px] shadow-[0_12px_30px_rgba(27,36,55,0.08)]"
+                            ref="leftScrollRef"
+                            class="flex min-h-0 flex-col overflow-y-auto px-[24px] py-[20px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-[720px]:px-[14px]"
+                            @scroll="handleLeftScroll"
                         >
-                            <div class="mb-[8px] flex flex-wrap gap-[6px]">
-                                <span class="rounded-full border border-[rgba(47,124,246,0.3)] bg-[rgba(47,124,246,0.08)] px-[10px] py-[2px] text-[12px] font-semibold text-[var(--accent-color)]">
-                                    {{ card.clientType || '-' }}
-                                </span>
-                                <span class="rounded-full border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#10b981]">
-                                    {{ card.sectionType || '-' }}
-                                </span>
-                                <span
-                                    v-if="card.round !== null && card.round !== undefined"
-                                    class="rounded-full border border-[rgba(139,92,246,0.3)] bg-[rgba(139,92,246,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#8b5cf6]"
-                                >
-                                    round: {{ card.round }}
-                                </span>
-                                <span
-                                    v-if="isReactAgent && card.pace !== null && card.pace !== undefined"
-                                    class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
-                                >
-                                    pace: {{ card.pace }}
-                                </span>
-                                <span
-                                    v-if="!isReactAgent && card.step !== null && card.step !== undefined"
-                                    class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
-                                >
-                                    step: {{ card.step }}
-                                </span>
+                            <div class="mb-[14px] flex items-center justify-between gap-[12px]">
+                                <div>
+                                    <div class="section-kicker">Process Lane</div>
+                                    <div class="mt-[6px] text-[20px] font-bold text-[var(--text-primary)]">执行时间轴</div>
+                                </div>
+                                <span class="conversation-pill"><span>Cards</span><strong>{{ cards.length }}</strong></span>
                             </div>
-                            <div class="whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-[14px] leading-[1.6] text-[var(--text-primary)]">
-                                {{ getCardContent(card) }}
-                            </div>
-                        </div>
-                        <div v-if="cards.length === 0" class="empty-state flex-1 text-[13px]">
-                            暂无执行记录
-                        </div>
-                    </div>
-                </div>
-
-                <div class="h-full w-[1px] border-l border-dashed border-[rgba(15,23,42,0.30)] dark-divider"></div>
-
-                <div
-                    ref="rightScrollRef"
-                    class="flex h-full flex-col overflow-y-auto py-[16px] pl-[12px] pr-[24px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                    @scroll="handleRightScroll"
-                >
-                    <div class="flex w-full flex-1 flex-col gap-[14px]">
-                        <div
-                            v-for="message in messages"
-                            :key="message.id"
-                            class="flex w-full"
-                            :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-                        >
-                            <div class="flex max-w-full flex-col gap-[6px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
+                            <div class="flex flex-1 flex-col gap-[12px]">
+                                <div v-if="messageLoading" class="notice-inline">加载会话消息中...</div>
                                 <div
-                                    class="relative w-fit max-w-[720px] rounded-[14px] px-[14px] py-[12px] shadow-[0_12px_30px_rgba(27,36,55,0.08)] border"
-                                    :class="[
-                                        message.error
-                                            ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
-                                            : message.role === 'user'
-                                                ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
-                                                : 'bg-white border-[var(--border-color)]',
-                                        message.pending ? 'border-dashed' : 'border-solid'
-                                    ]"
+                                    v-for="card in cards"
+                                    :key="card.id"
+                                    class="rounded-[22px] border border-[rgba(148,163,184,0.16)] bg-white px-[16px] py-[14px] shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
                                 >
-                                    <div
-                                        v-if="message.pending && message.role === 'assistant' && !message.content"
-                                        class="inline-flex items-center gap-[8px]"
-                                    >
-                                        <div class="inline-flex items-center gap-[4px]">
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
-                                            <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
-                                        </div>
-                                        <div class="text-[13px] text-[var(--text-secondary)]">执行中...</div>
+                                    <div class="mb-[10px] flex flex-wrap gap-[6px]">
+                                        <span class="rounded-full border border-[rgba(47,124,246,0.3)] bg-[rgba(47,124,246,0.08)] px-[10px] py-[2px] text-[12px] font-semibold text-[var(--accent-color)]">
+                                            {{ card.clientType || '-' }}
+                                        </span>
+                                        <span class="rounded-full border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#10b981]">
+                                            {{ card.sectionType || '-' }}
+                                        </span>
+                                        <span
+                                            v-if="card.round !== null && card.round !== undefined"
+                                            class="rounded-full border border-[rgba(139,92,246,0.3)] bg-[rgba(139,92,246,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#8b5cf6]"
+                                        >
+                                            round: {{ card.round }}
+                                        </span>
+                                        <span
+                                            v-if="isReactAgent && card.pace !== null && card.pace !== undefined"
+                                            class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
+                                        >
+                                            pace: {{ card.pace }}
+                                        </span>
+                                        <span
+                                            v-if="!isReactAgent && card.step !== null && card.step !== undefined"
+                                            class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
+                                        >
+                                            step: {{ card.step }}
+                                        </span>
                                     </div>
-                                    <div
-                                        v-else-if="message.role === 'user' || message.pending"
-                                        class="whitespace-pre-wrap break-all [overflow-wrap:anywhere] leading-[1.6]"
-                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                    >
-                                        {{ getContent(message) }}
+                                    <div class="whitespace-pre-wrap break-all text-[14px] leading-[1.7] text-[var(--text-primary)] [overflow-wrap:anywhere]">
+                                        {{ getCardContent(card) }}
                                     </div>
-                                    <div
-                                        v-else
-                                        class="markdown-body break-words [overflow-wrap:anywhere] leading-[1.6] [&_pre]:overflow-auto [&_pre]:rounded-[10px] [&_pre]:bg-[#0f172a] [&_pre]:p-[12px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
-                                        :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                        v-html="renderMarkdown(getContent(message))"
-                                    ></div>
+                                </div>
+                                <div v-if="cards.length === 0" class="empty-state flex-1 text-[13px]">
+                                    暂无执行记录
                                 </div>
                             </div>
                         </div>
-                        <div v-if="messages.length === 0" class="empty-state flex-1 text-[13px]">
-                            暂无对话记录
+
+                        <div
+                            ref="rightScrollRef"
+                            class="flex min-h-0 flex-col overflow-y-auto border-l border-dashed border-[rgba(148,163,184,0.2)] px-[24px] py-[20px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-[1080px]:border-l-0 max-[1080px]:border-t max-[1080px]:border-solid max-[1080px]:px-[14px]"
+                            @scroll="handleRightScroll"
+                        >
+                            <div class="mb-[14px] flex items-center justify-between gap-[12px]">
+                                <div>
+                                    <div class="section-kicker">Answer Lane</div>
+                                    <div class="mt-[6px] text-[20px] font-bold text-[var(--text-primary)]">最终回答</div>
+                                </div>
+                                <span class="conversation-pill"><span>Messages</span><strong>{{ messages.length }}</strong></span>
+                            </div>
+                            <div class="flex w-full flex-1 flex-col gap-[14px]">
+                                <div
+                                    v-for="message in messages"
+                                    :key="message.id"
+                                    class="flex w-full"
+                                    :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+                                >
+                                    <div class="flex max-w-full flex-col gap-[8px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
+                                        <div class="flex items-center gap-[8px] px-[4px] text-[12px] font-semibold text-[var(--text-secondary)]">
+                                            <span>{{ message.role === 'user' ? '任务输入' : '工作结果' }}</span>
+                                            <span v-if="message.pending" class="rounded-full bg-[rgba(47,124,246,0.08)] px-[8px] py-[2px] text-[11px] text-[var(--accent-color)]">进行中</span>
+                                        </div>
+                                        <div
+                                            class="relative max-w-[760px] rounded-[22px] border px-[16px] py-[14px] shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
+                                            :class="[
+                                                message.error
+                                                    ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
+                                                    : message.role === 'user'
+                                                        ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
+                                                        : 'bg-white border-[rgba(148,163,184,0.16)]',
+                                                message.pending ? 'border-dashed' : 'border-solid'
+                                            ]"
+                                        >
+                                            <div
+                                                v-if="message.pending && message.role === 'assistant' && !message.content"
+                                                class="inline-flex items-center gap-[8px]"
+                                            >
+                                                <div class="inline-flex items-center gap-[4px]">
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
+                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
+                                                </div>
+                                                <div class="text-[13px] text-[var(--text-secondary)]">执行中...</div>
+                                            </div>
+                                            <div
+                                                v-else-if="message.role === 'user' || message.pending"
+                                                class="whitespace-pre-wrap break-all text-[15px] leading-[1.8] [overflow-wrap:anywhere]"
+                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                            >
+                                                {{ getContent(message) }}
+                                            </div>
+                                            <div
+                                                v-else
+                                                class="markdown-body break-words text-[15px] leading-[1.8] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[14px] [&_pre]:bg-[#0f172a] [&_pre]:p-[14px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
+                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                                v-html="renderMarkdown(getContent(message))"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="messages.length === 0" class="empty-state flex-1 text-[13px]">
+                                    暂无对话记录
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+
+                <aside class="panel-surface flex min-h-0 flex-col overflow-visible rounded-[30px]">
+                    <div class="flex-1 overflow-y-auto px-[18px] py-[18px]">
+                        <div class="space-y-[14px]">
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">智能体装配</div>
+                                <div class="conversation-side-subtitle">在这里选择 MiniAgent，不再把配置塞进顶部横条里。</div>
+                                <div class="mt-[14px] space-y-[12px]">
+                                    <div class="relative">
+                                        <button
+                                            ref="agentSelectRef"
+                                            type="button"
+                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all"
+                                            :class="agentOptions.length === 0 || isAgentLocked ? 'cursor-not-allowed opacity-70' : 'hover:border-[rgba(47,124,246,0.22)]'"
+                                            @click="toggleAgentDropdown"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">MiniAgent</span>
+                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentAgentLabel }}</span>
+                                            </span>
+                                            <span class="caret transition-transform duration-150" :class="agentDropdownOpen ? 'caret-open' : 'caret-closed'" />
+                                        </button>
+                                        <div
+                                            v-if="agentDropdownOpen && agentOptions.length > 0"
+                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
+                                        >
+                                            <div
+                                                v-for="item in agentOptions"
+                                                :key="item.value"
+                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
+                                                :class="item.value === currentAgentId ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
+                                                @click.stop="selectAgent(item.value)"
+                                            >
+                                                <span class="truncate">{{ item.label }}</span>
+                                                <span v-if="item.value === currentAgentId" class="text-[13px]">✓</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-if="currentAgentTypeLabel" class="conversation-pill !bg-[rgba(47,124,246,0.08)]">
+                                        <span>Type</span>
+                                        <strong>{{ currentAgentTypeLabel }}</strong>
+                                    </div>
+                                    <div v-if="currentAgentDesc" class="notice-inline text-[12px]">
+                                        {{ currentAgentDesc }}
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">参数面板</div>
+                                <div class="conversation-side-subtitle">Work 的执行参数保留原逻辑，只把状态放到更清楚的位置。</div>
+                                <div class="mt-[14px] grid gap-[10px]">
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxRetry</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxRetry }}</div>
+                                    </div>
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxRound</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxRound }}</div>
+                                    </div>
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxPace</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxPace }}</div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="conversation-side-card">
+                                <div class="conversation-side-title">会话状态</div>
+                                <div class="conversation-side-subtitle">过程卡片和结果记录都在同一块工作面内同步展示。</div>
+                                <div class="mt-[14px] grid gap-[10px]">
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Execution Cards</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ cards.length }}</div>
+                                    </div>
+                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
+                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User Turns</div>
+                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ userMessageCount }}/3</div>
+                                    </div>
+                                    <div v-if="!currentAgentId" class="notice-inline text-[12px]">
+                                        发送前请先选择一个 MiniAgent。
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
 
         <div class="bg-[var(--bg-page)]">
-            <div class="mx-auto flex w-full max-w-[980px] flex-col gap-0 py-[12px] pl-[24px] pr-[calc(24px+var(--scrollbar-w))]">
-                <div class="panel-surface flex flex-col gap-[10px] rounded-[24px] p-[14px]">
+            <div class="mx-auto flex w-full max-w-[1440px] flex-col gap-0 px-[24px] pb-[12px] max-[720px]:px-[12px]">
+                <div class="panel-surface flex flex-col gap-[12px] rounded-[30px] p-[16px]">
                     <textarea
                         v-model="inputValue"
-                        class="w-full resize-none rounded-[16px] border border-[var(--border-color)] bg-white px-[14px] py-[12px] text-[14px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] disabled:bg-[#f4f6fb]"
-                        rows="3"
+                        class="conversation-textarea min-h-[120px] disabled:bg-[#f4f6fb]"
+                        rows="4"
                         placeholder="输入问题，Command+Enter 发送"
                         :disabled="sending"
                         @keydown="handleKeydown"
                     ></textarea>
-                    <div v-if="sendError" class="notice-inline text-[12px]">
+                    <div v-if="sendError" class="notice-inline text-[13px]">
                         {{ sendError }}
                     </div>
-                    <div class="flex justify-end gap-[10px]">
-                        <button
-                            class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] font-bold leading-[1.1] text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            :disabled="!sending"
-                            @click="handleStop"
-                        >
-                            停止生成
-                        </button>
-                        <button
-                            class="inline-flex h-[36px] items-center justify-center rounded-[12px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            :disabled="sending || !inputValue.trim() || !currentAgentId || userMessageCount >= 3"
-                            @click="sendMessage"
-                        >
-                            {{ sending ? '执行中…' : '发送' }}
-                        </button>
+                    <div v-else-if="workLimitReached" class="notice-inline text-[13px]">
+                        当前会话已达到 3 条用户消息上限，请新建会话继续。
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-[12px]">
+                        <div class="text-[12px] leading-[1.7] text-[var(--text-secondary)]">
+                            Command+Enter 发送。左侧会保留执行过程，右侧查看最终回答。
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-[10px]">
+                            <button
+                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[rgba(148,163,184,0.18)] bg-white px-[16px] py-[10px] text-[14px] font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70"
+                                type="button"
+                                :disabled="!sending"
+                                @click="handleStop"
+                            >
+                                停止生成
+                            </button>
+                            <button
+                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[18px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                                type="button"
+                                :disabled="sending || !inputValue.trim() || !currentAgentId || workLimitReached"
+                                @click="sendMessage"
+                            >
+                                {{ sending ? '执行中…' : '发送' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

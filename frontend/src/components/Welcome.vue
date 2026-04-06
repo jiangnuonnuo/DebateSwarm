@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { insertSession } from '../request/api';
 import { useAgentStore, useChatStore } from '../router/pinia';
@@ -69,6 +69,12 @@ const featureCards = [
         route: '/setting'
     }
 ];
+
+const workspaceStats = computed(() => [
+    { label: 'Chat 会话', value: `${chatStore.chats.length}`.padStart(2, '0') },
+    { label: 'Work 会话', value: `${agentStore.sessions.length}`.padStart(2, '0') },
+    { label: '协作入口', value: 'Room' }
+]);
 
 const pickData = (resp, fallbackMessage = '操作失败') => {
     if (resp && typeof resp === 'object' && Object.prototype.hasOwnProperty.call(resp, 'code')) {
@@ -195,16 +201,27 @@ onBeforeUnmount(() => {
                     <div class="page-subtitle">
                         从同一个工作台里切换对话、任务、协作房间、工具和个人配置。入口不再分散，开始用、继续用、管理你自己的智能体都在这条路径里完成。
                     </div>
+                    <div class="mt-[20px] grid gap-[12px] md:grid-cols-3">
+                        <article
+                            v-for="stat in workspaceStats"
+                            :key="stat.label"
+                            class="welcome-stat-card"
+                        >
+                            <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">{{ stat.label }}</div>
+                            <div class="mt-[10px] text-[28px] font-bold leading-none text-[var(--text-primary)]">{{ stat.value }}</div>
+                        </article>
+                    </div>
                 </section>
 
                 <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
                     <div class="section-title-row">
                         <div>
-                            <div class="section-kicker">Quick Start</div>
-                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">快速开始</div>
+                            <div class="section-kicker">Launchpad</div>
+                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">从这里直接开始</div>
+                            <div class="mt-[8px] max-w-[760px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">首页不再只是平铺卡片，而是把对话、任务和协作房间作为三条主路径，帮助新用户更快找到入口。</div>
                         </div>
                     </div>
-                    <div class="mt-[16px] grid gap-[14px] lg:grid-cols-[1.2fr_1.2fr_0.9fr]">
+                    <div class="mt-[16px] grid gap-[14px] lg:grid-cols-[1.1fr_1.1fr_0.95fr]">
                         <article
                             v-for="card in featureCards.slice(0, 3)"
                             :key="card.key"
@@ -231,38 +248,79 @@ onBeforeUnmount(() => {
                     </div>
                 </section>
 
-                <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
-                    <div class="section-title-row">
-                        <div>
-                            <div class="section-kicker">Explore</div>
-                            <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">继续工作</div>
-                        </div>
-                    </div>
-                    <div class="mt-[16px] grid items-stretch gap-[14px] md:grid-cols-2 xl:grid-cols-4">
-                        <article
-                            v-for="card in featureCards.slice(3)"
-                            :key="card.key"
-                            class="context-card group relative flex flex-col overflow-hidden px-[18px] py-[16px]"
-                        >
-                            <div class="welcome-feature-glow pointer-events-none absolute inset-0 opacity-80"></div>
-                            <div class="relative flex h-full flex-col">
-                                <div class="section-kicker !tracking-[0.16em]">{{ card.key }}</div>
-                                <h3 class="mt-[10px] text-[18px] font-bold leading-[1.25] text-[var(--text-primary)]">{{ card.title }}</h3>
-                                <p class="mt-[8px] text-[13px] leading-[1.65] text-[var(--text-secondary)]">{{ card.description }}</p>
-                                <button
-                                    v-if="card.route || card.action"
-                                    type="button"
-                                    class="mt-auto inline-flex w-fit items-center gap-[6px] pt-[16px] text-[13px] font-semibold text-[var(--accent-color)]"
-                                    :class="creatingSessionType ? 'opacity-70' : ''"
-                                    :disabled="Boolean(creatingSessionType)"
-                                    @click="handleCardClick(card)"
-                                >
-                                    {{ resolveCardCta(card) }}
-                                    <span aria-hidden="true">→</span>
-                                </button>
+                <section class="grid gap-[18px] xl:grid-cols-[1.1fr_0.9fr]">
+                    <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
+                        <div class="section-title-row">
+                            <div>
+                                <div class="section-kicker">Continue</div>
+                                <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">继续工作</div>
                             </div>
-                        </article>
-                    </div>
+                        </div>
+                        <div class="mt-[16px] grid items-stretch gap-[14px] md:grid-cols-2">
+                            <article
+                                v-for="card in featureCards.slice(3, 7)"
+                                :key="card.key"
+                                class="context-card group relative flex flex-col overflow-hidden px-[18px] py-[16px]"
+                            >
+                                <div class="welcome-feature-glow pointer-events-none absolute inset-0 opacity-80"></div>
+                                <div class="relative flex h-full flex-col">
+                                    <div class="section-kicker !tracking-[0.16em]">{{ card.key }}</div>
+                                    <h3 class="mt-[10px] text-[18px] font-bold leading-[1.25] text-[var(--text-primary)]">{{ card.title }}</h3>
+                                    <p class="mt-[8px] text-[13px] leading-[1.65] text-[var(--text-secondary)]">{{ card.description }}</p>
+                                    <button
+                                        v-if="card.route || card.action"
+                                        type="button"
+                                        class="mt-auto inline-flex w-fit items-center gap-[6px] pt-[16px] text-[13px] font-semibold text-[var(--accent-color)]"
+                                        :class="creatingSessionType ? 'opacity-70' : ''"
+                                        :disabled="Boolean(creatingSessionType)"
+                                        @click="handleCardClick(card)"
+                                    >
+                                        {{ resolveCardCta(card) }}
+                                        <span aria-hidden="true">→</span>
+                                    </button>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section class="panel-surface px-[22px] py-[20px] max-[720px]:px-[16px]">
+                        <div class="section-title-row">
+                            <div>
+                                <div class="section-kicker">Guide</div>
+                                <div class="mt-[8px] text-[22px] font-bold text-[var(--text-primary)]">新用户路径</div>
+                            </div>
+                        </div>
+                        <div class="mt-[18px] space-y-[12px]">
+                            <article class="welcome-route-card">
+                                <div class="welcome-route-index">01</div>
+                                <div>
+                                    <div class="font-semibold text-[var(--text-primary)]">先去 Setting 完成 Client / MCP 装配</div>
+                                    <div class="mt-[6px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">新用户先完成基础装配，再进入 Chat 或 Work，路径会更清楚。</div>
+                                </div>
+                            </article>
+                            <article class="welcome-route-card">
+                                <div class="welcome-route-index">02</div>
+                                <div>
+                                    <div class="font-semibold text-[var(--text-primary)]">Chat 用于单轮到多轮的普通对话</div>
+                                    <div class="mt-[6px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">模型、工具和知识库都在同一对话工作区里完成协同。</div>
+                                </div>
+                            </article>
+                            <article class="welcome-route-card">
+                                <div class="welcome-route-index">03</div>
+                                <div>
+                                    <div class="font-semibold text-[var(--text-primary)]">Work 用于智能体执行与结果联动</div>
+                                    <div class="mt-[6px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">过程卡片和最终回答同屏展示，不再分裂成机械白板。</div>
+                                </div>
+                            </article>
+                            <article class="welcome-route-card">
+                                <div class="welcome-route-index">04</div>
+                                <div>
+                                    <div class="font-semibold text-[var(--text-primary)]">Room 用于多智能体协作和辩论</div>
+                                    <div class="mt-[6px] text-[13px] leading-[1.7] text-[var(--text-secondary)]">成员、辩论、消息和仲裁者都进入一个更清晰的协作空间。</div>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
                 </section>
             </div>
         </div>
@@ -385,6 +443,37 @@ onBeforeUnmount(() => {
     background-image: radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.18), transparent 58%);
 }
 
+.welcome-stat-card {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.54);
+    padding: 16px 18px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.welcome-route-card {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 14px;
+    align-items: flex-start;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.58);
+    padding: 16px;
+}
+
+.welcome-route-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(47, 124, 246, 0.12), rgba(83, 197, 255, 0.16));
+    color: var(--accent-color);
+    font-size: 18px;
+    font-weight: 800;
+}
+
 @media (max-width: 900px) {
     .welcome-hero-inner {
         gap: 14px;
@@ -430,6 +519,10 @@ onBeforeUnmount(() => {
     .welcome-typewriter {
         margin-left: 0;
         width: 100%;
+    }
+
+    .welcome-route-card {
+        grid-template-columns: 1fr;
     }
 }
 </style>
