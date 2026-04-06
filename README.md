@@ -1,15 +1,14 @@
-# Dasi MiniAgent
-
-
+# Xerina MiniAgent
 
 ## 项目简介
 
 ### 概述
 
-Dasi MiniAgent 是一个集成了 AI 对话、多角色 Agent 工作流、RAG 知识库和 MCP 工具调用的全栈项目，包含用户端与管理后台两套前端页面，以及基于 DDD 架构的完整后端服务。
+Xerina MiniAgent 是一个集成了 AI 对话、多角色 Agent 工作流、多智能体辩论赛、RAG 知识库和 MCP 工具调用的全栈项目。本项目基于 **Dasi MiniAgent** 开源框架进行二次开发与深度增强，旨在探索更复杂的多智能体协同场景。
 
 - 前端：Vue 3、Vite、TailwindCSS、Axios、Pinia、vue-router、vue-flow
 - 后端：Spring Boot 3、Java 17、Spring AI、MyBatis、MySQL、PostgreSQL、Redis、Docker、OneAPI
+- **核心增强：多智能体辩论赛系统、实时仲裁调度引擎、多 AI 群聊协作模式**
 
 ### 目录结构
 
@@ -52,6 +51,12 @@ Dasi MiniAgent 是一个集成了 AI 对话、多角色 Agent 工作流、RAG �
 ```
 
 ## 核心功能
+
+### Multi-Agent Debate & Collaboration (核心)
+
+- **智能体辩论赛**：支持自定义辩论主题，自由分配正方/反方辩手，并设定 AI 仲裁者（主持人）进行全自动调度、过程解说及胜方裁决。
+- **多智能体群聊**：在一个房间内邀请多个不同能力的 AI 智能体与用户共同交流，支持 @ 指定智能体响应，模拟真实的多人协作场景。
+- **实时调度系统**：基于仲裁者指令或预设规则（轮询/权重/随机）的发言权分配机制，确保对话流的逻辑性与平衡性。
 
 ### Chat Client
 
@@ -102,49 +107,53 @@ Dasi MiniAgent 是一个集成了 AI 对话、多角色 Agent 工作流、RAG �
 
 ## 页面展示
 
-### User
+### User (用户端)
 
-![image-20260313173756223](./assets/image-20260313173756223.png)
+![用户聊天主界面](./assets/user-chat-main.png)
 
-![image-20260313174905274](./assets/image-20260313174905274.png)
+![辩论赛配置界面](./assets/user-debate-setup.png)
 
-![image-20260313174920603](./assets/image-20260313174920603.png)
+![辩论赛进行中](./assets/user-debate-running.png)
 
-![image-20260313174930894](./assets/image-20260313174930894.png)
+![辩论赛胜方裁决](./assets/user-debate-winner.png)
 
-![image-20260313175007028](./assets/image-20260313175007028.png)
+![智能体快速构建 (Studio)](./assets/user-agent-studio.png)
 
-![image-20260313175018380](./assets/image-20260313175018380.png)
+![智能体广场 (Plaza)](./assets/user-agent-plaza.png)
 
-![image-20260313175059730](./assets/image-20260313175059730.png)
+![个人智能体仓库 (Repository)](./assets/user-agent-repository.png)
 
-![image-20260313175948054](./assets/image-20260313175948054.png)
+![MCP 工具配置](./assets/user-settings-mcp.png)
 
-![image-20260313173810710](./assets/image-20260313173810710.png)
+![任务流水看板](./assets/user-work-lane.png)
 
-### Admin
+### Admin (管理后台)
 
-![image-20260313180008675](./assets/image-20260313180008675.png)
+![管理后台仪表盘](./assets/admin-dashboard.png)
 
-![image-20260313180018281](./assets/image-20260313180018281.png)
+![数据模型管理](./assets/admin-table-manage.png)
 
-![image-20260313180053814](./assets/image-20260313180053814.png)
+![客户端绑定配置](./assets/admin-config-binding.png)
 
-![image-20260313180035388](./assets/image-20260313180035388.png)
+![智能体编排流水线](./assets/admin-flow-design.png)
 
-![image-20260313180108915](./assets/image-20260313180108915.png)
+![配置可视化画布](./assets/admin-canvas-view.png)
 
 ## 联系方式
 
-- 📧 Email：1740929297@qq.com
+- 📧 Email：2068346641@qq.com
 
-- 📕 小红书：dasi0227
 
-# 版权声明
+# 版权与致谢
 
-© 2026 Dasi. All Rights Reserved.
+© 2026 Xerina. All Rights Reserved.
 
-本项目由 Dasi 独立开发完成，仅用于学习研究与技术交流。未经作者许可，任何组织或个人不得将本项目代码或其衍生作品用于商业用途。在遵守相关开源协议的前提下，允许个人进行学习、研究、二次开发与非商业使用，但需保留原作者署名。
+本项目基于 **Dasi MiniAgent** 开源项目进行二次开发。在此特别感谢原作者 **Dasi** 提供的优秀底层架构与开源精神。
+
+1. **原作者权利**：底层 DDD 架构及核心模块版权归原作者 Dasi 所有。
+2. **Xerina 权利**：本项目新增的辩论赛系统、多智能体调度逻辑及相关 UI 改进归 Xerina 所有。
+3. **使用须知**：本项目仅用于学习研究与技术交流。在引用或二次分发时，请务必同时保留原作者 Dasi 及 Xerina 的署名，不得用于非法或未经授权的商业用途。
 
 本项目部分功能依赖第三方开源组件及模型服务，其版权归各自作者或组织所有。作者不对因使用本项目代码而产生的任何直接或间接损失承担责任。
+
 
