@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, watch } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import Sidebar from './components/Sidebar.vue';
 import Toast from './components/Toast.vue';
+import CompanionPet from './components/CompanionPet.vue';
 import { useSettingsStore } from './router/pinia';
 
 const route = useRoute();
@@ -54,4 +55,9 @@ onBeforeUnmount(() => {
             <Toast />
         </div>
     </div>
+    
+    <!-- 全局悬浮小人 -->
+    <Teleport to="body">
+        <CompanionPet label="Agent" />
+    </Teleport>
 </template>

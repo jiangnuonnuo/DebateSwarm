@@ -19,7 +19,6 @@ import { formatMcpJson } from '../utils/StringUtil';
 import { areCardListsEqual, areMessageListsEqual, createStableRecordId, toSafeTimestamp } from '../utils/MessageRenderUtil';
 import { useAgentSettingsStore, useAgentStore, useChatStore, useSettingsStore, useWelcomeLaunchStore } from '../router/pinia';
 import { getStrategyTone } from '../utils/StrategyTone';
-import CompanionPet from './CompanionPet.vue';
 import Footer from './Footer.vue';
 
 const router = useRouter();
@@ -811,299 +810,233 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="grid h-screen grid-rows-[auto_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
-        <header class="sticky top-0 z-10 border-b border-[rgba(148,163,184,0.14)] bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(241,247,255,0.84))] backdrop-blur-[18px]">
-            <div class="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-[18px] px-[24px] py-[20px] max-[960px]:flex-col max-[720px]:px-[12px]">
-                <div class="min-w-0 flex-1">
-                    <div class="section-kicker">Work Workspace</div>
-                    <div class="mt-[10px] text-[clamp(28px,3vw,38px)] font-bold leading-[1.02] text-[var(--text-primary)]">{{ currentSessionTitle }}</div>
-                    <div class="mt-[10px] max-w-[780px] text-[14px] leading-[1.8] text-[var(--text-secondary)]">
-                        {{ workSubtitle }}
+    <section class="flex h-screen flex-col bg-[var(--bg-page)] overflow-hidden">
+        <!-- 顶部紧凑 Header -->
+        <header class="sticky top-0 z-30 flex h-[64px] shrink-0 items-center border-b border-[var(--border-color)] bg-[var(--panel-bg)] px-6 backdrop-blur-xl">
+            <div class="mx-auto flex w-full max-w-[var(--workspace-max)] items-center justify-between gap-4">
+                <div class="flex items-center gap-6 overflow-hidden">
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-color)] text-white shadow-lg shadow-blue-500/20">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" />
+                            </svg>
+                        </div>
+                        <h1 class="truncate text-lg font-bold tracking-tight text-[var(--text-primary)]">
+                            {{ currentSessionTitle }}
+                        </h1>
                     </div>
-                    <div class="mt-[14px] flex flex-wrap gap-[8px]">
-                        <span class="conversation-pill">
-                            <span>MiniAgent</span>
-                            <strong>{{ currentAgentLabel }}</strong>
-                        </span>
-                        <span v-if="currentAgentTypeLabel" class="conversation-pill">
-                            <span>Strategy</span>
-                            <strong>{{ currentAgentTypeLabel }}</strong>
-                        </span>
+
+                    <!-- 顶部选择器组 -->
+                    <div class="hidden h-8 w-[1px] bg-[var(--border-color)] md:block"></div>
+                    
+                    <div class="flex items-center gap-2">
+                        <!-- MiniAgent 选择器 -->
+                        <div class="relative">
+                            <button
+                                ref="agentSelectRef"
+                                type="button"
+                                class="flex h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-page)] px-4 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-[var(--accent-color)] hover:bg-blue-50/50"
+                                :class="{ 'opacity-70 cursor-not-allowed': isAgentLocked }"
+                                @click="toggleAgentDropdown"
+                            >
+                                <span class="text-[var(--text-muted)]">MiniAgent:</span>
+                                <span class="max-w-[120px] truncate">{{ currentAgentLabel }}</span>
+                                <svg class="h-4 w-4 text-[var(--text-muted)] transition-transform" :class="{ 'rotate-180': agentDropdownOpen }" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            
+                            <div v-if="agentDropdownOpen" class="absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl border border-[var(--border-color)] bg-white p-2 shadow-2xl ring-1 ring-black/5">
+                                <div v-for="item in agentOptions" :key="item.value" 
+                                    class="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors hover:bg-blue-50"
+                                    :class="item.value === currentAgentId ? 'bg-blue-50 text-[var(--accent-color)] font-semibold' : 'text-[var(--text-primary)]'"
+                                    @click.stop="selectAgent(item.value)"
+                                >
+                                    <span class="truncate">{{ item.label }}</span>
+                                    <svg v-if="item.value === currentAgentId" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 策略展示 -->
+                        <div v-if="currentAgentTypeLabel" class="flex h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-page)] px-4 text-sm font-medium">
+                            <span class="text-[var(--text-muted)]">Strategy:</span>
+                            <span class="text-[var(--accent-color)]">{{ currentAgentTypeLabel }}</span>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-start gap-[12px] max-[960px]:w-full max-[960px]:justify-between">
-                    <CompanionPet label="work" />
-                    <div class="flex flex-wrap justify-end gap-[10px]">
-                        <button
-                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[16px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95"
-                            type="button"
-                            @click="openSettings"
-                        >
-                            回答设置
-                        </button>
-                    </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="flex h-9 items-center gap-2 rounded-full border border-[var(--accent-color)] bg-white px-4 text-sm font-semibold text-[var(--accent-color)] transition-all hover:bg-blue-50"
+                        type="button"
+                        @click="openSettings"
+                    >
+                        参数设置
+                    </button>
                 </div>
             </div>
         </header>
 
-        <div class="overflow-hidden bg-[var(--bg-page)]">
-            <div class="mx-auto grid h-full max-w-[1440px] grid-cols-[minmax(0,1fr)_320px] gap-[18px] px-[24px] py-[18px] max-[1279px]:grid-cols-1 max-[720px]:px-[12px]">
-                <div class="panel-surface flex min-h-0 flex-col overflow-hidden rounded-[30px]">
-                    <div class="grid min-h-0 flex-1 grid-cols-[1.08fr_0.92fr] max-[1080px]:grid-cols-1">
-                        <div
-                            ref="leftScrollRef"
-                            class="flex min-h-0 flex-col overflow-y-auto px-[24px] py-[20px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-[720px]:px-[14px]"
-                            @scroll="handleLeftScroll"
-                        >
-                            <div class="mb-[14px] flex items-center justify-between gap-[12px]">
-                                <div>
-                                    <div class="section-kicker">Process Lane</div>
-                                    <div class="mt-[6px] text-[20px] font-bold text-[var(--text-primary)]">执行时间轴</div>
-                                </div>
-                                <span class="conversation-pill"><span>Cards</span><strong>{{ cards.length }}</strong></span>
-                            </div>
-                            <div class="flex flex-1 flex-col gap-[12px]">
-                                <div v-if="messageLoading" class="notice-inline">加载会话消息中...</div>
-                                <div
-                                    v-for="card in cards"
-                                    :key="card.id"
-                                    class="rounded-[22px] border border-[rgba(148,163,184,0.16)] bg-white px-[16px] py-[14px] shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
-                                >
-                                    <div class="mb-[10px] flex flex-wrap gap-[6px]">
-                                        <span class="rounded-full border border-[rgba(47,124,246,0.3)] bg-[rgba(47,124,246,0.08)] px-[10px] py-[2px] text-[12px] font-semibold text-[var(--accent-color)]">
-                                            {{ card.clientType || '-' }}
-                                        </span>
-                                        <span class="rounded-full border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#10b981]">
-                                            {{ card.sectionType || '-' }}
-                                        </span>
-                                        <span
-                                            v-if="card.round !== null && card.round !== undefined"
-                                            class="rounded-full border border-[rgba(139,92,246,0.3)] bg-[rgba(139,92,246,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#8b5cf6]"
-                                        >
-                                            round: {{ card.round }}
-                                        </span>
-                                        <span
-                                            v-if="isReactAgent && card.pace !== null && card.pace !== undefined"
-                                            class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
-                                        >
-                                            pace: {{ card.pace }}
-                                        </span>
-                                        <span
-                                            v-if="!isReactAgent && card.step !== null && card.step !== undefined"
-                                            class="rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-[10px] py-[2px] text-[12px] font-semibold text-[#f59e0b]"
-                                        >
-                                            step: {{ card.step }}
-                                        </span>
-                                    </div>
-                                    <div class="whitespace-pre-wrap break-all text-[14px] leading-[1.7] text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                                        {{ getCardContent(card) }}
-                                    </div>
-                                </div>
-                                <div v-if="cards.length === 0" class="empty-state flex-1 text-[13px]">
-                                    暂无执行记录
-                                </div>
-                            </div>
+        <!-- 主体内容区域：移除侧边栏，改为通透双栏布局 -->
+        <main class="flex-1 overflow-hidden">
+            <div class="mx-auto grid h-full max-w-[var(--workspace-max)] grid-cols-2 gap-0 divide-x divide-[var(--border-color)]">
+                <!-- 左侧：执行过程 (Process Lane) -->
+                <div class="flex flex-col min-h-0">
+                    <div class="flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-page)] px-6 py-3">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
+                            <span class="text-sm font-bold tracking-wider text-[var(--text-muted)] uppercase">Process Lane</span>
                         </div>
-
-                        <div
-                            ref="rightScrollRef"
-                            class="flex min-h-0 flex-col overflow-y-auto border-l border-dashed border-[rgba(148,163,184,0.2)] px-[24px] py-[20px] scroll-smooth [scrollbar-gutter:auto] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-[1080px]:border-l-0 max-[1080px]:border-t max-[1080px]:border-solid max-[1080px]:px-[14px]"
-                            @scroll="handleRightScroll"
-                        >
-                            <div class="mb-[14px] flex items-center justify-between gap-[12px]">
-                                <div>
-                                    <div class="section-kicker">Answer Lane</div>
-                                    <div class="mt-[6px] text-[20px] font-bold text-[var(--text-primary)]">最终回答</div>
-                                </div>
-                                <span class="conversation-pill"><span>Messages</span><strong>{{ messages.length }}</strong></span>
-                            </div>
-                            <div class="flex w-full flex-1 flex-col gap-[14px]">
-                                <div
-                                    v-for="message in messages"
-                                    :key="message.id"
-                                    class="flex w-full"
-                                    :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-                                >
-                                    <div class="flex max-w-full flex-col gap-[8px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
-                                        <div class="flex items-center gap-[8px] px-[4px] text-[12px] font-semibold text-[var(--text-secondary)]">
-                                            <span>{{ message.role === 'user' ? '任务输入' : '工作结果' }}</span>
-                                            <span v-if="message.pending" class="rounded-full bg-[rgba(47,124,246,0.08)] px-[8px] py-[2px] text-[11px] text-[var(--accent-color)]">进行中</span>
-                                        </div>
-                                        <div
-                                            class="relative max-w-[760px] rounded-[22px] border px-[16px] py-[14px] shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
-                                            :class="[
-                                                message.error
-                                                    ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
-                                                    : message.role === 'user'
-                                                        ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
-                                                        : 'bg-white border-[rgba(148,163,184,0.16)]',
-                                                message.pending ? 'border-dashed' : 'border-solid'
-                                            ]"
-                                        >
-                                            <div
-                                                v-if="message.pending && message.role === 'assistant' && !message.content"
-                                                class="inline-flex items-center gap-[8px]"
-                                            >
-                                                <div class="inline-flex items-center gap-[4px]">
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
-                                                </div>
-                                                <div class="text-[13px] text-[var(--text-secondary)]">执行中...</div>
-                                            </div>
-                                            <div
-                                                v-else-if="message.role === 'user' || message.pending"
-                                                class="whitespace-pre-wrap break-all text-[15px] leading-[1.8] [overflow-wrap:anywhere]"
-                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                            >
-                                                {{ getContent(message) }}
-                                            </div>
-                                            <div
-                                                v-else
-                                                class="markdown-body break-words text-[15px] leading-[1.8] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[14px] [&_pre]:bg-[#0f172a] [&_pre]:p-[14px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
-                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
-                                                v-html="renderMarkdown(getContent(message))"
-                                            ></div>
-                                        </div>
+                        <div class="text-[11px] font-medium text-[var(--text-muted)]">
+                            Cards: {{ cards.length }}
+                        </div>
+                    </div>
+                    
+                    <div
+                        ref="leftScrollRef"
+                        class="flex-1 overflow-y-auto px-6 py-6 scroll-smooth"
+                        @scroll="handleLeftScroll"
+                    >
+                        <div class="flex flex-col gap-4">
+                            <div v-if="messageLoading" class="notice-inline">同步执行状态...</div>
+                            <div
+                                v-for="card in cards"
+                                :key="card.id"
+                                class="group relative overflow-hidden rounded-2xl border border-[var(--border-color)] bg-white p-4 transition-all hover:border-blue-200 hover:shadow-md"
+                            >
+                                <div class="mb-3 flex flex-wrap items-center gap-2">
+                                    <span class="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 uppercase">{{ card.clientType || '-' }}</span>
+                                    <span class="rounded-md bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500 uppercase">{{ card.sectionType || '-' }}</span>
+                                    <div class="ml-auto flex items-center gap-2 text-[10px] font-medium text-slate-400">
+                                        <span v-if="card.round !== null">Round {{ card.round }}</span>
+                                        <span v-if="card.pace !== null">Pace {{ card.pace }}</span>
+                                        <span v-if="card.step !== null">Step {{ card.step }}</span>
                                     </div>
                                 </div>
-                                <div v-if="messages.length === 0" class="empty-state flex-1 text-[13px]">
-                                    暂无对话记录
+                                <div class="text-sm leading-relaxed text-[var(--text-primary)]">
+                                    {{ getCardContent(card) }}
                                 </div>
+                            </div>
+                            <div v-if="cards.length === 0" class="flex flex-col items-center justify-center py-20 text-[var(--text-muted)]">
+                                <svg class="mb-3 h-12 w-12 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <p class="text-sm">等待任务执行过程...</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <aside class="panel-surface flex min-h-0 flex-col overflow-visible rounded-[30px]">
-                    <div class="flex-1 overflow-y-auto px-[18px] py-[18px]">
-                        <div class="space-y-[14px]">
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">智能体装配</div>
-                                <div class="conversation-side-subtitle">在这里选择 MiniAgent，不再把配置塞进顶部横条里。</div>
-                                <div class="mt-[14px] space-y-[12px]">
-                                    <div class="relative">
-                                        <button
-                                            ref="agentSelectRef"
-                                            type="button"
-                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all"
-                                            :class="agentOptions.length === 0 || isAgentLocked ? 'cursor-not-allowed opacity-70' : 'hover:border-[rgba(47,124,246,0.22)]'"
-                                            @click="toggleAgentDropdown"
-                                        >
-                                            <span class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">MiniAgent</span>
-                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentAgentLabel }}</span>
-                                            </span>
-                                            <span class="caret transition-transform duration-150" :class="agentDropdownOpen ? 'caret-open' : 'caret-closed'" />
-                                        </button>
-                                        <div
-                                            v-if="agentDropdownOpen && agentOptions.length > 0"
-                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
-                                        >
-                                            <div
-                                                v-for="item in agentOptions"
-                                                :key="item.value"
-                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                                :class="item.value === currentAgentId ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                                @click.stop="selectAgent(item.value)"
-                                            >
-                                                <span class="truncate">{{ item.label }}</span>
-                                                <span v-if="item.value === currentAgentId" class="text-[13px]">✓</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div v-if="currentAgentTypeLabel" class="conversation-pill !bg-[rgba(47,124,246,0.08)]">
-                                        <span>Type</span>
-                                        <strong>{{ currentAgentTypeLabel }}</strong>
-                                    </div>
-                                    <div v-if="currentAgentDesc" class="notice-inline text-[12px]">
-                                        {{ currentAgentDesc }}
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">参数面板</div>
-                                <div class="conversation-side-subtitle">Work 的执行参数保留原逻辑，只把状态放到更清楚的位置。</div>
-                                <div class="mt-[14px] grid gap-[10px]">
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxRetry</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxRetry }}</div>
-                                    </div>
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxRound</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxRound }}</div>
-                                    </div>
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">maxPace</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ settingsStore.maxPace }}</div>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">会话状态</div>
-                                <div class="conversation-side-subtitle">过程卡片和结果记录都在同一块工作面内同步展示。</div>
-                                <div class="mt-[14px] grid gap-[10px]">
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Execution Cards</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ cards.length }}</div>
-                                    </div>
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User Turns</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ userMessageCount }}/3</div>
-                                    </div>
-                                    <div v-if="!currentAgentId" class="notice-inline text-[12px]">
-                                        发送前请先选择一个 MiniAgent。
-                                    </div>
-                                </div>
-                            </section>
+                <!-- 右侧：最终回答 (Answer Lane) -->
+                <div class="flex flex-col min-h-0 bg-white/40 backdrop-blur-sm">
+                    <div class="flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-page)]/50 px-6 py-3">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-blue-600"></div>
+                            <span class="text-sm font-bold tracking-wider text-[var(--text-muted)] uppercase">Answer Lane</span>
+                        </div>
+                        <div class="text-[11px] font-medium text-[var(--text-muted)]">
+                            Messages: {{ messages.length }}
                         </div>
                     </div>
-                </aside>
-            </div>
-        </div>
 
-        <div class="bg-[var(--bg-page)]">
-            <div class="mx-auto flex w-full max-w-[1440px] flex-col gap-0 px-[24px] pb-[12px] max-[720px]:px-[12px]">
-                <div class="panel-surface flex flex-col gap-[12px] rounded-[30px] p-[16px]">
+                    <div
+                        ref="rightScrollRef"
+                        class="flex-1 overflow-y-auto px-6 py-6 scroll-smooth"
+                        @scroll="handleRightScroll"
+                    >
+                        <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
+                            <div
+                                v-for="message in messages"
+                                :key="message.id"
+                                class="flex w-full"
+                                :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+                            >
+                                <div class="flex max-w-[85%] flex-col gap-2" :class="message.role === 'user' ? 'items-end' : 'items-start'">
+                                    <div class="flex items-center gap-2 px-1 text-[11px] font-bold text-[var(--text-muted)] uppercase">
+                                        <span>{{ message.role === 'user' ? 'Input' : 'Result' }}</span>
+                                        <span v-if="message.pending" class="flex items-center gap-1 text-blue-500">
+                                            <span class="h-1 w-1 animate-ping rounded-full bg-blue-500"></span>
+                                            Running
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="relative rounded-2xl border p-4 transition-all"
+                                        :class="[
+                                            message.error
+                                                ? 'bg-red-50 border-red-100 text-red-600'
+                                                : message.role === 'user'
+                                                    ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white shadow-lg shadow-blue-500/10'
+                                                    : 'bg-white border-[var(--border-color)] shadow-sm hover:shadow-md',
+                                            message.pending ? 'border-dashed' : 'border-solid'
+                                        ]"
+                                    >
+                                        <!-- 消息内容 -->
+                                        <div v-if="message.pending && message.role === 'assistant' && !message.content" class="flex items-center gap-2 py-1">
+                                            <div class="flex gap-1">
+                                                <div class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400"></div>
+                                                <div class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400 [animation-delay:0.2s]"></div>
+                                                <div class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400 [animation-delay:0.4s]"></div>
+                                            </div>
+                                            <span class="text-xs text-slate-400 font-medium">Thinking...</span>
+                                        </div>
+                                        <div v-else-if="message.role === 'user' || message.pending" class="whitespace-pre-wrap break-all text-sm leading-relaxed">
+                                            {{ getContent(message) }}
+                                        </div>
+                                        <div v-else
+                                            class="markdown-body text-sm leading-relaxed [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-xl [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md"
+                                            v-html="renderMarkdown(getContent(message))"
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部输入区域 -->
+        <div class="shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-page)]/80 p-4 backdrop-blur-md">
+            <div class="mx-auto max-w-4xl">
+                <div class="relative overflow-hidden rounded-2xl border border-[var(--border-color)] bg-white shadow-2xl transition-all focus-within:border-[var(--accent-color)] focus-within:ring-2 focus-within:ring-blue-500/10">
                     <textarea
                         v-model="inputValue"
-                        class="conversation-textarea min-h-[120px] disabled:bg-[#f4f6fb]"
-                        rows="4"
-                        placeholder="输入问题，Command+Enter 发送"
+                        class="w-full resize-none bg-transparent px-4 py-3 text-sm focus:outline-none disabled:opacity-50"
+                        rows="3"
+                        placeholder="描述你的任务需求..."
                         :disabled="sending"
                         @keydown="handleKeydown"
                     ></textarea>
-                    <div v-if="sendError" class="notice-inline text-[13px]">
-                        {{ sendError }}
-                    </div>
-                    <div v-else-if="workLimitReached" class="notice-inline text-[13px]">
-                        当前会话已达到 3 条用户消息上限，请新建会话继续。
-                    </div>
-                    <div class="flex flex-wrap items-center justify-between gap-[12px]">
-                        <div class="text-[12px] leading-[1.7] text-[var(--text-secondary)]">
-                            Command+Enter 发送。左侧会保留执行过程，右侧查看最终回答。
+                    
+                    <div class="flex items-center justify-between border-t border-slate-50 bg-slate-50/30 px-3 py-2">
+                        <div class="flex items-center gap-4">
+                            <div v-if="sendError" class="text-[11px] font-bold text-[var(--accent-color)]">{{ sendError }}</div>
+                            <div v-else class="text-[11px] font-medium text-slate-400">⌘ + Enter 发送</div>
                         </div>
-                        <div class="flex flex-wrap justify-end gap-[10px]">
+                        
+                        <div class="flex items-center gap-2">
                             <button
-                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[rgba(148,163,184,0.18)] bg-white px-[16px] py-[10px] text-[14px] font-semibold text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70"
-                                type="button"
-                                :disabled="!sending"
+                                v-if="sending"
+                                class="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50"
                                 @click="handleStop"
                             >
-                                停止生成
+                                停止
                             </button>
                             <button
-                                class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[18px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
-                                type="button"
+                                class="h-8 rounded-lg bg-[var(--accent-color)] px-4 text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:brightness-110 disabled:grayscale disabled:opacity-50"
                                 :disabled="sending || !inputValue.trim() || !currentAgentId || workLimitReached"
                                 @click="sendMessage"
                             >
-                                {{ sending ? '执行中…' : '发送' }}
+                                {{ sending ? '执行中...' : '发送任务' }}
                             </button>
                         </div>
                     </div>
+                </div>
+                <div class="mt-2 text-center text-[10px] text-slate-400">
+                    任务流转过程中会自动同步执行步骤与最终回复
                 </div>
             </div>
         </div>

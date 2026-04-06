@@ -23,7 +23,6 @@ import { normalizeError, notifyAppError } from '../request/request';
 import { applyStreamToken, createStreamAccumulator, parseThinkText } from '../utils/StringUtil';
 import { areMessageListsEqual, createStableRecordId, toSafeTimestamp } from '../utils/MessageRenderUtil';
 import { useAgentStore, useChatStore, useSettingsStore, useWelcomeLaunchStore } from '../router/pinia';
-import CompanionPet from './CompanionPet.vue';
 import Footer from './Footer.vue';
 
 const router = useRouter();
@@ -1275,63 +1274,145 @@ const handleUpload = async () => {
 
 <template>
     <section class="grid h-screen grid-rows-[auto_1fr_auto_var(--footer-height)] bg-[var(--bg-page)]">
-        <header class="sticky top-0 z-10 border-b border-[rgba(148,163,184,0.14)] bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(241,247,255,0.84))] backdrop-blur-[18px]">
-            <div class="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-[18px] px-[24px] py-[20px] max-[960px]:flex-col max-[720px]:px-[12px]">
-                <div class="min-w-0 flex-1">
-                    <div class="section-kicker">Chat Workspace</div>
-                    <div class="mt-[10px] text-[clamp(28px,3vw,38px)] font-bold leading-[1.02] text-[var(--text-primary)]">{{ currentChatTitle }}</div>
-                    <div class="mt-[10px] max-w-[760px] text-[14px] leading-[1.8] text-[var(--text-secondary)]">
-                        {{ currentChatSubtitle }}
+        <header class="sticky top-0 z-30 h-[var(--header-height)] border-b border-[var(--border-color)] bg-[var(--panel-bg)] backdrop-blur-xl">
+            <div class="mx-auto flex h-full w-full max-w-[var(--workspace-max)] items-center justify-between px-[24px] max-[720px]:px-[12px]">
+                <div class="flex min-w-0 items-center gap-[18px]">
+                    <div class="min-w-0">
+                        <h2 class="truncate text-[18px] font-bold tracking-tight text-[var(--text-primary)]">{{ currentChatTitle }}</h2>
                     </div>
-                    <div class="mt-[14px] flex flex-wrap gap-[8px]">
-                        <span class="conversation-pill">
-                            <span>CLIENT</span>
-                            <strong>{{ currentModelLabel }}</strong>
-                        </span>
-                        <span class="conversation-pill">
-                            <span>MCP</span>
-                            <strong>{{ currentMcpLabel }}</strong>
-                        </span>
-                        <span class="conversation-pill">
-                            <span>RAG</span>
-                            <strong>{{ currentRagLabel }}</strong>
-                        </span>
+                    
+                    <div class="ml-[12px] flex items-center gap-[8px] max-[1024px]:hidden">
+                        <div class="relative">
+                            <button
+                                ref="modelSelectRef"
+                                type="button"
+                                class="inline-flex items-center gap-[6px] rounded-[10px] px-[10px] py-[6px] text-[12px] font-semibold transition-all hover:bg-[var(--accent-soft)]"
+                                :class="models.length === 0 || isClientLocked ? 'cursor-not-allowed opacity-50' : 'text-[var(--accent-color)]'"
+                                @click="toggleModelDropdown"
+                            >
+                                <span class="opacity-60">CLIENT:</span>
+                                <span class="max-w-[120px] truncate">{{ currentModelLabel }}</span>
+                                <span class="caret h-[4px] w-[4px] border-b-2 border-r-2 border-current opacity-40 transition-transform" :class="modelDropdownOpen ? 'rotate-[225deg]' : 'rotate-[45deg]'" />
+                            </button>
+                            <div
+                                v-if="modelDropdownOpen && models.length > 0"
+                                class="absolute left-0 top-[calc(100%+6px)] z-[50] w-[220px] rounded-[14px] border border-[var(--border-color)] bg-white p-[5px] shadow-[var(--panel-shadow)]"
+                            >
+                                <div
+                                    v-for="item in models"
+                                    :key="item.value"
+                                    class="flex cursor-pointer items-center justify-between rounded-[8px] px-[10px] py-[8px] text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-page)]"
+                                    :class="item.value === currentModel ? 'bg-[var(--accent-soft)] text-[var(--accent-color)] font-bold' : ''"
+                                    @click.stop="selectModel(item.value)"
+                                >
+                                    <span class="truncate">{{ item.label }}</span>
+                                    <span v-if="item.value === currentModel">✓</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <span class="h-[12px] w-[1px] bg-[var(--border-color)]"></span>
+
+                        <div class="relative">
+                            <button
+                                ref="mcpSelectRef"
+                                type="button"
+                                class="inline-flex items-center gap-[6px] rounded-[10px] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text-secondary)] transition-all hover:bg-[var(--surface-3)]"
+                                @click="toggleMcpDropdown"
+                            >
+                                <span class="opacity-60">MCP:</span>
+                                <span class="max-w-[120px] truncate">{{ currentMcpLabel }}</span>
+                                <span class="caret h-[4px] w-[4px] border-b-2 border-r-2 border-current opacity-40 transition-transform" :class="mcpDropdownOpen ? 'rotate-[225deg]' : 'rotate-[45deg]'" />
+                            </button>
+                            <div
+                                v-if="mcpDropdownOpen"
+                                class="absolute left-0 top-[calc(100%+6px)] z-[50] w-[220px] rounded-[14px] border border-[var(--border-color)] bg-white p-[5px] shadow-[var(--panel-shadow)] max-h-[300px] overflow-y-auto"
+                                @click.stop
+                            >
+                                <div
+                                    v-for="item in mcpTools"
+                                    :key="item.value"
+                                    class="flex cursor-pointer items-center justify-between rounded-[8px] px-[10px] py-[8px] text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-page)]"
+                                    :class="selectedMcpIds.includes(item.value) ? 'bg-[var(--accent-soft)] text-[var(--accent-color)] font-bold' : ''"
+                                    @click.stop="toggleMcpSelection(item.value)"
+                                >
+                                    <span class="truncate">{{ item.label }}</span>
+                                    <span v-if="selectedMcpIds.includes(item.value)">✓</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <span class="h-[12px] w-[1px] bg-[var(--border-color)]"></span>
+
+                        <div class="relative">
+                            <button
+                                ref="ragSelectRef"
+                                type="button"
+                                class="inline-flex items-center gap-[6px] rounded-[10px] px-[10px] py-[6px] text-[12px] font-semibold text-[var(--text-secondary)] transition-all hover:bg-[var(--surface-3)]"
+                                @click="toggleRagDropdown"
+                            >
+                                <span class="opacity-60">RAG:</span>
+                                <span class="max-w-[120px] truncate">{{ currentRagLabel }}</span>
+                                <span class="caret h-[4px] w-[4px] border-b-2 border-r-2 border-current opacity-40 transition-transform" :class="ragDropdownOpen ? 'rotate-[225deg]' : 'rotate-[45deg]'" />
+                            </button>
+                            <div
+                                v-if="ragDropdownOpen"
+                                class="absolute left-0 top-[calc(100%+6px)] z-[50] w-[220px] rounded-[14px] border border-[var(--border-color)] bg-white p-[5px] shadow-[var(--panel-shadow)] max-h-[300px] overflow-y-auto"
+                            >
+                                <div
+                                    v-for="item in ragTags"
+                                    :key="item.value || 'empty'"
+                                    class="flex cursor-pointer items-center justify-between rounded-[8px] px-[10px] py-[8px] text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-page)]"
+                                    :class="item.value === currentRagTag ? 'bg-[var(--accent-soft)] text-[var(--accent-color)] font-bold' : ''"
+                                    @click.stop="selectRag(item.value)"
+                                >
+                                    <span class="truncate">{{ item.label }}</span>
+                                    <span v-if="item.value === currentRagTag">✓</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-start gap-[12px] max-[960px]:w-full max-[960px]:justify-between">
-                    <CompanionPet label="chat" />
-                    <div class="flex flex-wrap justify-end gap-[10px]">
-                        <button
-                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[rgba(148,163,184,0.16)] bg-white/90 px-[16px] py-[10px] text-[14px] font-semibold text-[var(--text-primary)] transition-all duration-200 hover:border-[rgba(47,124,246,0.22)] hover:bg-white"
-                            type="button"
-                            @click="openUpload"
-                        >
-                            上传知识库
-                        </button>
-                        <button
-                            class="inline-flex min-h-[42px] items-center justify-center rounded-[16px] border border-[var(--accent-color)] bg-[var(--accent-color)] px-[16px] py-[10px] text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-95"
-                            type="button"
-                            @click="openSettings"
-                        >
-                            回答设置
-                        </button>
-                    </div>
+
+                <div class="flex items-center gap-[12px]">
+                    <button
+                        class="inline-flex h-[36px] items-center justify-center rounded-[10px] border border-[var(--border-color)] bg-white/60 px-[14px] text-[13px] font-semibold text-[var(--text-primary)] transition-all hover:bg-white hover:shadow-sm active:scale-95"
+                        type="button"
+                        @click="openUpload"
+                    >
+                        上传知识库
+                    </button>
+                    <button
+                        class="inline-flex h-[36px] items-center justify-center rounded-[10px] bg-[var(--accent-color)] px-[14px] text-[13px] font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:brightness-110 active:scale-95"
+                        type="button"
+                        @click="openSettings"
+                    >
+                        回答设置
+                    </button>
                 </div>
             </div>
         </header>
 
         <div class="overflow-hidden bg-[var(--bg-page)]">
-            <div class="mx-auto grid h-full max-w-[1440px] grid-cols-[minmax(0,1fr)_340px] gap-[18px] px-[24px] py-[18px] max-[1279px]:grid-cols-1 max-[720px]:px-[12px]">
-                <div class="panel-surface flex min-h-0 flex-col overflow-hidden rounded-[30px]">
+            <div class="mx-auto grid h-full max-w-[var(--workspace-max)] grid-cols-1 gap-0 px-[24px] py-[18px] max-[720px]:px-[12px]">
+                <div class="panel-surface flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-[var(--panel-border)] shadow-[var(--panel-shadow)]">
                     <div
                         ref="messageScrollRef"
                         class="flex-1 overflow-y-auto px-[24px] py-[24px] scroll-smooth [scrollbar-gutter:auto] max-[720px]:px-[14px]"
                         @scroll="handleScroll"
                     >
-                        <div class="mx-auto flex w-full max-w-[1120px] flex-col gap-[18px]">
+                        <div class="mx-auto flex w-full max-w-[960px] flex-col gap-[20px]">
                             <div v-if="messageLoading" class="notice-inline">加载会话消息中...</div>
-                            <div v-else-if="messages.length === 0" class="empty-state min-h-[360px] text-[15px]">
-                                这里还没有消息。先在右侧完成装配，然后开始一次更完整的对话。
+                            <div v-else-if="messages.length === 0" class="empty-state min-h-[400px] flex flex-col items-center justify-center text-center">
+                                <div class="mb-[20px] opacity-20 text-[var(--accent-color)]">
+                                    <svg class="h-[64px] w-[64px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                </div>
+                                <div class="text-[16px] font-semibold text-[var(--text-primary)]">开始一次新的对话</div>
+                                <div class="mt-[8px] max-w-[400px] text-[14px] leading-[1.6] text-[var(--text-secondary)]">
+                                    {{ currentChatSubtitle }}
+                                </div>
                             </div>
                             <div
                                 v-for="message in messages"
@@ -1339,32 +1420,16 @@ const handleUpload = async () => {
                                 class="flex w-full"
                                 :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
                             >
-                                <div class="flex max-w-[96%] gap-[12px]" :class="message.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
-                                    <div
-                                        class="hidden h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[16px] border text-[13px] font-bold shadow-[0_10px_20px_rgba(15,23,42,0.08)] sm:flex"
-                                        :class="
-                                            message.role === 'user'
-                                                ? 'border-[rgba(47,124,246,0.2)] bg-[var(--bubble-user-bg)] text-[var(--accent-color)]'
-                                                : 'border-[rgba(148,163,184,0.16)] bg-white text-[var(--text-primary)]'
-                                        "
-                                    >
-                                        {{ message.role === 'user' ? 'YOU' : 'AI' }}
-                                    </div>
-                                    <div class="flex min-w-0 max-w-[860px] flex-col gap-[8px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
-                                        <div class="flex items-center gap-[8px] px-[4px] text-[12px] font-semibold text-[var(--text-secondary)]">
-                                            <span>{{ message.role === 'user' ? '你的提问' : '模型回答' }}</span>
-                                            <span v-if="message.pending" class="rounded-full bg-[rgba(47,124,246,0.08)] px-[8px] py-[2px] text-[11px] text-[var(--accent-color)]">进行中</span>
-                                            <span v-if="message.error" class="rounded-full bg-[rgba(148,163,184,0.14)] px-[8px] py-[2px] text-[11px] text-[var(--notice-text)]">未完成</span>
-                                        </div>
+                                <div class="flex max-w-[90%] gap-[12px]" :class="message.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
+                                    <div class="flex min-w-0 flex-col gap-[6px]" :class="message.role === 'user' ? 'items-end' : 'items-start'">
                                         <div
-                                            class="relative w-full overflow-hidden rounded-[24px] border px-[18px] py-[16px] shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+                                            class="relative w-full overflow-hidden rounded-[20px] px-[18px] py-[14px]"
                                             :class="[
                                                 message.error
-                                                    ? 'bg-[var(--notice-bg)] border-[var(--notice-border)] text-[var(--notice-text)]'
+                                                    ? 'bg-[var(--notice-bg)] border border-[var(--notice-border)] text-[var(--notice-text)]'
                                                     : message.role === 'user'
-                                                        ? 'bg-[var(--bubble-user-bg)] border-[var(--bubble-user-border)]'
-                                                        : 'bg-white/95 border-[rgba(148,163,184,0.16)]',
-                                                message.pending ? 'border-dashed' : 'border-solid'
+                                                        ? 'bg-[var(--accent-color)] text-white shadow-md shadow-blue-500/10'
+                                                        : 'bg-white border border-[var(--panel-border)] shadow-sm text-[var(--text-primary)]',
                                             ]"
                                         >
                                             <div
@@ -1372,46 +1437,36 @@ const handleUpload = async () => {
                                                 class="inline-flex items-center gap-[8px]"
                                             >
                                                 <div class="inline-flex items-center gap-[4px]">
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink"></span>
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.2s]"></span>
-                                                    <span class="h-[6px] w-[6px] rounded-full bg-[#7b8190] animate-blink [animation-delay:0.4s]"></span>
+                                                    <span class="h-[5px] w-[5px] rounded-full bg-blue-400 animate-bounce"></span>
+                                                    <span class="h-[5px] w-[5px] rounded-full bg-blue-400 animate-bounce [animation-delay:0.2s]"></span>
+                                                    <span class="h-[5px] w-[5px] rounded-full bg-blue-400 animate-bounce [animation-delay:0.4s]"></span>
                                                 </div>
-                                                <div class="text-[13px] text-[var(--text-secondary)]">思考中</div>
+                                                <div class="text-[13px] font-medium text-[var(--accent-color)]">思考中...</div>
                                             </div>
                                             <div
                                                 v-else-if="message.role === 'user' || message.pending"
-                                                class="whitespace-pre-wrap break-all text-[15px] leading-[1.8] [overflow-wrap:anywhere]"
-                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                                class="whitespace-pre-wrap break-all text-[15px] leading-[1.7] [overflow-wrap:anywhere]"
                                             >
                                                 {{ getContent(message) }}
                                             </div>
                                             <div
                                                 v-else
-                                                class="markdown-body break-words text-[15px] leading-[1.8] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[14px] [&_pre]:bg-[#0f172a] [&_pre]:p-[14px] [&_pre]:text-[#e2e8f0] [&_code]:rounded-[6px] [&_code]:bg-[#f1f5f9] [&_code]:px-[6px] [&_code]:py-[2px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none"
-                                                :class="message.error ? 'text-[var(--notice-text)]' : ''"
+                                                class="markdown-body break-words text-[15px] leading-[1.7] [overflow-wrap:anywhere] [&_pre]:overflow-auto [&_pre]:rounded-[12px] [&_pre]:bg-[#1e293b] [&_pre]:p-[14px] [&_pre]:text-[#f1f5f9] [&_code]:rounded-[4px] [&_code]:bg-[var(--surface-3)] [&_code]:px-[4px] [&_code]:py-[1px] [&_pre_code]:bg-transparent [&_pre_code]:p-0"
                                                 v-html="renderMarkdown(getContent(message))"
                                             ></div>
                                         </div>
-                                        <div class="relative flex items-center gap-[6px]" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+                                        <div class="flex items-center gap-[10px] px-[6px]">
+                                            <span class="text-[11px] font-medium text-[var(--text-muted)]">{{ message.role === 'user' ? 'YOU' : 'AI' }}</span>
                                             <button
                                                 type="button"
-                                                class="flex h-[28px] w-[28px] items-center justify-center rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white text-[var(--text-secondary)] shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-colors duration-150 hover:text-[var(--accent-color)] disabled:cursor-not-allowed disabled:opacity-60"
-                                                :disabled="!getContent(message)"
-                                                aria-label="复制"
+                                                class="opacity-0 group-hover:opacity-100 flex h-[24px] w-[24px] items-center justify-center rounded-[6px] text-[var(--text-muted)] hover:text-[var(--accent-color)] hover:bg-[var(--accent-soft)] transition-all"
                                                 @click.stop="handleCopy(message)"
                                             >
-                                                <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                <svg viewBox="0 0 24 24" class="h-[12px] w-[12px]" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M8 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
                                                     <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                                 </svg>
                                             </button>
-                                            <div
-                                                v-if="copiedMessageId === message.id"
-                                                class="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white px-[10px] py-[6px] text-[12px] text-[var(--text-secondary)] shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                                                :class="message.role === 'user' ? 'right-[38px]' : 'left-[38px]'"
-                                            >
-                                                已复制
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1419,149 +1474,9 @@ const handleUpload = async () => {
                         </div>
                     </div>
                 </div>
-
-                <aside class="panel-surface flex min-h-0 flex-col overflow-visible rounded-[30px]">
-                    <div class="flex-1 overflow-y-auto px-[18px] py-[18px]">
-                        <div class="space-y-[14px]">
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">模型装配</div>
-                                <div class="conversation-side-subtitle">CLIENT 决定当前回答的来源。开始发送后，当前会话会锁定已选模型。</div>
-                                <div class="mt-[14px] space-y-[10px]">
-                                    <div class="relative">
-                                        <button
-                                            ref="modelSelectRef"
-                                            type="button"
-                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all"
-                                            :class="models.length === 0 || isClientLocked ? 'cursor-not-allowed opacity-70' : 'hover:border-[rgba(47,124,246,0.22)]'"
-                                            @click="toggleModelDropdown"
-                                        >
-                                            <span class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Client</span>
-                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentModelLabel }}</span>
-                                            </span>
-                                            <span class="caret transition-transform duration-150" :class="modelDropdownOpen ? 'caret-open' : 'caret-closed'" />
-                                        </button>
-                                        <div
-                                            v-if="modelDropdownOpen && models.length > 0"
-                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)]"
-                                        >
-                                            <div
-                                                v-for="item in models"
-                                                :key="item.value"
-                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                                :class="item.value === currentModel ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                                @click.stop="selectModel(item.value)"
-                                            >
-                                                <span class="truncate">{{ item.label }}</span>
-                                                <span v-if="item.value === currentModel" class="text-[13px]">✓</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div v-if="isClientLocked" class="notice-inline text-[12px]">
-                                        该会话已开始发送消息，当前 CLIENT 已锁定。
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">工具与知识</div>
-                                <div class="conversation-side-subtitle">让工具、知识库和上传入口都回到一个右侧舱里，顶部不再堆满选择器。</div>
-                                <div class="mt-[14px] space-y-[10px]">
-                                    <div class="relative">
-                                        <button
-                                            ref="mcpSelectRef"
-                                            type="button"
-                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all hover:border-[rgba(47,124,246,0.22)]"
-                                            @click="toggleMcpDropdown"
-                                        >
-                                            <span class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">MCP</span>
-                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentMcpLabel }}</span>
-                                            </span>
-                                            <span class="caret transition-transform duration-150" :class="mcpDropdownOpen ? 'caret-open' : 'caret-closed'" />
-                                        </button>
-                                        <div
-                                            v-if="mcpDropdownOpen"
-                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
-                                            @click.stop
-                                        >
-                                            <div
-                                                v-if="mcpTools.length === 0"
-                                                class="rounded-[12px] px-[12px] py-[11px] text-[13px] text-[var(--text-secondary)]"
-                                            >
-                                                暂无工具
-                                            </div>
-                                            <div
-                                                v-for="item in mcpTools"
-                                                :key="item.value"
-                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                                :class="selectedMcpIds.includes(item.value) ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                                @click.stop="toggleMcpSelection(item.value)"
-                                            >
-                                                <span class="truncate">{{ item.label }}</span>
-                                                <span v-if="selectedMcpIds.includes(item.value)" class="text-[13px]">✓</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="relative">
-                                        <button
-                                            ref="ragSelectRef"
-                                            type="button"
-                                            class="flex min-h-[48px] w-full items-center justify-between rounded-[18px] border border-[rgba(148,163,184,0.18)] bg-white px-[14px] py-[12px] text-left shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all hover:border-[rgba(47,124,246,0.22)]"
-                                            @click="toggleRagDropdown"
-                                        >
-                                            <span class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Knowledge</span>
-                                                <span class="mt-[4px] block truncate text-[14px] font-semibold text-[var(--text-primary)]">{{ currentRagLabel }}</span>
-                                            </span>
-                                            <span class="caret transition-transform duration-150" :class="ragDropdownOpen ? 'caret-open' : 'caret-closed'" />
-                                        </button>
-                                        <div
-                                            v-if="ragDropdownOpen"
-                                            class="absolute left-0 top-[calc(100%+8px)] z-[18] w-full rounded-[18px] border border-[var(--border-color)] bg-white p-[6px] shadow-[0_20px_44px_rgba(15,23,42,0.14)] max-h-[260px] overflow-y-auto"
-                                        >
-                                            <div
-                                                v-for="item in ragTags"
-                                                :key="item.value || 'empty'"
-                                                class="flex cursor-pointer items-center justify-between rounded-[12px] px-[12px] py-[11px] text-[14px] text-[var(--text-primary)] transition-colors duration-150 hover:bg-[#f5f7fb]"
-                                                :class="item.value === currentRagTag ? 'bg-[#e8f1ff] text-[var(--accent-color)] font-bold' : ''"
-                                                @click.stop="selectRag(item.value)"
-                                            >
-                                                <span class="truncate">{{ item.label }}</span>
-                                                <span v-if="item.value === currentRagTag" class="text-[13px]">✓</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section class="conversation-side-card">
-                                <div class="conversation-side-title">当前状态</div>
-                                <div class="conversation-side-subtitle">这里不再用警报式红框，而是用更中性的说明来表达当前上下文。</div>
-                                <div class="mt-[14px] grid gap-[10px]">
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Messages</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ messages.length }} 条</div>
-                                    </div>
-                                    <div class="rounded-[18px] border border-[rgba(148,163,184,0.14)] bg-white/80 px-[14px] py-[12px]">
-                                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User Turns</div>
-                                        <div class="mt-[6px] text-[14px] font-semibold text-[var(--text-primary)]">{{ userMessageCount }}/20</div>
-                                    </div>
-                                    <div v-if="!currentModel" class="notice-inline text-[12px]">
-                                        还没有选择 CLIENT，发送前请先完成模型装配。
-                                    </div>
-                                    <div v-else-if="!isAtBottom" class="notice-inline text-[12px]">
-                                        当前不在消息底部，继续滚动可查看最新回答。
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-                    </div>
-                </aside>
             </div>
         </div>
-
+        
         <div class="bg-[var(--bg-page)]">
             <div class="mx-auto flex w-full max-w-[1440px] flex-col gap-0 px-[24px] pb-[12px] max-[720px]:px-[12px]">
                 <div class="panel-surface flex flex-col gap-[12px] rounded-[30px] p-[16px]">
@@ -1641,7 +1556,7 @@ const handleUpload = async () => {
                             @input="settingsErrors.temperature = ''"
                             @blur="validateSettings(true)"
                         />
-                        <div v-if="settingsErrors.temperature" class="text-[12px] text-[#d14343]">
+                        <div v-if="settingsErrors.temperature" class="text-[12px] text-[var(--accent-strong)] font-medium">
                             {{ settingsErrors.temperature }}
                         </div>
                     </div>
@@ -1658,7 +1573,7 @@ const handleUpload = async () => {
                             @input="settingsErrors.presencePenalty = ''"
                             @blur="validateSettings(true)"
                         />
-                        <div v-if="settingsErrors.presencePenalty" class="text-[12px] text-[#d14343]">
+                        <div v-if="settingsErrors.presencePenalty" class="text-[12px] text-[var(--accent-strong)] font-medium">
                             {{ settingsErrors.presencePenalty }}
                         </div>
                     </div>
@@ -1675,7 +1590,7 @@ const handleUpload = async () => {
                             @input="settingsErrors.maxCompletionTokens = ''"
                             @blur="validateSettings(true)"
                         />
-                        <div v-if="settingsErrors.maxCompletionTokens" class="text-[12px] text-[#d14343]">
+                        <div v-if="settingsErrors.maxCompletionTokens" class="text-[12px] text-[var(--accent-strong)] font-medium">
                             {{ settingsErrors.maxCompletionTokens }}
                         </div>
                     </div>
