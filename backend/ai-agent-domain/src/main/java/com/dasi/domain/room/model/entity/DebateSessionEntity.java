@@ -116,6 +116,24 @@ public class DebateSessionEntity {
                 && roundWinners.size() >= currentRound;
     }
 
+    /**
+     * 在轮间窗口更新下一轮配置。
+     * 仅修改会话配置字段，不推进轮次状态。
+     */
+    public void reconfigureForNextRound(List<String> nextProClientIds,
+                                        List<String> nextConClientIds,
+                                        Integer nextTurnsPerRound) {
+        if (nextProClientIds != null) {
+            this.proClientIds = new ArrayList<>(nextProClientIds);
+        }
+        if (nextConClientIds != null) {
+            this.conClientIds = new ArrayList<>(nextConClientIds);
+        }
+        if (nextTurnsPerRound != null) {
+            this.turnsPerRound = nextTurnsPerRound;
+        }
+    }
+
     public void startNextRound() {
         if (!canStartNextRound()) {
             throw new IllegalStateException("当前轮尚未宣判，无法开始下一轮");

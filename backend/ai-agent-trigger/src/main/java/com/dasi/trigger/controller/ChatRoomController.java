@@ -5,6 +5,7 @@ import com.dasi.api.dto.request.ArbitratorSetRequest;
 import com.dasi.api.dto.request.ChatRoomCreateRequest;
 import com.dasi.api.dto.request.ChatRoomCursorRequest;
 import com.dasi.api.dto.request.ChatRoomMemberRequest;
+import com.dasi.api.dto.request.DebateNextRoundRequest;
 import com.dasi.api.dto.request.DebateRoomRequest;
 import com.dasi.api.dto.request.DebateStartRequest;
 import com.dasi.api.dto.request.DebateWinnerRequest;
@@ -20,6 +21,7 @@ import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.model.valobj.DebateMemberStatusVO;
 import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
 import com.dasi.domain.room.model.valobj.DebateStatusVO;
+import com.dasi.domain.room.model.valobj.DebateRoundConfigVO;
 import com.dasi.domain.room.service.IRoomAdminService;
 import com.dasi.domain.room.service.debate.IDebateService;
 import com.dasi.domain.util.jwt.UserContext;
@@ -251,9 +253,16 @@ public class ChatRoomController implements IChatRoomService {
 
     @Override
     @PostMapping("/debate/round/next")
-    public Result<Boolean> startNextRound(@RequestBody DebateRoomRequest request) {
+    public Result<Boolean> startNextRound(@RequestBody DebateNextRoundRequest request) {
         try {
-            debateService.startNextRound(request.getRoomId());
+            debateService.startNextRound(
+                    request.getRoomId(),
+                    DebateRoundConfigVO.builder()
+                            .proClientIds(request.getProClientIds())
+                            .conClientIds(request.getConClientIds())
+                            .turnsPerRound(request.getTurnsPerRound())
+                            .build()
+            );
             return Result.success(Boolean.TRUE);
         } catch (Exception e) {
             log.error("【辩论管理】开始下一轮失败", e);

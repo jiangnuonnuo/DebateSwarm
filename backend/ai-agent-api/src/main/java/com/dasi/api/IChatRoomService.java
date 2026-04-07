@@ -5,6 +5,7 @@ import com.dasi.api.dto.request.ChatRoomCursorRequest;
 import com.dasi.api.dto.request.ChatRoomMemberRequest;
 import com.dasi.api.dto.request.ArbitratorSetRequest;
 import com.dasi.api.dto.request.DebateRoomRequest;
+import com.dasi.api.dto.request.DebateNextRoundRequest;
 import com.dasi.api.dto.request.DebateStartRequest;
 import com.dasi.api.dto.request.DebateWinnerRequest;
 import com.dasi.api.dto.response.ChatRoomDTO;
@@ -93,7 +94,7 @@ public interface IChatRoomService {
     Result<Boolean> declareRoundWinner(@RequestBody DebateWinnerRequest request);
 
     @PostMapping("/chat-room/debate/round/next")
-    Result<Boolean> startNextRound(@RequestBody DebateRoomRequest request);
+    Result<Boolean> startNextRound(@RequestBody DebateNextRoundRequest request);
 
     @PostMapping("/chat-room/debate/stop")
     Result<Boolean> stopDebate(@RequestBody DebateRoomRequest request);

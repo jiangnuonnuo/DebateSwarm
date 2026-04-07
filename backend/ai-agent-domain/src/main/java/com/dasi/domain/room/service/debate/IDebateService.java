@@ -2,6 +2,7 @@ package com.dasi.domain.room.service.debate;
 
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
+import com.dasi.domain.room.model.valobj.DebateRoundConfigVO;
 import com.dasi.domain.room.model.valobj.DebateStatusVO;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
@@ -18,7 +19,7 @@ public interface IDebateService {
 
     void declareRoundWinner(String roomId, String winnerSide);
 
-    void startNextRound(String roomId);
+    void startNextRound(String roomId, DebateRoundConfigVO roundConfig);
 
     void stopDebate(String roomId);
 

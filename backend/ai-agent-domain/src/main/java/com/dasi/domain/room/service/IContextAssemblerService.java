@@ -1,6 +1,9 @@
 package com.dasi.domain.room.service;
 
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.valobj.ArbitrationPromptContextVO;
+import com.dasi.domain.room.model.valobj.ArbitratorPromptEnvelopeVO;
+import com.dasi.domain.room.model.valobj.RoomRuntimePromptContextVO;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
@@ -26,6 +29,22 @@ public interface IContextAssemblerService {
     List<Message> assemble(String roomId, String agentId, String roomName, String currentMemberName);
 
     /**
+     * 为特定的 Agent 装配群聊上下文（含运行时动态提示词）
+     *
+     * @param roomId                房间ID
+     * @param agentId               智能体ID
+     * @param roomName              房间名称
+     * @param currentMemberName     当前智能体在房间的昵称
+     * @param runtimePromptContext  本次请求的运行时上下文
+     * @return 组装后的消息列表
+     */
+    List<Message> assemble(String roomId,
+                           String agentId,
+                           String roomName,
+                           String currentMemberName,
+                           RoomRuntimePromptContextVO runtimePromptContext);
+
+    /**
      * 存储对话信息到上下文 (持久化)
      *
      * @param messageEntity 消息领域实体
@@ -39,6 +58,15 @@ public interface IContextAssemblerService {
      * @return 组装后的消息列表
      */
     String queryRoomExtConfig(String roomId );
+
+    /**
+     * 组装仲裁者调用所需的运行时提示词载荷
+     *
+     * @param promptContext       仲裁结构化上下文
+     * @param arbitratorClientId  仲裁者 clientId
+     * @return system + user 提示词封装
+     */
+    ArbitratorPromptEnvelopeVO assembleArbitratorPromptEnvelope(ArbitrationPromptContextVO promptContext, String arbitratorClientId);
 
 
 

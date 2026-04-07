@@ -12,6 +12,13 @@
 - 单个 `client` 失败、超时、空响应时，不允许卡死整轮
 - 停止辩论后，旧执行和旧回调必须被彻底切断
 
+## 1.1 增量修复（2026-04-07）
+
+- 轮间重配：`/chat-room/debate/round/next` 支持可选传入 `proClientIds`、`conClientIds`、`turnsPerRound`，仅在 `ROUND_END + 已宣判` 生效。
+- 仲裁者固定：活跃会话内不支持切换仲裁者；下一轮只允许改正反方和发言次数。
+- 状态自愈：新增会话恢复流程，收敛 `room_state` 与 `session` 脱锚状态，避免“已结束但无法开启新辩论”。
+- 状态查询收口：`queryDebateStatus` 不再以“兜底查活跃 session”覆盖 room 运行态，防止孤儿会话误锁前端按钮。
+
 ## 2. 当前核心不变量
 
 ### 2.1 规则树是唯一执行入口
@@ -340,3 +347,40 @@
 - 新增日志：
   - `DEBATE_INTERMISSION_MENTION_ALLOWED`
   - `DEBATE_INTERMISSION_PLAIN_BLOCKED`
+
+### 9.8 运行时动态提示词分层（2026-04-07）
+
+- 目标：
+  - 彻底阻断“入房改写 ai_prompt 导致提示词重复污染”的路径；
+  - 保留静态装配链复用能力；
+  - 将房间/辩论动态信息改为单次请求运行时注入。
+- 分层规范：
+  - 静态人设：继续通过 `ChatClient.defaultSystem(...)`（来自 DB 原始 prompt）；
+  - 动态房间环境：在 `ContextAssemblerService` 每次请求生成 runtime header 注入；
+  - 仲裁者动态指令：通过 `DebateRuntimeInstructionRenderer` 渲染 `debateInstruction`，仅本次仲裁调用生效。
+- 落地动作：
+  - `ClientMemberService` 下线 `rebuildSystemPrompt -> updateSystenByPromptId`，入房只做装配预热；
+  - `RoomChatService` 在调用 `assemble` 时传入 `RoomRuntimePromptContextVO`；
+  - `LlmArbitrationDecisionStrategy` 支持：
+    - 若静态 system prompt 含 `{debateInstruction}`，运行时替换；
+    - 若不含占位符，运行时追加动态仲裁指令；
+    - 全流程不写回 DB。
+- 新增日志：
+  - `PROMPT_PERSIST_BLOCKED`
+  - `PROMPT_RUNTIME_ASSEMBLE`
+  - `ARBITRATOR_RUNTIME_INSTRUCTION_RENDERED`
+
+### 9.9 装配收口与日志降噪（2026-04-07）
+
+- 装配职责收口：
+  - `service/context` 作为唯一提示词文本装配中心。
+  - 普通聊天 runtime 头由 `RoomRuntimeHeaderAssembler` 组装。
+  - 仲裁动态指令由 `DebateInstructionAssembler` 组装。
+  - `ContextAssemblerService` 统一输出 `ArbitratorPromptEnvelopeVO(systemPrompt + userPrompt)`。
+- 业务职责收敛：
+  - `DebateService` 仅维护结构化仲裁上下文，不再拼装仲裁文本。
+  - `LlmArbitrationDecisionStrategy` 仅负责调用与解析，不再负责“替换/追加”拼装策略。
+- 日志降噪策略：
+  - `INFO` 仅保留摘要：`ARBITRATOR_PROMPT_READY`
+  - 全量候选集、偏好列表、动态指令全文降级为 `DEBUG`
+  - 禁止在 `INFO` 打印超长 prompt 正文

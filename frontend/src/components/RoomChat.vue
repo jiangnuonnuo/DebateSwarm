@@ -99,6 +99,7 @@
                             <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">仲裁者</label>
                             <div class="flex gap-2">
                                 <select v-model="selectedArbitratorId"
+                                        :disabled="debateLoading || !canEditArbitrator"
                                         class="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500/40">
                                     <option value="">选择仲裁模型</option>
                                     <option v-for="option in debateClientOptions" :key="option.id" :value="option.id">
@@ -106,12 +107,12 @@
                                     </option>
                                 </select>
                                 <button @click="setDebateArbitrator"
-                                        :disabled="debateLoading || !selectedArbitratorId"
+                                        :disabled="debateLoading || !selectedArbitratorId || !canEditArbitrator"
                                         class="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[11px] font-bold disabled:opacity-30 transition-all hover:bg-blue-500">
                                     设置
                                 </button>
                                 <button @click="removeDebateArbitrator"
-                                        :disabled="debateLoading || !debateStatus?.arbitratorClientId"
+                                        :disabled="debateLoading || !debateStatus?.arbitratorClientId || !canEditArbitrator"
                                         class="px-3 py-1.5 rounded-xl border border-white/10 text-[11px] font-bold text-white/80 disabled:opacity-30 transition-all hover:bg-white/10">
                                     移除
                                 </button>
@@ -133,6 +134,7 @@
                                         <input type="checkbox"
                                                class="accent-blue-500"
                                                :checked="selectedProIds.includes(option.id)"
+                                               :disabled="debateLoading || !canEditDebateConfig"
                                                @change="toggleDebater('PRO', option.id)">
                                         <span class="truncate">{{ option.name }}</span>
                                     </label>
@@ -152,6 +154,7 @@
                                         <input type="checkbox"
                                                class="accent-slate-400"
                                                :checked="selectedConIds.includes(option.id)"
+                                               :disabled="debateLoading || !canEditDebateConfig"
                                                @change="toggleDebater('CON', option.id)">
                                         <span class="truncate">{{ option.name }}</span>
                                     </label>
@@ -167,6 +170,7 @@
                                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">辩题</span>
                                 <input v-model="debateTopic"
                                        type="text"
+                                       :disabled="debateLoading || hasActiveDebateSession"
                                        class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500/40"
                                        placeholder="输入辩论主题..." />
                             </label>
@@ -174,6 +178,8 @@
                                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">发言数</span>
                                 <input v-model="debateTurns"
                                        type="number"
+                                       :disabled="debateLoading || !canEditDebateConfig"
+                                       @input="markNextRoundConfigDirty"
                                        class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500/40" />
                             </label>
                         </div>
@@ -205,7 +211,7 @@
                             </button>
                         </div>
                         <p v-if="canStartNextRound" class="text-[10px] text-emerald-300/80">
-                            当前处于轮间阶段：支持 @ 指定客户端回复；未 @ 消息不会触发自动回复。
+                            当前处于轮间阶段：可调整正反方与发言次数并开启下一轮；同时支持 @ 指定客户端回复。
                         </p>
                     </div>
                 </div>
@@ -494,8 +500,10 @@ const debateTurns = ref(6);
 const selectedArbitratorId = ref('');
 const selectedProIds = ref([]);
 const selectedConIds = ref([]);
+const nextRoundConfigDirty = ref(false);
 
 const inviteList = computed(() => (inviteMode.value === 'client' ? availableClients.value : availableAgents.value));
+const hasActiveDebateSession = computed(() => Boolean(debateStatus.value?.sessionId));
 const isDebateRunning = computed(() => ['RUNNING', 'ROUND_END'].includes(debateStatus.value?.status || ''));
 const waitingForWinner = computed(() => Boolean(debateStatus.value?.waitingForWinner));
 const canDeclareWinner = computed(() => {
@@ -519,6 +527,8 @@ const canStopDebate = computed(() => {
     }
     return isDebateRunning.value;
 });
+const canEditArbitrator = computed(() => !hasActiveDebateSession.value);
+const canEditDebateConfig = computed(() => !hasActiveDebateSession.value || canStartNextRound.value);
 const debatePanelVisible = computed(() => Boolean(showDebatePanel.value));
 const debateClientOptions = computed(() => clientMembers.value.map(item => ({
     id: item.memberId,
@@ -813,14 +823,29 @@ const loadAvailableAgents = async () => {
     } catch (e) {}
 };
 
+const statusCanStartNextRound = (status) => {
+    if (!status) return false;
+    if (typeof status.canStartNextRound === 'boolean') {
+        return status.canStartNextRound;
+    }
+    const winners = status.roundWinners || {};
+    const currentRound = status.currentRound || 0;
+    const hasWinner = currentRound > 0 && Boolean(winners[String(currentRound)]);
+    return Boolean(status.status === 'ROUND_END' && !status.waitingForWinner && hasWinner);
+};
+
 const syncDebateFormFromStatus = (status) => {
     if (!status) return;
     selectedArbitratorId.value = status.arbitratorClientId || selectedArbitratorId.value || '';
-    if (status.sessionId) {
+    const keepRoundDraft = Boolean(status.sessionId) && statusCanStartNextRound(status) && nextRoundConfigDirty.value;
+    if (status.sessionId && !keepRoundDraft) {
         debateTopic.value = status.topic || debateTopic.value;
         debateTurns.value = status.turnsPerRound || debateTurns.value || 6;
         selectedProIds.value = Array.isArray(status.proMembers) ? status.proMembers.map(item => item.clientId) : [];
         selectedConIds.value = Array.isArray(status.conMembers) ? status.conMembers.map(item => item.clientId) : [];
+    }
+    if (!status.sessionId) {
+        nextRoundConfigDirty.value = false;
     }
 };
 
@@ -910,6 +935,12 @@ const removeDebateArbitrator = async () => {
     }).catch((e) => toast.show(e.message || '移除仲裁者失败'));
 };
 
+const markNextRoundConfigDirty = () => {
+    if (canStartNextRound.value) {
+        nextRoundConfigDirty.value = true;
+    }
+};
+
 const toggleDebater = (side, clientId) => {
     if (clientId === selectedArbitratorId.value) {
         toast.show('仲裁者不能同时作为辩手');
@@ -919,10 +950,12 @@ const toggleDebater = (side, clientId) => {
     const opposite = side === 'PRO' ? selectedConIds : selectedProIds;
     if (target.value.includes(clientId)) {
         target.value = target.value.filter(id => id !== clientId);
+        markNextRoundConfigDirty();
         return;
     }
     opposite.value = opposite.value.filter(id => id !== clientId);
     target.value = [...target.value, clientId];
+    markNextRoundConfigDirty();
 };
 
 const startDebateFlow = async () => {
@@ -949,6 +982,7 @@ const startDebateFlow = async () => {
         if (res.code !== 200) {
             throw new Error(res.info || '开始辩论失败');
         }
+        nextRoundConfigDirty.value = false;
         toast.show('辩论已开始');
     }).catch((e) => toast.show(e.message || '开始辩论失败'));
 };
@@ -969,10 +1003,16 @@ const declareDebateWinner = async (winnerSide) => {
 
 const startDebateNextRound = async () => {
     await runDebateAction(async () => {
-        const res = await chatRoomDebateNextRound({ roomId: roomId.value });
+        const res = await chatRoomDebateNextRound({
+            roomId: roomId.value,
+            proClientIds: selectedProIds.value,
+            conClientIds: selectedConIds.value,
+            turnsPerRound: Number(debateTurns.value) || 6
+        });
         if (res.code !== 200) {
             throw new Error(res.info || '开始下一轮失败');
         }
+        nextRoundConfigDirty.value = false;
         toast.show('下一轮已开始');
     }).catch((e) => toast.show(e.message || '开始下一轮失败'));
 };
@@ -986,6 +1026,7 @@ const stopDebateFlow = async () => {
         showDebatePanel.value = false;
         showWinnerModal.value = false;
         winnerModalToken.value = '';
+        nextRoundConfigDirty.value = false;
         toast.show('辩论已结束');
     }).catch((e) => toast.show(e.message || '停止辩论失败'));
 };

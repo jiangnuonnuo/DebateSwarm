@@ -5,9 +5,13 @@ import com.dasi.domain.ai.service.dispatch.IDispatchService;
 import com.dasi.domain.room.apapter.port.IRoomEventPublisher;
 import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.AiChatRoomMessageEntity;
+import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
 import com.dasi.domain.room.model.valobj.ClientReplyResultVO;
+import com.dasi.domain.room.model.valobj.DebateStatus;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.model.valobj.RoomChatRequest;
+import com.dasi.domain.room.model.valobj.RoomRuntimePromptContextVO;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IContextAssemblerService;
 import com.dasi.domain.room.service.IRoomChatService;
@@ -330,7 +334,8 @@ public class RoomChatService implements IRoomChatService {
             }
 
             String roomName = chatRoomRepository.queryRoomName(roomId);
-            List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName);
+            RoomRuntimePromptContextVO runtimePromptContext = buildRuntimePromptContext(request, clientName);
+            List<Message> messages = contextAssemblerService.assemble(roomId, clientId, roomName, clientName, runtimePromptContext);
             String content = invokeWithTimeout(
                     () -> client.prompt(new Prompt(messages)).call().content(),
                     timeoutSeconds,
@@ -458,5 +463,56 @@ public class RoomChatService implements IRoomChatService {
             return -1L;
         }
         return Math.max(0L, result.getFinishedAt() - result.getStartedAt());
+    }
+
+    private RoomRuntimePromptContextVO buildRuntimePromptContext(ClientExecutionRequestVO request, String senderName) {
+        String roomId = request.getRoomId();
+        DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
+        RoomDebateStateVO roomState = chatRoomRepository.queryRoomDebateState(roomId);
+        String stage = resolveRuntimeStage(activeSession, roomState);
+        String hint = buildRuntimeHint(stage, activeSession, request);
+        return RoomRuntimePromptContextVO.builder()
+                .roomId(roomId)
+                .sessionId(activeSession == null ? request.getSessionId() : activeSession.getSessionId())
+                .stage(stage)
+                .traceId(request.getDispatchTraceId() == null || request.getDispatchTraceId().isBlank()
+                        ? request.getBatchTraceId()
+                        : request.getDispatchTraceId())
+                .eventType(request.getDecisionSource() == null || request.getDecisionSource().isBlank()
+                        ? "USER_MSG"
+                        : request.getDecisionSource())
+                .senderId(request.getClientId())
+                .senderName(senderName)
+                .atMemberIds(request.getRequestedAtMemberIds() == null ? "[]" : JSON.toJSONString(request.getRequestedAtMemberIds()))
+                .runtimeHint(hint)
+                .build();
+    }
+
+    private String resolveRuntimeStage(DebateSessionEntity activeSession, RoomDebateStateVO roomState) {
+        if (activeSession == null || activeSession.getStatus() == null) {
+            return "FREE_CHAT";
+        }
+        if (DebateStatus.RUNNING.equals(activeSession.getStatus())) {
+            return "RUNNING";
+        }
+        if (DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
+            boolean waitingForWinner = roomState != null && roomState.waitingForWinner();
+            return waitingForWinner ? "ROUND_END_WAIT_WINNER" : "INTERMISSION";
+        }
+        return activeSession.getStatus().name();
+    }
+
+    private String buildRuntimeHint(String stage, DebateSessionEntity activeSession, ClientExecutionRequestVO request) {
+        return switch (stage) {
+            case "RUNNING" -> String.format(
+                    "当前辩论进行中（sessionId=%s, round=%s, turn=%s）。请围绕辩题推进攻防并保持简洁。",
+                    activeSession == null ? "" : activeSession.getSessionId(),
+                    activeSession == null ? "" : String.valueOf(activeSession.getCurrentRound()),
+                    activeSession == null ? "" : String.valueOf(activeSession.getCurrentTurn())
+            );
+            case "ROUND_END_WAIT_WINNER" -> "当前处于本轮结束待裁决阶段，普通消息不会触发自动辩论推进。";
+            case "INTERMISSION" -> "当前处于轮间阶段，仅 @ 指定消息会触发回复。";
+            default -> "当前为自由聊天模式，请结合最近对话自然回复。";
+        };
     }
 }

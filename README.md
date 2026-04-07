@@ -113,7 +113,7 @@ Xerina MiniAgent 是一个集成了 AI 对话、多角色 Agent 工作流、多�
 
 ![辩论赛配置界面](./assets/user-debate-setup.png)
 
-![辩论赛进行中](./assets/user-debate-running.png)
+![辩论赛进行中](./assets/user-debate-free.png)
 
 ![辩论赛胜方裁决](./assets/user-debate-winner.png)
 

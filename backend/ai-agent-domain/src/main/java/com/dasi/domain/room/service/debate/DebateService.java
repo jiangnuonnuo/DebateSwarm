@@ -13,6 +13,7 @@ import com.dasi.domain.room.model.valobj.ArbitrationPromptContextVO;
 import com.dasi.domain.room.model.valobj.DebateContextVO;
 import com.dasi.domain.room.model.valobj.DebateMemberStatusVO;
 import com.dasi.domain.room.model.valobj.DebateRoundSummaryVO;
+import com.dasi.domain.room.model.valobj.DebateRoundConfigVO;
 import com.dasi.domain.room.model.valobj.DebateStatus;
 import com.dasi.domain.room.model.valobj.DebateStatusVO;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
@@ -21,6 +22,7 @@ import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.IRoomChatService;
 import com.dasi.domain.room.service.debate.arbitration.IDebateArbitrationService;
+import com.dasi.domain.room.service.debate.support.DebateSessionRecoveryService;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import com.dasi.types.exception.DependencyConflictException;
 import com.dasi.types.exception.MissingException;
@@ -64,18 +66,20 @@ public class DebateService implements IDebateService {
     @Resource
     private IRoomEventPublisher roomEventPublisher;
 
+    @Resource
+    private DebateSessionRecoveryService debateSessionRecoveryService;
+
     @Override
     @Transactional
     public void setArbitrator(String roomId, String clientId) {
         ensureRoomExists(roomId);
         validateClientMember(roomId, clientId);
 
+        RoomDebateStateVO state = sanitizeRoomState(roomId, loadRoomDebateStateFresh(roomId), true);
         DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
         if (activeSession != null) {
             throw new DependencyConflictException("当前房间已有进行中的辩论，无法切换仲裁者");
         }
-
-        RoomDebateStateVO state = loadRoomDebateStateFresh(roomId);
         state.setArbitratorClientId(clientId);
         clearRoundState(state);
         clearPendingDispatch(state);
@@ -86,12 +90,12 @@ public class DebateService implements IDebateService {
     @Transactional
     public void removeArbitrator(String roomId) {
         ensureRoomExists(roomId);
+        RoomDebateStateVO state = sanitizeRoomState(roomId, loadRoomDebateStateFresh(roomId), true);
         DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
         if (activeSession != null) {
             throw new DependencyConflictException("当前房间辩论进行中，无法移除仲裁者");
         }
 
-        RoomDebateStateVO state = loadRoomDebateState(roomId);
         state.setArbitratorClientId(null);
         state.setActiveDebateSessionId(null);
         clearRoundState(state);
@@ -103,7 +107,7 @@ public class DebateService implements IDebateService {
     @Transactional
     public String startDebate(String roomId, String topic, List<String> proClientIds, List<String> conClientIds, Integer turnsPerRound) {
         ensureRoomExists(roomId);
-        RoomDebateStateVO state = loadRoomDebateState(roomId);
+        RoomDebateStateVO state = sanitizeRoomState(roomId, loadRoomDebateStateFresh(roomId), true);
         if (state.getArbitratorClientId() == null || state.getArbitratorClientId().isBlank()) {
             throw new MissingException("请先设置仲裁者");
         }
@@ -182,8 +186,30 @@ public class DebateService implements IDebateService {
 
     @Override
     @Transactional
-    public void startNextRound(String roomId) {
+    public void startNextRound(String roomId, DebateRoundConfigVO roundConfig) {
         DebateSessionEntity session = getRequiredActiveSession(roomId);
+        DebateRoundConfigVO normalizedConfig = normalizeRoundConfig(roundConfig);
+        if (normalizedConfig != null) {
+            if (hasLineupOverride(normalizedConfig)) {
+                validateDebateSides(
+                        roomId,
+                        session.getArbitratorClientId(),
+                        normalizedConfig.getProClientIds(),
+                        normalizedConfig.getConClientIds()
+                );
+            }
+            session.reconfigureForNextRound(
+                    normalizedConfig.getProClientIds(),
+                    normalizedConfig.getConClientIds(),
+                    normalizedConfig.getTurnsPerRound()
+            );
+            log.info("【NEXT_ROUND_RECONFIG_APPLIED】roomId={}, sessionId={}, proSize={}, conSize={}, turnsPerRound={}",
+                    roomId,
+                    session.getSessionId(),
+                    session.getProClientIds() == null ? 0 : session.getProClientIds().size(),
+                    session.getConClientIds() == null ? 0 : session.getConClientIds().size(),
+                    session.getTurnsPerRound());
+        }
         session.startNextRound();
         if (!chatRoomRepository.updateDebateSessionStatus(session)) {
             throw new DependencyConflictException("辩论状态已变更，请刷新后重试");
@@ -213,7 +239,7 @@ public class DebateService implements IDebateService {
     @Transactional
     public void stopDebate(String roomId) {
         ensureRoomExists(roomId);
-        RoomDebateStateVO state = loadRoomDebateStateFresh(roomId);
+        RoomDebateStateVO state = sanitizeRoomState(roomId, loadRoomDebateStateFresh(roomId), false);
         DebateSessionEntity session = resolveSessionForStop(roomId, state);
         finishSessionStrongly(roomId, session);
 
@@ -237,14 +263,11 @@ public class DebateService implements IDebateService {
     @Override
     public DebateStatusVO queryDebateStatus(String roomId) {
         ensureRoomExists(roomId);
-        RoomDebateStateVO state = loadRoomDebateState(roomId);
+        RoomDebateStateVO state = sanitizeRoomState(roomId, loadRoomDebateState(roomId), true);
 
         DebateSessionEntity session = null;
         if (state.getActiveDebateSessionId() != null && !state.getActiveDebateSessionId().isBlank()) {
             session = chatRoomRepository.queryDebateSessionBySessionId(state.getActiveDebateSessionId());
-        }
-        if (session == null) {
-            session = chatRoomRepository.queryActiveDebateSession(roomId);
         }
 
         if (session == null) {
@@ -500,6 +523,10 @@ public class DebateService implements IDebateService {
         return ensureStateVersion(chatRoomRepository.queryRoomDebateStateFresh(roomId));
     }
 
+    private RoomDebateStateVO sanitizeRoomState(String roomId, RoomDebateStateVO state, boolean healDetachedOrphanSession) {
+        return debateSessionRecoveryService.sanitizeRoomState(roomId, state, healDetachedOrphanSession);
+    }
+
     private void persistRoomDebateState(String roomId, RoomDebateStateVO state) {
         RoomDebateStateVO targetState = state == null ? RoomDebateStateVO.builder().version(0).build() : state;
         for (int attempt = 1; attempt <= ROOM_STATE_WRITE_MAX_RETRY; attempt++) {
@@ -596,6 +623,43 @@ public class DebateService implements IDebateService {
             return DEFAULT_TURNS_PER_ROUND;
         }
         return turnsPerRound;
+    }
+
+    private DebateRoundConfigVO normalizeRoundConfig(DebateRoundConfigVO roundConfig) {
+        if (roundConfig == null) {
+            return null;
+        }
+        boolean hasPro = roundConfig.getProClientIds() != null;
+        boolean hasCon = roundConfig.getConClientIds() != null;
+        if (hasPro ^ hasCon) {
+            throw new MissingException("变更正反方时必须同时提供 proClientIds 和 conClientIds");
+        }
+
+        List<String> normalizedPro = hasPro ? normalizeDebaters(roundConfig.getProClientIds()) : null;
+        List<String> normalizedCon = hasCon ? normalizeDebaters(roundConfig.getConClientIds()) : null;
+        Integer normalizedTurns = null;
+        if (roundConfig.getTurnsPerRound() != null) {
+            if (roundConfig.getTurnsPerRound() <= 0) {
+                throw new MissingException("turnsPerRound 必须大于 0");
+            }
+            normalizedTurns = roundConfig.getTurnsPerRound();
+        }
+
+        if (!hasPro && normalizedTurns == null) {
+            return null;
+        }
+
+        return DebateRoundConfigVO.builder()
+                .proClientIds(normalizedPro)
+                .conClientIds(normalizedCon)
+                .turnsPerRound(normalizedTurns)
+                .build();
+    }
+
+    private boolean hasLineupOverride(DebateRoundConfigVO roundConfig) {
+        return roundConfig != null
+                && roundConfig.getProClientIds() != null
+                && roundConfig.getConClientIds() != null;
     }
 
     private String normalizeWinnerSide(String winnerSide) {
@@ -727,7 +791,7 @@ public class DebateService implements IDebateService {
                                                     RoomDebateStateVO state,
                                                     AiChatRoomMessageEntity triggerMessage) {
         ArbitrationPromptContextVO promptContext = buildArbitrationPromptContext(session, state, triggerMessage);
-        log.info("【ARBITRATOR_PROMPT_CONTEXT】sessionId={}, roomId={}, arbitratorClientId={}, round={}, turn={}, triggerSpeakerId={}, requiredSide={}, excluded={}, candidates={}, preferred={}",
+        log.debug("【ARBITRATOR_PROMPT_CONTEXT】sessionId={}, roomId={}, arbitratorClientId={}, round={}, turn={}, triggerSpeakerId={}, requiredSide={}, excluded={}, candidates={}, preferred={}",
                 session.getSessionId(),
                 session.getRoomId(),
                 promptContext.getArbitratorClientId(),
@@ -814,7 +878,7 @@ public class DebateService implements IDebateService {
         Map<String, Integer> candidateJoinOrder = buildJoinOrderMap(session.getRoomId(), candidateSpeakerIds);
         List<String> preferredSpeakerIds = session.listPreferredSpeakerIds(lastSpeakerClientId, requiredSide, excludedSpeakerIds, roundHistory, candidateJoinOrder);
 
-        return ArbitrationPromptContextVO.builder()
+        ArbitrationPromptContextVO promptContext = ArbitrationPromptContextVO.builder()
                 .roomId(session.getRoomId())
                 .sessionId(session.getSessionId())
                 .topic(debateContext == null ? session.getTopic() : debateContext.getTopic())
@@ -837,6 +901,7 @@ public class DebateService implements IDebateService {
                 .roundHistory(roundHistory)
                 .recentConversation(recentConversation)
                 .build();
+        return promptContext;
     }
 
     private void saveDebateRecord(DebateSessionEntity session, String roomId, RoomDebateStateVO state, AiChatRoomMessageEntity lastMessage) {
