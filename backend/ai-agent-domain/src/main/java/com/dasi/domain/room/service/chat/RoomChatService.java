@@ -470,7 +470,14 @@ public class RoomChatService implements IRoomChatService {
         DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
         RoomDebateStateVO roomState = chatRoomRepository.queryRoomDebateState(roomId);
         String stage = resolveRuntimeStage(activeSession, roomState);
-        String hint = buildRuntimeHint(stage, activeSession, request);
+        String hint = buildRuntimeHint(stage, activeSession, roomState, request);
+        if ("INTERMISSION".equals(stage)
+                && roomState != null
+                && roomState.getArbitratorClientId() != null
+                && roomState.getArbitratorClientId().equals(request.getClientId())) {
+            log.debug("【ARBITRATOR_CHAT_MODE】roomId={}, clientId={}, stage={}, traceId={}",
+                    roomId, request.getClientId(), stage, request.getDispatchTraceId());
+        }
         return RoomRuntimePromptContextVO.builder()
                 .roomId(roomId)
                 .sessionId(activeSession == null ? request.getSessionId() : activeSession.getSessionId())
@@ -502,7 +509,13 @@ public class RoomChatService implements IRoomChatService {
         return activeSession.getStatus().name();
     }
 
-    private String buildRuntimeHint(String stage, DebateSessionEntity activeSession, ClientExecutionRequestVO request) {
+    private String buildRuntimeHint(String stage,
+                                    DebateSessionEntity activeSession,
+                                    RoomDebateStateVO roomState,
+                                    ClientExecutionRequestVO request) {
+        boolean isArbitrator = roomState != null
+                && roomState.getArbitratorClientId() != null
+                && roomState.getArbitratorClientId().equals(request.getClientId());
         return switch (stage) {
             case "RUNNING" -> String.format(
                     "当前辩论进行中（sessionId=%s, round=%s, turn=%s）。请围绕辩题推进攻防并保持简洁。",
@@ -511,7 +524,9 @@ public class RoomChatService implements IRoomChatService {
                     activeSession == null ? "" : String.valueOf(activeSession.getCurrentTurn())
             );
             case "ROUND_END_WAIT_WINNER" -> "当前处于本轮结束待裁决阶段，普通消息不会触发自动辩论推进。";
-            case "INTERMISSION" -> "当前处于轮间阶段，仅 @ 指定消息会触发回复。";
+            case "INTERMISSION" -> isArbitrator
+                    ? "当前处于已宣判轮间阶段。你是本房间仲裁者，可自然表达观点并回应问题；本次是聊天回复，不需要输出 speaker 决策 JSON。"
+                    : "当前处于轮间阶段，仅 @ 指定消息会触发回复。";
             default -> "当前为自由聊天模式，请结合最近对话自然回复。";
         };
     }

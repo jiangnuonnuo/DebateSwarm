@@ -194,7 +194,7 @@ public class ContextAssemblerService implements IContextAssemblerService {
                                                                        String arbitratorClientId) {
         String debateInstruction = debateInstructionAssembler.buildInstruction(promptContext);
         String instructionDigest = debateInstructionAssembler.buildDigest(debateInstruction);
-        String staticSystemPrompt = queryStaticSystemPrompt(arbitratorClientId);
+        String staticSystemPrompt = sanitizeArbitratorStaticPrompt(queryStaticSystemPrompt(arbitratorClientId), arbitratorClientId);
         String mode;
         String systemPrompt;
         if (staticSystemPrompt.isBlank()) {
@@ -258,6 +258,40 @@ public class ContextAssemblerService implements IContextAssemblerService {
                 .mode(mode)
                 .instructionDigest(instructionDigest)
                 .build();
+    }
+
+    private String sanitizeArbitratorStaticPrompt(String staticPrompt, String clientId) {
+        if (staticPrompt == null) {
+            return "";
+        }
+        String normalized = staticPrompt.trim();
+        if (normalized.isBlank()) {
+            return "";
+        }
+        int placeholderCount = countOccurrences(normalized, "{debateInstruction}");
+        int personaCount = countOccurrences(normalized, "# 1. 核心人设");
+        if (normalized.length() > 5000 || placeholderCount > 1 || personaCount > 1) {
+            log.warn("【ARBITRATOR_STATIC_PROMPT_SANITIZED】clientId={}, length={}, placeholderCount={}, personaCount={}, action=FALLBACK_ONLY",
+                    clientId, normalized.length(), placeholderCount, personaCount);
+            return "";
+        }
+        return normalized;
+    }
+
+    private int countOccurrences(String text, String token) {
+        if (text == null || token == null || token.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int idx = 0;
+        while (idx >= 0) {
+            idx = text.indexOf(token, idx);
+            if (idx >= 0) {
+                count++;
+                idx += token.length();
+            }
+        }
+        return count;
     }
 
     private String queryStaticSystemPrompt(String clientId) {
