@@ -105,10 +105,13 @@ public class RoomDispatchService implements IRoomDispatchService {
         // 1. 识别当前发言者 ID 和 绑定的成员信息
         String currentSenderId = "";
         String atMemberId = "" ;
+        AiChatRoomMessageEntity currentMessage = null;
         if (wsEvent.getPayload() instanceof AiChatRoomMessageEntity) {
-            currentSenderId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getSenderId();
-            atMemberId = ((AiChatRoomMessageEntity) wsEvent.getPayload()).getAtMemberId();
+            currentMessage = (AiChatRoomMessageEntity) wsEvent.getPayload();
+            currentSenderId = currentMessage.getSenderId();
+            atMemberId = currentMessage.getAtMemberId();
         }
+        String eventTraceId = resolveEventTraceId(wsEvent, currentMessage);
 
         // 2. 解析被 @ 的成员 ID 集合 (以逗号分隔)
         List<String> atMemberIds = new ArrayList<>();
@@ -124,9 +127,9 @@ public class RoomDispatchService implements IRoomDispatchService {
                 .roomId(roomId)
                 .eventType(eventType)
                 .senderId(currentSenderId)
-                .traceId(wsEvent.getTraceId())
+                .traceId(eventTraceId)
                 .atMemberIds(atMemberIds)
-                .currentMessage(wsEvent.getPayload() instanceof AiChatRoomMessageEntity ? (AiChatRoomMessageEntity) wsEvent.getPayload() : null)
+                .currentMessage(currentMessage)
                 .build();
 
         log.info("【调度决策】接收事件 roomId={}, eventType={}, senderId={}", roomId, eventType, currentSenderId);
@@ -147,5 +150,26 @@ public class RoomDispatchService implements IRoomDispatchService {
                 .map(String::trim)
                 .filter(name -> !name.isEmpty())
                 .collect(Collectors.toList());
+    }
+
+    private String resolveEventTraceId(WebSocketEvent<?> wsEvent, AiChatRoomMessageEntity currentMessage) {
+        if (wsEvent != null && wsEvent.getTraceId() != null && !wsEvent.getTraceId().isBlank()) {
+            return wsEvent.getTraceId();
+        }
+        if (currentMessage != null && currentMessage.getTraceId() != null && !currentMessage.getTraceId().isBlank()) {
+            return currentMessage.getTraceId();
+        }
+        return extractDispatchTraceId(currentMessage);
+    }
+
+    private String extractDispatchTraceId(AiChatRoomMessageEntity message) {
+        if (message == null || message.getExtData() == null || message.getExtData().isBlank()) {
+            return null;
+        }
+        try {
+            return JSON.parseObject(message.getExtData()).getString("dispatchTraceId");
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

@@ -73,6 +73,18 @@
         WHERE session_id = #{sessionId} AND version = #{version} AND is_deleted = 0
     </update>
 
+    <update id="updateStatusForce" parameterType="com.dasi.infrastructure.persistent.po.AiDebateSession">
+        UPDATE ai_debate_session
+        <set>
+            <if test="currentRound != null">current_round = #{currentRound},</if>
+            <if test="currentTurn != null">current_turn = #{currentTurn},</if>
+            <if test="roundWinners != null">round_winners = #{roundWinners},</if>
+            <if test="status != null">status = #{status},</if>
+            version = version + 1
+        </set>
+        WHERE session_id = #{sessionId} AND is_deleted = 0
+    </update>
+
     <update id="deleteBySessionId">
         UPDATE ai_debate_session SET is_deleted = 1
         WHERE session_id = #{sessionId}

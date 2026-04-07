@@ -81,7 +81,7 @@ public class ChatExecutionNode extends AbstractDispatchNode {
             }
 
             decision = ensureDebateTrace(decision, activeSession);
-            if (!preparePendingDispatch(roomId, activeSession, decision)) {
+            if (!ensurePendingDispatchGuard(roomId, activeSession, decision)) {
                 log.info("【STALE_CALLBACK_DROPPED】调度护栏已变化，放弃执行 roomId={}, speakerId={}, traceId={}",
                         roomId, speakerId, decision.getDispatchTraceId());
                 return router(strategyEntity, dispatchContext);
@@ -133,9 +133,13 @@ public class ChatExecutionNode extends AbstractDispatchNode {
         return null;
     }
 
-    private boolean preparePendingDispatch(String roomId, DebateSessionEntity activeSession, DispatchDecisionVO decision) {
+    /**
+     * 辩论链默认由 DebateService 预先写入 pending speaker 护栏。
+     * 这里仅做护栏校验；仅在“辩论中 @ 指定直达执行”的兼容路径下才补写一次护栏。
+     */
+    private boolean ensurePendingDispatchGuard(String roomId, DebateSessionEntity activeSession, DispatchDecisionVO decision) {
         chatRoomRepository.initRoomStateIfAbsent(roomId);
-        RoomDebateStateVO state = chatRoomRepository.queryRoomDebateState(roomId);
+        RoomDebateStateVO state = chatRoomRepository.queryRoomDebateStateFresh(roomId);
         if (state == null) {
             state = RoomDebateStateVO.builder().version(0).build();
         }
@@ -143,6 +147,27 @@ public class ChatExecutionNode extends AbstractDispatchNode {
             return false;
         }
 
+        if (Objects.equals(state.getPendingSpeakerId(), decision.getSpeakerId())
+                && Objects.equals(state.getDispatchTraceId(), decision.getDispatchTraceId())
+                && Objects.equals(state.getDispatchSessionId(), activeSession.getSessionId())
+                && Objects.equals(state.getDispatchRound(), activeSession.getCurrentRound())
+                && Objects.equals(state.getDispatchVersion(), activeSession.getVersion())) {
+            return true;
+        }
+
+        // 兼容辩论中 @指定直达执行：该路径不会先经过 DebateService 写入护栏。
+        if (decision.getDecisionSource() != null
+                && decision.getDecisionSource().startsWith("AT_MENTION")
+                && (state.getPendingSpeakerId() == null || state.getPendingSpeakerId().isBlank())) {
+            return preparePendingDispatchFallback(roomId, activeSession, decision, state);
+        }
+        return false;
+    }
+
+    private boolean preparePendingDispatchFallback(String roomId,
+                                                   DebateSessionEntity activeSession,
+                                                   DispatchDecisionVO decision,
+                                                   RoomDebateStateVO state) {
         state.setPendingSpeakerId(decision.getSpeakerId());
         state.setPendingTurnNumber((activeSession.getCurrentTurn() == null ? 0 : activeSession.getCurrentTurn()) + 1);
         state.setPendingDecisionSource(decision.getDecisionSource());
@@ -159,6 +184,8 @@ public class ChatExecutionNode extends AbstractDispatchNode {
         boolean saved = chatRoomRepository.saveRoomDebateState(roomId, state, version);
         if (saved) {
             state.setVersion(version + 1);
+            log.info("【CHAT_EXECUTE】兼容路径补写 pending 护栏 roomId={}, sessionId={}, speakerId={}, traceId={}",
+                    roomId, activeSession.getSessionId(), decision.getSpeakerId(), decision.getDispatchTraceId());
         }
         return saved;
     }

@@ -5,6 +5,9 @@ import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
+import com.dasi.domain.room.model.valobj.DebateStatus;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
+import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import com.dasi.domain.room.service.debate.IDebateService;
 import jakarta.annotation.Resource;
@@ -36,6 +39,18 @@ public class ArbitratorNode extends AbstractDispatchNode {
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
         // 如果已经有决策 (如来自 @指定)，直接路由
         if (dispatchContext.hasAnyDecision()) {
+            if (dispatchContext.getDecision() != null) {
+                log.info("【ARBITRATOR_BYPASS】roomId={}, eventType={}, reason=PRE_DECIDED, source={}, speakerId={}",
+                        strategyEntity.getRoomId(),
+                        strategyEntity.getEventType(),
+                        dispatchContext.getDecision().getDecisionSource(),
+                        dispatchContext.getDecision().getSpeakerId());
+            } else {
+                log.info("【ARBITRATOR_BYPASS】roomId={}, eventType={}, reason=PRE_DECIDED_BATCH, size={}",
+                        strategyEntity.getRoomId(),
+                        strategyEntity.getEventType(),
+                        dispatchContext.getDecisions() == null ? 0 : dispatchContext.getDecisions().size());
+            }
             return router(strategyEntity, dispatchContext);
         }
 
@@ -49,6 +64,25 @@ public class ArbitratorNode extends AbstractDispatchNode {
         // 2. 存入上下文供后续阶段使用
         dispatchContext.setDebateSession(activeSession);
         log.info("【调度决策】ArbitratorNode 识别到辩论模式：sessionId={}", activeSession.getSessionId());
+
+        boolean isUserMsg = WebSocketEvent.EventType.USER_MSG.equals(strategyEntity.getEventType());
+        if (DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
+            chatRoomRepository.initRoomStateIfAbsent(strategyEntity.getRoomId());
+            RoomDebateStateVO roomState = chatRoomRepository.queryRoomDebateState(strategyEntity.getRoomId());
+            boolean waitingForWinner = roomState == null || roomState.waitingForWinner();
+
+            // 轮间窗口（已宣判、待下一轮）：允许 @ 命中；未@普通消息直接阻断，不进入辩论推进逻辑。
+            if (isUserMsg && !waitingForWinner) {
+                log.info("【DEBATE_INTERMISSION_PLAIN_BLOCKED】轮间普通消息不触发自动回复 roomId={}, senderId={}, atMemberIds={}",
+                        strategyEntity.getRoomId(), strategyEntity.getSenderId(), strategyEntity.getAtMemberIds());
+                dispatchContext.setTerminateChain(true);
+                return router(strategyEntity, dispatchContext);
+            }
+
+            // ROUND_END 阶段不处理辩论推进事件，避免误把轮间聊天回流写入辩论状态机。
+            dispatchContext.setTerminateChain(true);
+            return router(strategyEntity, dispatchContext);
+        }
 
         DispatchDecisionVO decision = debateService.decideNextDispatch(strategyEntity, dispatchContext);
         if (decision != null) {

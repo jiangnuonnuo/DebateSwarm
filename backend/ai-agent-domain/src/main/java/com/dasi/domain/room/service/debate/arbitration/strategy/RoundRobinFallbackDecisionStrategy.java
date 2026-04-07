@@ -4,6 +4,7 @@ import com.dasi.domain.room.model.valobj.ArbitrationDecisionResultVO;
 import com.dasi.domain.room.model.valobj.ArbitrationPromptContextVO;
 import com.dasi.domain.room.model.valobj.DebateMemberStatusVO;
 import com.dasi.domain.room.model.valobj.DebateTurnRecordVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
  * @Description: 仲裁降级轮转策略
  */
 @Service
+@Slf4j
 public class RoundRobinFallbackDecisionStrategy implements IArbitrationDecisionStrategy {
 
     private static final String STRATEGY_TYPE = "ROUND_ROBIN_FALLBACK";
@@ -23,6 +25,13 @@ public class RoundRobinFallbackDecisionStrategy implements IArbitrationDecisionS
         if (speakerId == null && promptContext.getCandidateSpeakerIds() != null && !promptContext.getCandidateSpeakerIds().isEmpty()) {
             speakerId = promptContext.getCandidateSpeakerIds().get(0);
         }
+        log.info("【ARBITRATOR_FALLBACK_PICK】sessionId={}, roomId={}, speakerId={}, requiredSide={}, candidates={}, preferred={}",
+                promptContext.getSessionId(),
+                promptContext.getRoomId(),
+                speakerId,
+                promptContext.getRequiredSide(),
+                promptContext.getCandidateSpeakerIds(),
+                promptContext.getPreferredSpeakerIds());
         return ArbitrationDecisionResultVO.builder()
                 .speakerId(speakerId)
                 .reasoning(buildFallbackReasoning(promptContext, speakerId))

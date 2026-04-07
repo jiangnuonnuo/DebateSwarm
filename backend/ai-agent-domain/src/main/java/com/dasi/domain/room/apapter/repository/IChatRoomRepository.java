@@ -106,7 +106,19 @@ public interface IChatRoomRepository {
 
     RoomDebateStateVO queryRoomDebateState(String roomId);
 
+    /**
+     * 直接回源数据库查询房间辩论运行态，绕过缓存。
+     * 用于高并发写场景下的乐观锁冲突恢复。
+     */
+    RoomDebateStateVO queryRoomDebateStateFresh(String roomId);
+
     boolean saveRoomDebateState(String roomId, RoomDebateStateVO state, Integer version);
+
+    /**
+     * 强制覆盖保存房间辩论运行态（不校验 version）。
+     * 仅用于 stopDebate 这类显式人工终止场景。
+     */
+    boolean forceSaveRoomDebateState(String roomId, RoomDebateStateVO state);
 
     void initRoomStateIfAbsent(String roomId);
 
@@ -138,6 +150,11 @@ public interface IChatRoomRepository {
     boolean updateDebateSessionProgress(DebateSessionEntity session);
 
     boolean updateDebateSessionStatus(DebateSessionEntity session);
+
+    /**
+     * 强制更新辩论会话状态（不校验 version），仅用于显式 stopDebate。
+     */
+    boolean forceUpdateDebateSessionStatus(DebateSessionEntity session);
 
     /**
      * 保存辩论对话记录

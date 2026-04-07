@@ -260,3 +260,83 @@
 - 从第二手开始采用对侧阵营硬候选约束
 - 每轮胜方继续由用户手动裁决
 - `room` 大领域继续保持单仓储设计
+
+## 9. 2026-04-07 落地修复记录
+
+### 9.1 辩论主链稳定性
+
+- `DebateService` 成为房间辩论运行态主写入口，常规仲裁路径不再由 `ChatExecutionNode` 写 `pendingSpeakerId`。
+- `persistRoomDebateState` 增加有限重试（默认 3 次），冲突时回源数据库取最新 `version` 后重试。
+- `startDebate` 首发链路调整为：`afterCommit -> DEBATE_DISPATCH_TRIGGER -> decideNextDispatch(写护栏) -> ChatExecutionNode 执行`。
+- `ChatExecutionNode` 改为“护栏校验优先”，仅保留辩论中 `@` 指定的兼容补写路径。
+
+### 9.2 stopDebate 强终止
+
+- `stopDebate` 增加会话终止重试（默认 3 次），失败会打印 `DEBATE_STOP_FORCE` 相关日志。
+- 新增 `forceSaveRoomDebateState`（不走 version 锁）用于人工显式停止时的强清理：
+  - 清空 `activeDebateSessionId`
+  - 清空 `pending*` 与调度护栏
+  - 清空槽位重试状态与轮次待裁决快照
+
+### 9.3 离线持续执行可观测
+
+- 外部推送无在线会话时新增日志标签 `DEBATE_BACKGROUND_CONTINUE`，用于确认“页面离线但内部调度仍持续运行”。
+
+### 9.4 Work 与 Repository 可用性
+
+- Work 智能体列表查询增强为“创建来源 + SELF 仓库映射”合并去重，减少列表缺失。
+- Work 下拉新增“已绑定（临时）”保活项，避免会话绑定 agent 因列表抖动被清空。
+- Work 页面新增“发布到广场”按钮与发布弹窗（复用 `/workspace/agent/publish`）。
+- Repository 的“我创建的”卡片新增发布按钮与发布弹窗（同接口复用）。
+
+### 9.5 首发回流误判 stale 修复（2026-04-07）
+
+- 根因：
+  - `CLIENT_MSG_END` 成功回流消息未携带 `dispatchTraceId/dispatchSessionId/dispatchRound/dispatchVersion`。
+  - `DebateService.matchesDispatchGuard` 强依赖上述字段，导致首发成功也会被判定为 stale。
+- 修复动作：
+  - `RoomChatService.clientChat` 成功路径补齐 `dispatch*` 元数据，并写入 `traceId=dispatchTraceId`。
+  - `buildExecutionExtData` 统一新增 `callbackType`（`SUCCESS/ERROR`），成功与失败回流结构同构。
+  - `RoomDispatchService.dispatchNextSpeaker` 的 `traceId` 装配改为三层优先级：
+    1. `wsEvent.traceId`
+    2. `payload.traceId`
+    3. `payload.extData.dispatchTraceId`
+  - `DebateService.matchesDispatchGuard` 改为“严格优先 + 兼容回退”：
+    - extData 完整时走严格校验
+    - extData 全缺失时允许 trace/state/pending 一致的兼容放行
+    - extData 半残直接拒绝
+- 新增日志标签：
+  - `DEBATE_GUARD_STRICT_PASS`
+  - `DEBATE_GUARD_FALLBACK_PASS`
+  - `DEBATE_GUARD_REJECT`
+
+### 9.6 ROUND_END 宣判后“开始下一轮”入口修复（2026-04-07）
+
+- 根因：
+  - 前端脚本已存在 `canStartNextRound` 计算，但面板模板未渲染“开始下一轮”按钮，导致用户宣判后只能看到“结束”。
+- 修复动作：
+  - `RoomChat.vue` 操作区新增“开始下一轮”按钮，绑定现有 `startDebateNextRound`。
+  - `debate/status` 增加动作权限字段：
+    - `canDeclareWinner`
+    - `canStartNextRound`
+    - `canStopDebate`
+  - 前端优先使用后端权限字段渲染按钮；旧后端场景下保留本地兼容兜底判断。
+- 交互目标：
+  - `ROUND_END + waitingForWinner=true` 显示“裁决胜方”。
+  - 宣判后（`ROUND_END + waitingForWinner=false`）显示“开始下一轮”。
+  - `RUNNING/ROUND_END` 均允许“结束辩论”。
+
+### 9.7 ROUND_END 轮间 @ 回复放行（2026-04-07）
+
+- 背景：
+  - 第一轮已宣判但第二轮未开始时，用户发送 `@client` 未触发响应，体验与预期不一致。
+- 行为收敛：
+  - `RUNNING`：保持“普通消息不自动回复”，仅按现有辩论规则推进。
+  - `ROUND_END + waitingForWinner=true`：仍不放行 `@`（等待裁决阶段）。
+  - `ROUND_END + waitingForWinner=false`：进入轮间窗口，仅放行 `@` 指定回复，未 `@` 普通消息继续拦截。
+- 节点改造：
+  - `AtMentionNode` 在轮间窗口把 `@` 按自由聊天路径处理（支持单 @ 与 Multi-At）。
+  - `ArbitratorNode` 在轮间窗口拦截未 `@` 的 `USER_MSG`，不进入辩论推进逻辑。
+- 新增日志：
+  - `DEBATE_INTERMISSION_MENTION_ALLOWED`
+  - `DEBATE_INTERMISSION_PLAIN_BLOCKED`

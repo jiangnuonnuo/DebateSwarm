@@ -44,4 +44,13 @@ public class DebateStatusDTO implements Serializable {
     private List<DebateMemberDTO> proMembers;
 
     private List<DebateMemberDTO> conMembers;
+
+    /** 当前是否允许宣布胜方 */
+    private Boolean canDeclareWinner;
+
+    /** 当前是否允许开始下一轮 */
+    private Boolean canStartNextRound;
+
+    /** 当前是否允许结束辩论 */
+    private Boolean canStopDebate;
 }

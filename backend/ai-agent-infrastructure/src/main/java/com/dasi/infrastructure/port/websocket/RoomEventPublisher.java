@@ -56,6 +56,9 @@ public class RoomEventPublisher implements IRoomEventPublisher {
                     }
                 }
             });
+        } else {
+            log.info("【DEBATE_BACKGROUND_CONTINUE】当前房间无在线会话，仅保留内部调度推进 roomId={}, type={}",
+                    roomId, event.getEventType());
         }
         log.debug("【推送服务】对外广播成功 roomId={}, type={}", roomId, event.getEventType());
     }

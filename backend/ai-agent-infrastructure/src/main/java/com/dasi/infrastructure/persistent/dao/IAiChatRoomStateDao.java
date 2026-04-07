@@ -28,6 +28,11 @@ public interface IAiChatRoomStateDao {
     int updateStateWithLock(AiChatRoomState aiChatRoomState);
 
     /**
+     * 强制覆盖更新状态（不校验 version）。
+     */
+    int updateStateForce(AiChatRoomState aiChatRoomState);
+
+    /**
      * 物理/逻辑删除状态记录 (通常随房间一起逻辑删除)
      */
     void deleteByRoomId(@Param("roomId") String roomId);

@@ -112,10 +112,29 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
             aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(arbitratorClientId));
         }
         ChatClient arbitratorClient = applicationContext.getBean(beanName, ChatClient.class);
+        log.info("【ARBITRATOR_LLM_CALL】sessionId={}, roomId={}, arbitratorClientId={}, round={}, turn={}, requiredSide={}, candidates={}, preferred={}",
+                promptContext.getSessionId(),
+                promptContext.getRoomId(),
+                arbitratorClientId,
+                promptContext.getCurrentRound(),
+                promptContext.getCurrentTurn(),
+                promptContext.getRequiredSide(),
+                promptContext.getCandidateSpeakerIds(),
+                promptContext.getPreferredSpeakerIds());
         String rawResponse = arbitratorClient.prompt(buildPrompt(promptContext)).call().content();
-        log.info("仲裁者 client{}，房间 = {} 仲裁结果为={}", arbitratorClientId,promptContext.getRoomId() , rawResponse);
+        log.info("【ARBITRATOR_LLM_RAW】sessionId={}, roomId={}, arbitratorClientId={}, raw={}",
+                promptContext.getSessionId(),
+                promptContext.getRoomId(),
+                arbitratorClientId,
+                shorten(rawResponse, 500));
         String normalized = normalizeJson(rawResponse);
         JSONObject jsonObject = JSON.parseObject(normalized);
+        log.info("【ARBITRATOR_LLM_PARSED】sessionId={}, roomId={}, arbitratorClientId={}, speakerId={}, reasoning={}",
+                promptContext.getSessionId(),
+                promptContext.getRoomId(),
+                arbitratorClientId,
+                jsonObject.getString("speakerId"),
+                jsonObject.getString("reasoning"));
         return ArbitrationDecisionResultVO.builder()
                 .speakerId(jsonObject.getString("speakerId"))
                 .reasoning(jsonObject.getString("reasoning"))
@@ -218,5 +237,15 @@ public class LlmArbitrationDecisionStrategy implements IArbitrationDecisionStrat
 
     private int defaultNumber(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private String shorten(String text, int maxLen) {
+        if (text == null) {
+            return null;
+        }
+        if (text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, maxLen) + "...";
     }
 }

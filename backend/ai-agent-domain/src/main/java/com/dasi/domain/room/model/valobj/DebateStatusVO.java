@@ -41,4 +41,13 @@ public class DebateStatusVO {
     private List<DebateMemberStatusVO> proMembers;
 
     private List<DebateMemberStatusVO> conMembers;
+
+    /** 当前是否允许宣布胜方 */
+    private Boolean canDeclareWinner;
+
+    /** 当前是否允许开始下一轮 */
+    private Boolean canStartNextRound;
+
+    /** 当前是否允许结束辩论 */
+    private Boolean canStopDebate;
 }

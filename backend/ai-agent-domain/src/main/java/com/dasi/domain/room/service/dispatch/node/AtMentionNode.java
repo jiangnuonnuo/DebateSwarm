@@ -7,6 +7,7 @@ import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.model.valobj.DebateStatus;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -45,8 +46,15 @@ public class AtMentionNode extends AbstractDispatchNode {
             activeSession = chatRoomRepository.queryActiveDebateSession(strategyEntity.getRoomId());
             dispatchContext.setDebateSession(activeSession);
         }
+        boolean debateIntermission = false;
         if (activeSession != null && DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
-            return router(strategyEntity, dispatchContext);
+            chatRoomRepository.initRoomStateIfAbsent(strategyEntity.getRoomId());
+            RoomDebateStateVO roomState = chatRoomRepository.queryRoomDebateState(strategyEntity.getRoomId());
+            boolean waitingForWinner = roomState == null || roomState.waitingForWinner();
+            if (waitingForWinner) {
+                return router(strategyEntity, dispatchContext);
+            }
+            debateIntermission = true;
         }
 
         // 按用户 @ 顺序精确校验，确保命中的人确实是当前房间中的 CLIENT。
@@ -55,7 +63,7 @@ public class AtMentionNode extends AbstractDispatchNode {
             return router(strategyEntity, dispatchContext);
         }
 
-        boolean debateMode = activeSession != null;
+        boolean debateMode = activeSession != null && !debateIntermission;
         List<String> legalDebaters = activeSession == null ? null : activeSession.getAllDebaterIds();
         List<DispatchDecisionVO> collectedDecisions = new ArrayList<>();
         for (AiChatRoomMemberEntity clientMember : clients) {
@@ -63,7 +71,7 @@ public class AtMentionNode extends AbstractDispatchNode {
             if (clientId.equals(strategyEntity.getSenderId())) {
                 continue;
             }
-            if (activeSession != null) {
+            if (debateMode) {
                 if (!activeSession.canAcceptMentionOverride(clientId) || !legalDebaters.contains(clientId)) {
                     log.info("【调度决策】AtMentionNode 跳过非合法辩手 mention：clientId={}", clientId);
                     continue;
@@ -72,7 +80,7 @@ public class AtMentionNode extends AbstractDispatchNode {
 
             DispatchDecisionVO decision = DispatchDecisionVO.builder()
                     .speakerId(clientId)
-                    .decisionSource("AT_MENTION")
+                    .decisionSource(debateIntermission ? "AT_MENTION_INTERMISSION" : "AT_MENTION")
                     .reasoning(debateMode
                             ? String.format("用户指定由辩手 %s 优先回应。", clientMember.getMemberName())
                             : String.format("用户在同一条消息中指定由 %s 参与回应。", clientMember.getMemberName()))
@@ -101,15 +109,27 @@ public class AtMentionNode extends AbstractDispatchNode {
                         .multiAt(false)
                         .build();
                 dispatchContext.setDecision(singleDecision);
-                log.info("【调度决策】AtMentionNode 命中单目标 @：roomId={}, clientId={}",
-                        strategyEntity.getRoomId(), singleDecision.getSpeakerId());
+                if (debateIntermission) {
+                    log.info("【DEBATE_INTERMISSION_MENTION_ALLOWED】轮间 @ 放行 roomId={}, clientId={}",
+                            strategyEntity.getRoomId(), singleDecision.getSpeakerId());
+                } else {
+                    log.info("【调度决策】AtMentionNode 命中单目标 @：roomId={}, clientId={}",
+                            strategyEntity.getRoomId(), singleDecision.getSpeakerId());
+                }
             } else if (!collectedDecisions.isEmpty()) {
                 dispatchContext.setDecisions(collectedDecisions);
                 dispatchContext.setMultiAtMode(true);
-                log.info("【MULTI_AT_COLLECT】roomId={}, atMemberIds={}, hitClientIds={}",
-                        strategyEntity.getRoomId(),
-                        atMemberIds,
-                        collectedDecisions.stream().map(DispatchDecisionVO::getSpeakerId).toList());
+                if (debateIntermission) {
+                    log.info("【DEBATE_INTERMISSION_MENTION_ALLOWED】轮间 Multi-At 放行 roomId={}, atMemberIds={}, hitClientIds={}",
+                            strategyEntity.getRoomId(),
+                            atMemberIds,
+                            collectedDecisions.stream().map(DispatchDecisionVO::getSpeakerId).toList());
+                } else {
+                    log.info("【MULTI_AT_COLLECT】roomId={}, atMemberIds={}, hitClientIds={}",
+                            strategyEntity.getRoomId(),
+                            atMemberIds,
+                            collectedDecisions.stream().map(DispatchDecisionVO::getSpeakerId).toList());
+                }
             }
         }
 

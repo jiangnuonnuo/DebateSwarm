@@ -361,16 +361,13 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     public RoomDebateStateVO queryRoomDebateState(String roomId) {
         String cacheKey = ROOM_DEBATE_STATE_KEY + roomId;
         return getFromCacheOrDb(cacheKey, RoomDebateStateVO.class, () -> {
-            AiChatRoomState po = aiChatRoomStateDao.queryByRoomId(roomId);
-            if (po == null || po.getPublicData() == null || po.getPublicData().isBlank()) {
-                return null;
-            }
-            RoomDebateStateVO state = JSON.parseObject(po.getPublicData(), RoomDebateStateVO.class);
-            if (state != null) {
-                state.setVersion(po.getVersion());
-            }
-            return state;
+            return parseRoomDebateState(aiChatRoomStateDao.queryByRoomId(roomId));
         });
+    }
+
+    @Override
+    public RoomDebateStateVO queryRoomDebateStateFresh(String roomId) {
+        return parseRoomDebateState(aiChatRoomStateDao.queryByRoomId(roomId));
     }
 
     @Override
@@ -383,6 +380,22 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .version(version)
                 .build();
         int count = aiChatRoomStateDao.updateStateWithLock(po);
+        if (count > 0) {
+            redisUtil.deleteByKey(ROOM_DEBATE_STATE_KEY + roomId);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean forceSaveRoomDebateState(String roomId, RoomDebateStateVO state) {
+        AiChatRoomState po = AiChatRoomState.builder()
+                .roomId(roomId)
+                .currentStage(state != null && state.getActiveDebateSessionId() != null ? "DEBATE" : "FREE_CHAT")
+                .publicData(state == null ? "{}" : JSON.toJSONString(state))
+                .roundNumber(state == null || state.getPendingRoundNumber() == null ? 0 : state.getPendingRoundNumber())
+                .build();
+        int count = aiChatRoomStateDao.updateStateForce(po);
         if (count > 0) {
             redisUtil.deleteByKey(ROOM_DEBATE_STATE_KEY + roomId);
             return true;
@@ -468,6 +481,27 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
     @Override
     public boolean updateDebateSessionStatus(DebateSessionEntity session) {
         return doUpdateDebateSession(session);
+    }
+
+    @Override
+    public boolean forceUpdateDebateSessionStatus(DebateSessionEntity session) {
+        AiDebateSession po = AiDebateSession.builder()
+                .sessionId(session.getSessionId())
+                .currentRound(session.getCurrentRound())
+                .currentTurn(session.getCurrentTurn())
+                .roundWinners(DebateSessionEntity.listToStr(session.getRoundWinners()))
+                .status(session.getStatus().getCode())
+                .build();
+        int count = aiDebateSessionDao.updateStatusForce(po);
+        if (count > 0) {
+            AiDebateSession latest = aiDebateSessionDao.querySessionDetailBySessionId(session.getSessionId());
+            if (latest != null) {
+                redisUtil.deleteByKey(ACTIVE_DEBATE_SESSION_KEY + latest.getRoomId());
+                redisUtil.deleteByKey(DEBATE_CONTEXT_KEY + session.getSessionId());
+            }
+            return true;
+        }
+        return false;
     }
 
     private boolean doUpdateDebateSession(DebateSessionEntity session) {
@@ -597,5 +631,16 @@ public class ChatRoomRepository extends AbstractRepository implements IChatRoomR
                 .status(DebateStatus.getByCode(po.getStatus()))
                 .version(po.getVersion())
                 .build();
+    }
+
+    private RoomDebateStateVO parseRoomDebateState(AiChatRoomState po) {
+        if (po == null || po.getPublicData() == null || po.getPublicData().isBlank()) {
+            return null;
+        }
+        RoomDebateStateVO state = JSON.parseObject(po.getPublicData(), RoomDebateStateVO.class);
+        if (state != null) {
+            state.setVersion(po.getVersion());
+        }
+        return state;
     }
 }

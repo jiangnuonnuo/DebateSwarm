@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { repoDeleteMineAgent, repoList } from '../request/api';
+import { plazaPublish, repoDeleteMineAgent, repoList } from '../request/api';
 import { notifyAppError } from '../request/request';
 import { useSettingsStore } from '../router/pinia';
 import { COLLAPSE_INNER_CLASS, getCollapseClasses } from '../utils/CollapseUtil';
@@ -17,6 +17,13 @@ const message = ref('');
 const mineAgents = ref([]);
 const addedAgents = ref([]);
 const favorAgents = ref([]);
+const showPublishModal = ref(false);
+const publishSubmitting = ref(false);
+const publishTargetAgentId = ref('');
+const publishForm = reactive({
+    plazaTitle: '',
+    plazaDesc: ''
+});
 
 const sectionOpen = reactive({
     mine: false,
@@ -111,6 +118,48 @@ const deleteMineAgent = async (item) => {
     } catch (error) {
         notifyAppError(error, '删除 MiniAgent 失败');
         loading.value = false;
+    }
+};
+
+const openPublishModal = (item) => {
+    const agentId = (item?.agentId || '').toString().trim();
+    if (!agentId) {
+        message.value = '该条目缺少可发布的 agentId';
+        return;
+    }
+    publishTargetAgentId.value = agentId;
+    publishForm.plazaTitle = `${resolveAgentName(item)} · 广场发布`;
+    publishForm.plazaDesc = resolveAgentDesc(item);
+    showPublishModal.value = true;
+};
+
+const closePublishModal = () => {
+    if (publishSubmitting.value) return;
+    showPublishModal.value = false;
+};
+
+const submitPublish = async () => {
+    const agentId = publishTargetAgentId.value;
+    const plazaTitle = publishForm.plazaTitle.trim();
+    const plazaDesc = publishForm.plazaDesc.trim();
+    if (!agentId) {
+        message.value = '缺少待发布的 agentId';
+        return;
+    }
+    if (!plazaTitle || !plazaDesc) {
+        message.value = '请先填写发布标题和描述';
+        return;
+    }
+    publishSubmitting.value = true;
+    try {
+        await plazaPublish({ agentId, plazaTitle, plazaDesc });
+        message.value = '发布成功，已同步到广场';
+        showPublishModal.value = false;
+        await loadRepository();
+    } catch (error) {
+        notifyAppError(error, '发布失败');
+    } finally {
+        publishSubmitting.value = false;
     }
 };
 
@@ -242,6 +291,14 @@ onMounted(loadRepository);
                                             </button>
                                             <button
                                                 v-if="section.key === 'mine'"
+                                                class="rounded-[12px] border border-[rgba(16,185,129,0.28)] bg-[rgba(236,253,245,0.94)] px-[12px] py-[8px] text-[12px] font-semibold text-emerald-600 transition hover:bg-[rgba(209,250,229,0.96)]"
+                                                type="button"
+                                                @click="openPublishModal(item)"
+                                            >
+                                                发布
+                                            </button>
+                                            <button
+                                                v-if="section.key === 'mine'"
                                                 class="rounded-[12px] border px-[12px] py-[8px] text-[12px] font-semibold transition"
                                                 :class="dangerButtonClass"
                                                 type="button"
@@ -264,6 +321,49 @@ onMounted(loadRepository);
                             </div>
                         </div>
                     </section>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showPublishModal" class="fixed inset-0 z-[30] grid place-items-center bg-[rgba(0,0,0,0.35)] p-[20px]" @click.self="closePublishModal">
+            <div class="w-full max-w-[520px] rounded-[16px] border border-[var(--border-color)] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
+                <div class="flex items-center justify-between border-b border-[var(--border-color)] px-[18px] pt-[14px] pb-[10px]">
+                    <div class="text-[18px] font-bold">发布到广场</div>
+                    <button class="text-[22px] text-[var(--text-secondary)]" type="button" @click="closePublishModal">×</button>
+                </div>
+                <div class="flex flex-col gap-[12px] px-[18px] py-[14px]">
+                    <label class="text-[13px] font-semibold text-[var(--text-primary)]">发布标题</label>
+                    <input
+                        v-model="publishForm.plazaTitle"
+                        type="text"
+                        class="h-10 rounded-[10px] border border-[var(--border-color)] px-3 text-[13px] outline-none focus:border-emerald-500"
+                        placeholder="请输入广场标题"
+                    />
+                    <label class="text-[13px] font-semibold text-[var(--text-primary)]">发布描述</label>
+                    <textarea
+                        v-model="publishForm.plazaDesc"
+                        rows="4"
+                        class="rounded-[10px] border border-[var(--border-color)] px-3 py-2 text-[13px] outline-none focus:border-emerald-500"
+                        placeholder="请输入广场描述"
+                    ></textarea>
+                </div>
+                <div class="flex justify-end gap-[10px] border-t border-[var(--border-color)] px-[18px] pt-[12px] pb-[16px]">
+                    <button
+                        class="inline-flex items-center justify-center rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] font-bold leading-[1.1] text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc]"
+                        type="button"
+                        :disabled="publishSubmitting"
+                        @click="closePublishModal"
+                    >
+                        取消
+                    </button>
+                    <button
+                        class="inline-flex items-center justify-center rounded-[12px] border border-emerald-500 bg-emerald-500 px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95 disabled:opacity-60"
+                        type="button"
+                        :disabled="publishSubmitting"
+                        @click="submitPublish"
+                    >
+                        {{ publishSubmitting ? '发布中...' : '确认发布' }}
+                    </button>
                 </div>
             </div>
         </div>

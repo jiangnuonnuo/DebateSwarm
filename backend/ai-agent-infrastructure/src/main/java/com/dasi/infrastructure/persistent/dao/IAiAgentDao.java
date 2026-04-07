@@ -11,6 +11,8 @@ public interface IAiAgentDao {
 
     AiAgent queryAgentByAgentId(@Param("agentId") String agentId);
 
+    List<AiAgent> queryAgentByAgentIds(@Param("agentIds") List<String> agentIds);
+
     List<AiAgent> queryWorkAgentByUserId(@Param("userId") Long userId);
 
     List<AiAgent> page(@Param("keyword") String keyword,

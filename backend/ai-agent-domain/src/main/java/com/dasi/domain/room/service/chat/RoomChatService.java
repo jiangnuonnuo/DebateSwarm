@@ -115,7 +115,8 @@ public class RoomChatService implements IRoomChatService {
         String clientId = request.getClientId();
         String traceId = request.getDispatchTraceId();
 
-        log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}, traceId={}", roomId, clientId, traceId);
+        log.info("【CHAT_EXECUTE】准备执行辩手发言 roomId={}, clientId={}, traceId={}, source={}, sessionId={}, round={}, version={}",
+                roomId, clientId, traceId, request.getDecisionSource(), request.getSessionId(), request.getRoundNumber(), request.getSessionVersion());
         ClientReplyResultVO result = doGenerateClientReply(request, debateSpeakerTimeoutSeconds, "CLIENT_CHAT");
         if (!result.isSuccess()) {
             if ("TIMEOUT".equals(result.getErrorType())) {
@@ -129,7 +130,8 @@ public class RoomChatService implements IRoomChatService {
             return;
         }
 
-        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, null);
+        // 辩论成功回流也必须携带 dispatch 元数据，避免护栏校验在 extData 缺失时误判 stale。
+        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, buildExecutionExtData(request, null, null), traceId);
         contextAssemblerService.recordMessage(aiMsg);
 
         eventPublisher.publishExternal(WebSocketEvent.builder()
@@ -148,8 +150,8 @@ public class RoomChatService implements IRoomChatService {
                 .traceId(traceId)
                 .build());
 
-        log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, traceId={}, messageId={}",
-                roomId, clientId, traceId, aiMsg.getMessageId());
+        log.info("【CHAT_EXECUTE】客户端回答结束 roomId={}, clientId={}, traceId={}, messageId={}, contentLength={}",
+                roomId, clientId, traceId, aiMsg.getMessageId(), aiMsg.getContent() == null ? 0 : aiMsg.getContent().length());
     }
 
     @Override
@@ -175,7 +177,7 @@ public class RoomChatService implements IRoomChatService {
             return;
         }
 
-        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, buildMultiAtSuccessExtData(result));
+        AiChatRoomMessageEntity aiMsg = buildClientMessage(result, buildMultiAtSuccessExtData(result), result.getBatchTraceId());
         contextAssemblerService.recordMessage(aiMsg);
         eventPublisher.publishExternal(WebSocketEvent.<AiChatRoomMessageEntity>builder()
                 .roomId(result.getRoomId())
@@ -247,8 +249,20 @@ public class RoomChatService implements IRoomChatService {
                 .messageRole("assistant")
                 .content("")
                 .extData(buildExecutionExtData(request, errorType, errorMessage))
+                .traceId(traceId)
                 .isPreempted(1)
                 .build();
+
+        // 轮间/自由聊天 @ 场景下 trace 可能为空，内部事件无法回流出业务提示，补一条外部系统通知提升可观测性。
+        if (traceId == null || traceId.isBlank()) {
+            String displayName = (clientName == null || clientName.isBlank()) ? clientId : clientName;
+            publishSystemNotice(
+                    roomId,
+                    "CLIENT_EXECUTION_ERROR",
+                    String.format("%s 本次响应失败：%s", displayName, shortenErrorMessage(errorMessage)),
+                    buildExecutionErrorNoticeExtData(request, errorType, errorMessage)
+            );
+        }
 
         eventPublisher.publishInternal(WebSocketEvent.<AiChatRoomMessageEntity>builder()
                 .roomId(roomId)
@@ -266,6 +280,7 @@ public class RoomChatService implements IRoomChatService {
         data.put("dispatchRound", request.getRoundNumber());
         data.put("dispatchVersion", request.getSessionVersion());
         data.put("decisionSource", request.getDecisionSource());
+        data.put("callbackType", (errorType == null || errorType.isBlank()) ? "SUCCESS" : "ERROR");
         if (request.getReasoning() != null && !request.getReasoning().isBlank()) {
             data.put("decisionReasoning", request.getReasoning());
         }
@@ -282,11 +297,22 @@ public class RoomChatService implements IRoomChatService {
         if (e == null) {
             return "未知执行错误";
         }
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String rootMessage = root.getMessage();
+        if (rootMessage == null || rootMessage.isBlank()) {
+            rootMessage = root.getClass().getSimpleName();
+        }
         String message = e.getMessage();
         if (message == null || message.isBlank()) {
-            return e.getClass().getSimpleName();
+            return rootMessage;
         }
-        return message;
+        if (root == e) {
+            return message;
+        }
+        return message + " | root=" + root.getClass().getSimpleName() + ": " + rootMessage;
     }
 
     private ClientReplyResultVO doGenerateClientReply(ClientExecutionRequestVO request, long timeoutSeconds, String stage) {
@@ -294,6 +320,8 @@ public class RoomChatService implements IRoomChatService {
         String clientId = request.getClientId();
         long startedAt = System.currentTimeMillis();
         String clientName = chatRoomRepository.queryMemberName(roomId, clientId);
+        log.info("【CLIENT_REPLY_ATTEMPT】stage={}, roomId={}, clientId={}, traceId={}, source={}, timeoutSeconds={}",
+                stage, roomId, clientId, request.getDispatchTraceId(), request.getDecisionSource(), timeoutSeconds);
 
         try {
             ChatClient client = ensureClientBean(clientId);
@@ -359,7 +387,7 @@ public class RoomChatService implements IRoomChatService {
                 .build();
     }
 
-    private AiChatRoomMessageEntity buildClientMessage(ClientReplyResultVO result, String extData) {
+    private AiChatRoomMessageEntity buildClientMessage(ClientReplyResultVO result, String extData, String traceId) {
         return AiChatRoomMessageEntity.builder()
                 .roomId(result.getRoomId())
                 .messageId("msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
@@ -369,6 +397,7 @@ public class RoomChatService implements IRoomChatService {
                 .messageRole("assistant")
                 .content(result.getContent())
                 .extData(extData)
+                .traceId(traceId)
                 .isPreempted(1)
                 .build();
     }
@@ -398,6 +427,30 @@ public class RoomChatService implements IRoomChatService {
         data.put("startedAt", result.getStartedAt());
         data.put("finishedAt", result.getFinishedAt());
         return JSON.toJSONString(data);
+    }
+
+    private String buildExecutionErrorNoticeExtData(ClientExecutionRequestVO request, String errorType, String errorMessage) {
+        LinkedHashMap<String, Object> data = new LinkedHashMap<>();
+        data.put("noticeType", "CLIENT_EXECUTION_ERROR");
+        data.put("clientId", request.getClientId());
+        data.put("dispatchTraceId", request.getDispatchTraceId());
+        data.put("dispatchSessionId", request.getSessionId());
+        data.put("dispatchRound", request.getRoundNumber());
+        data.put("dispatchVersion", request.getSessionVersion());
+        data.put("decisionSource", request.getDecisionSource());
+        data.put("errorType", errorType);
+        data.put("errorMessage", errorMessage);
+        return JSON.toJSONString(data);
+    }
+
+    private String shortenErrorMessage(String errorMessage) {
+        if (errorMessage == null || errorMessage.isBlank()) {
+            return "执行失败";
+        }
+        if (errorMessage.length() <= 96) {
+            return errorMessage;
+        }
+        return errorMessage.substring(0, 96) + "...";
     }
 
     private long calculateLatency(ClientReplyResultVO result) {

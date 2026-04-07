@@ -35,11 +35,24 @@ public class ArbitrationDecisionStrategyFactory {
                     .orTimeout(arbitratorTimeoutSeconds, TimeUnit.SECONDS)
                     .join();
             validate(promptContext, result);
+            log.info("【ARBITRATOR_DECISION_ACCEPTED】sessionId={}, roomId={}, source={}, speakerId={}, reasoning={}",
+                    promptContext.getSessionId(),
+                    promptContext.getRoomId(),
+                    result.getDecisionSource(),
+                    result.getSpeakerId(),
+                    result.getReasoning());
             return result;
         } catch (Exception e) {
-            log.warn("【辩论仲裁】LLM 决策失败，降级轮转策略：sessionId={}, reason={}",
-                    promptContext.getSessionId(), unwrapMessage(e));
-            return roundRobinFallbackDecisionStrategy.decide(promptContext);
+            log.warn("【ARBITRATOR_DECISION_FALLBACK】sessionId={}, roomId={}, reason={}",
+                    promptContext.getSessionId(), promptContext.getRoomId(), unwrapMessage(e));
+            ArbitrationDecisionResultVO fallback = roundRobinFallbackDecisionStrategy.decide(promptContext);
+            log.info("【ARBITRATOR_DECISION_FALLBACK_RESULT】sessionId={}, roomId={}, source={}, speakerId={}, reasoning={}",
+                    promptContext.getSessionId(),
+                    promptContext.getRoomId(),
+                    fallback.getDecisionSource(),
+                    fallback.getSpeakerId(),
+                    fallback.getReasoning());
+            return fallback;
         }
     }
 

@@ -11,6 +11,7 @@ import {
     listSessions,
     listWorkAnswerMessages,
     listWorkSseMessages,
+    plazaPublish,
     queryAgentList,
     updateSession
 } from '../request/api';
@@ -43,6 +44,13 @@ const messageLoading = ref(false);
 const sendError = ref('');
 const skipNextLoadSessionId = ref(null);
 let autoRefreshTimer = null;
+
+const showPublishModal = ref(false);
+const publishSubmitting = ref(false);
+const publishForm = reactive({
+    plazaTitle: '',
+    plazaDesc: ''
+});
 
 const settingsForm = reactive({
     maxRetry: settingsStore.maxRetry,
@@ -286,14 +294,68 @@ const fetchAgents = async () => {
             seen.add(item.value);
             return true;
         });
-        agentOptions.value = unique;
+
+        // 当前会话已绑定但列表暂缺时，保留一个临时选项避免绑定丢失。
         if (currentAgentId.value && !unique.some((item) => item.value === currentAgentId.value)) {
-            currentAgentId.value = '';
+            unique.unshift({
+                label: `已绑定（临时）${currentAgentId.value}`,
+                value: currentAgentId.value,
+                desc: '当前会话已绑定该 MiniAgent，列表刷新后会自动恢复正式条目。',
+                agentType: ''
+            });
+            console.info('【WORK_AGENT_FALLBACK】保留会话已绑定 agent', currentAgentId.value);
         }
+        agentOptions.value = unique;
         return unique;
     } catch (error) {
         console.warn('获取 MiniAgent 列表失败', error);
         return [];
+    }
+};
+
+const openPublishModal = () => {
+    const agentId = (currentAgentId.value || '').trim();
+    if (!agentId) {
+        sendError.value = '请先选择 MiniAgent 再发布';
+        return;
+    }
+    const match = agentOptions.value.find((item) => item.value === agentId);
+    publishForm.plazaTitle = match?.label ? `${match.label} · 广场发布` : `${agentId} · 广场发布`;
+    publishForm.plazaDesc = (match?.desc || '').trim() || '来自 Work 工作台的发布版本';
+    showPublishModal.value = true;
+};
+
+const closePublishModal = () => {
+    if (publishSubmitting.value) return;
+    showPublishModal.value = false;
+};
+
+const submitPublish = async () => {
+    const agentId = (currentAgentId.value || '').trim();
+    if (!agentId) {
+        sendError.value = '请先选择 MiniAgent 再发布';
+        return;
+    }
+    const plazaTitle = publishForm.plazaTitle.trim();
+    const plazaDesc = publishForm.plazaDesc.trim();
+    if (!plazaTitle || !plazaDesc) {
+        sendError.value = '请填写发布标题和描述';
+        return;
+    }
+    publishSubmitting.value = true;
+    try {
+        await plazaPublish({
+            agentId,
+            plazaTitle,
+            plazaDesc
+        });
+        sendError.value = '发布成功，已同步到广场';
+        showPublishModal.value = false;
+        console.info('【AGENT_PUBLISH_UI】Work 发布完成', { agentId });
+    } catch (error) {
+        notifyAppError(error, '发布失败');
+    } finally {
+        publishSubmitting.value = false;
     }
 };
 
@@ -870,6 +932,13 @@ onBeforeUnmount(() => {
 
                 <div class="flex items-center gap-3">
                     <button
+                        class="flex h-9 items-center gap-2 rounded-full border border-emerald-500 bg-white px-4 text-sm font-semibold text-emerald-600 transition-all hover:bg-emerald-50"
+                        type="button"
+                        @click="openPublishModal"
+                    >
+                        发布到广场
+                    </button>
+                    <button
                         class="flex h-9 items-center gap-2 rounded-full border border-[var(--accent-color)] bg-white px-4 text-sm font-semibold text-[var(--accent-color)] transition-all hover:bg-blue-50"
                         type="button"
                         @click="openSettings"
@@ -1173,6 +1242,49 @@ onBeforeUnmount(() => {
                         @click="saveSettings"
                     >
                         保存
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showPublishModal" class="fixed inset-0 z-[30] grid place-items-center bg-[rgba(0,0,0,0.35)] p-[20px]" @click.self="closePublishModal">
+            <div class="w-full max-w-[520px] rounded-[16px] border border-[var(--border-color)] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
+                <div class="flex items-center justify-between border-b border-[var(--border-color)] px-[18px] pt-[14px] pb-[10px]">
+                    <div class="text-[18px] font-bold">发布到广场</div>
+                    <button class="text-[22px] text-[var(--text-secondary)]" type="button" @click="closePublishModal">×</button>
+                </div>
+                <div class="flex flex-col gap-[12px] px-[18px] py-[14px]">
+                    <label class="text-[13px] font-semibold text-[var(--text-primary)]">发布标题</label>
+                    <input
+                        v-model="publishForm.plazaTitle"
+                        type="text"
+                        class="h-10 rounded-[10px] border border-[var(--border-color)] px-3 text-[13px] outline-none focus:border-emerald-500"
+                        placeholder="请输入广场标题"
+                    />
+                    <label class="text-[13px] font-semibold text-[var(--text-primary)]">发布描述</label>
+                    <textarea
+                        v-model="publishForm.plazaDesc"
+                        rows="4"
+                        class="rounded-[10px] border border-[var(--border-color)] px-3 py-2 text-[13px] outline-none focus:border-emerald-500"
+                        placeholder="请输入广场描述"
+                    ></textarea>
+                </div>
+                <div class="flex justify-end gap-[10px] border-t border-[var(--border-color)] px-[18px] pt-[12px] pb-[16px]">
+                    <button
+                        class="inline-flex items-center justify-center rounded-[12px] border border-[var(--border-color)] bg-white px-[14px] py-[9px] font-bold leading-[1.1] text-[var(--text-primary)] transition-all duration-200 hover:bg-[#f7f9fc]"
+                        type="button"
+                        :disabled="publishSubmitting"
+                        @click="closePublishModal"
+                    >
+                        取消
+                    </button>
+                    <button
+                        class="inline-flex items-center justify-center rounded-[12px] border border-emerald-500 bg-emerald-500 px-[14px] py-[9px] font-bold leading-[1.1] text-white transition-all duration-200 hover:brightness-95 disabled:opacity-60"
+                        type="button"
+                        :disabled="publishSubmitting"
+                        @click="submitPublish"
+                    >
+                        {{ publishSubmitting ? '发布中...' : '确认发布' }}
                     </button>
                 </div>
             </div>

@@ -49,6 +49,21 @@
         WHERE room_id = #{roomId} AND version = #{version} AND is_deleted = 0
     </update>
 
+    <update id="updateStateForce" parameterType="com.dasi.infrastructure.persistent.po.AiChatRoomState">
+        UPDATE ai_chat_room_state
+        <set>
+            <if test="currentStage != null">current_stage = #{currentStage},</if>
+            <if test="activeMemberId != null">active_member_id = #{activeMemberId},</if>
+            <if test="actionDeadline != null">action_deadline = #{actionDeadline},</if>
+            <if test="publicData != null">public_data = #{publicData},</if>
+            <if test="privateData != null">private_data = #{privateData},</if>
+            <if test="roundNumber != null">round_number = #{roundNumber},</if>
+            <if test="lastActionMsgId != null">last_action_msg_id = #{lastActionMsgId},</if>
+            version = version + 1
+        </set>
+        WHERE room_id = #{roomId} AND is_deleted = 0
+    </update>
+
     <update id="deleteByRoomId">
         UPDATE ai_chat_room_state SET is_deleted = 1
         WHERE room_id = #{roomId}

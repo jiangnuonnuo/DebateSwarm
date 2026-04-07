@@ -38,6 +38,11 @@ public interface IAiDebateSessionDao {
     int updateWithLock(AiDebateSession session);
 
     /**
+     * 强制更新会话状态（不校验 version）
+     */
+    int updateStatusForce(AiDebateSession session);
+
+    /**
      * 逻辑删除会话
      */
     void deleteBySessionId(@Param("sessionId") String sessionId);

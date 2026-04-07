@@ -105,6 +105,60 @@
                                         {{ option.name }}
                                     </option>
                                 </select>
+                                <button @click="setDebateArbitrator"
+                                        :disabled="debateLoading || !selectedArbitratorId"
+                                        class="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[11px] font-bold disabled:opacity-30 transition-all hover:bg-blue-500">
+                                    设置
+                                </button>
+                                <button @click="removeDebateArbitrator"
+                                        :disabled="debateLoading || !debateStatus?.arbitratorClientId"
+                                        class="px-3 py-1.5 rounded-xl border border-white/10 text-[11px] font-bold text-white/80 disabled:opacity-30 transition-all hover:bg-white/10">
+                                    移除
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-slate-500" v-if="!debateClientOptions.length">
+                                当前房间暂无 CLIENT 成员，请先邀请客户端加入房间。
+                            </p>
+                        </div>
+
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <div class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-bold text-blue-400">选择正方</span>
+                                    <span class="text-[10px] text-blue-400/50">{{ selectedProIds.length }} 人</span>
+                                </div>
+                                <div class="max-h-28 overflow-y-auto space-y-1 pr-1">
+                                    <label v-for="option in availableDebaterOptions" :key="`pro-${option.id}`"
+                                           class="flex items-center gap-2 rounded-lg px-2 py-1 text-[11px] hover:bg-blue-500/10 cursor-pointer">
+                                        <input type="checkbox"
+                                               class="accent-blue-500"
+                                               :checked="selectedProIds.includes(option.id)"
+                                               @change="toggleDebater('PRO', option.id)">
+                                        <span class="truncate">{{ option.name }}</span>
+                                    </label>
+                                    <p v-if="!availableDebaterOptions.length" class="text-[10px] text-slate-500 px-2 py-1">
+                                        无可选辩手
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-slate-500/20 bg-slate-500/5 p-3 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-bold text-slate-300">选择反方</span>
+                                    <span class="text-[10px] text-slate-500/70">{{ selectedConIds.length }} 人</span>
+                                </div>
+                                <div class="max-h-28 overflow-y-auto space-y-1 pr-1">
+                                    <label v-for="option in availableDebaterOptions" :key="`con-${option.id}`"
+                                           class="flex items-center gap-2 rounded-lg px-2 py-1 text-[11px] hover:bg-white/5 cursor-pointer">
+                                        <input type="checkbox"
+                                               class="accent-slate-400"
+                                               :checked="selectedConIds.includes(option.id)"
+                                               @change="toggleDebater('CON', option.id)">
+                                        <span class="truncate">{{ option.name }}</span>
+                                    </label>
+                                    <p v-if="!availableDebaterOptions.length" class="text-[10px] text-slate-500 px-2 py-1">
+                                        无可选辩手
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -130,17 +184,29 @@
                                     class="px-4 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-bold disabled:opacity-30 transition-all hover:bg-blue-500">
                                 开始辩论
                             </button>
-                            <button v-if="waitingForWinner"
+                            <button v-if="canDeclareWinner"
                                     @click="showWinnerModal = true"
                                     class="px-4 py-2 rounded-xl bg-blue-400 text-blue-950 text-[11px] font-bold transition-all hover:brightness-110">
                                 裁决胜方
                             </button>
-                            <button v-if="isDebateRunning"
+                            <button v-if="canStartNextRound"
+                                    @click="startDebateNextRound"
+                                    class="px-4 py-2 rounded-xl bg-emerald-500 text-emerald-950 text-[11px] font-bold hover:bg-emerald-400 transition-all">
+                                开始下一轮
+                            </button>
+                            <button v-if="canStopDebate"
                                     @click="stopDebateFlow"
                                     class="px-4 py-2 rounded-xl border border-blue-500/30 text-blue-400 text-[11px] font-bold hover:bg-blue-500/10 transition-all">
                                 结束
                             </button>
+                            <button @click="openInvite('client')"
+                                    class="px-4 py-2 rounded-xl border border-white/10 text-white/70 text-[11px] font-bold hover:bg-white/10 transition-all">
+                                邀请客户端
+                            </button>
                         </div>
+                        <p v-if="canStartNextRound" class="text-[10px] text-emerald-300/80">
+                            当前处于轮间阶段：支持 @ 指定客户端回复；未 @ 消息不会触发自动回复。
+                        </p>
                     </div>
                 </div>
             </section>
@@ -391,9 +457,22 @@ const messages = computed(() => roomStore.messages);
 const members = computed(() => roomStore.members);
 const currentUser = computed(() => authStore.user);
 
-const agentMembers = computed(() => members.value.filter(m => m.memberType === 'AGENT'));
-const clientMembers = computed(() => members.value.filter(m => m.memberType === 'CLIENT'));
-const humanMembers = computed(() => members.value.filter(m => m.memberType === 'USER'));
+const normalizeMemberType = (memberType) => String(memberType || '').toUpperCase();
+const resolveMemberId = (member) => member?.memberId || member?.clientId || member?.agentId || '';
+const resolveMemberName = (member) => member?.memberName || member?.clientName || member?.agentName || resolveMemberId(member);
+
+const normalizedMembers = computed(() => (members.value || [])
+    .map(item => ({
+        ...item,
+        memberId: resolveMemberId(item),
+        memberName: resolveMemberName(item),
+        memberType: normalizeMemberType(item?.memberType)
+    }))
+    .filter(item => Boolean(item.memberId)));
+
+const agentMembers = computed(() => normalizedMembers.value.filter(m => m.memberType === 'AGENT'));
+const clientMembers = computed(() => normalizedMembers.value.filter(m => m.memberType === 'CLIENT'));
+const humanMembers = computed(() => normalizedMembers.value.filter(m => m.memberType === 'USER'));
 
 const inputText = ref('');
 const showMemberDrawer = ref(false);
@@ -419,11 +498,31 @@ const selectedConIds = ref([]);
 const inviteList = computed(() => (inviteMode.value === 'client' ? availableClients.value : availableAgents.value));
 const isDebateRunning = computed(() => ['RUNNING', 'ROUND_END'].includes(debateStatus.value?.status || ''));
 const waitingForWinner = computed(() => Boolean(debateStatus.value?.waitingForWinner));
-const canStartNextRound = computed(() => Boolean(isDebateRunning.value && !waitingForWinner.value && debateStatus.value?.status === 'ROUND_END'));
+const canDeclareWinner = computed(() => {
+    if (typeof debateStatus.value?.canDeclareWinner === 'boolean') {
+        return debateStatus.value.canDeclareWinner;
+    }
+    return Boolean(debateStatus.value?.status === 'ROUND_END' && waitingForWinner.value);
+});
+const canStartNextRound = computed(() => {
+    if (typeof debateStatus.value?.canStartNextRound === 'boolean') {
+        return debateStatus.value.canStartNextRound;
+    }
+    const winners = debateStatus.value?.roundWinners || {};
+    const currentRound = debateStatus.value?.currentRound || 0;
+    const hasWinner = currentRound > 0 && Boolean(winners[String(currentRound)]);
+    return Boolean(debateStatus.value?.status === 'ROUND_END' && !waitingForWinner.value && hasWinner);
+});
+const canStopDebate = computed(() => {
+    if (typeof debateStatus.value?.canStopDebate === 'boolean') {
+        return debateStatus.value.canStopDebate;
+    }
+    return isDebateRunning.value;
+});
 const debatePanelVisible = computed(() => Boolean(showDebatePanel.value));
 const debateClientOptions = computed(() => clientMembers.value.map(item => ({
     id: item.memberId,
-    name: item.memberName
+    name: item.memberName || item.memberId
 })));
 const availableDebaterOptions = computed(() => debateClientOptions.value.filter(item => item.id !== selectedArbitratorId.value));
 const clientNameMap = computed(() => debateClientOptions.value.reduce((acc, item) => {
@@ -479,9 +578,9 @@ const atSearchText = ref('');
 const selectedAtMembers = ref([]);
 
 const filteredAtMembers = computed(() => {
-    const bots = members.value.filter(m => m.memberType === 'CLIENT');
+    const bots = normalizedMembers.value.filter(m => m.memberType === 'CLIENT');
     if (!atSearchText.value) return bots;
-    return bots.filter(m => m.memberName.toLowerCase().includes(atSearchText.value.toLowerCase()));
+    return bots.filter(m => (m.memberName || '').toLowerCase().includes(atSearchText.value.toLowerCase()));
 });
 
 const handleInput = (e) => {
@@ -812,6 +911,10 @@ const removeDebateArbitrator = async () => {
 };
 
 const toggleDebater = (side, clientId) => {
+    if (clientId === selectedArbitratorId.value) {
+        toast.show('仲裁者不能同时作为辩手');
+        return;
+    }
     const target = side === 'PRO' ? selectedProIds : selectedConIds;
     const opposite = side === 'PRO' ? selectedConIds : selectedProIds;
     if (target.value.includes(clientId)) {
@@ -912,6 +1015,7 @@ const parseSystemNoticeType = (msg) => {
     if (noticeType === 'SLOT_SKIPPED') return '槽位跳过';
     if (noticeType === 'DEBATE_STOP') return '辩论结束';
     if (noticeType === 'MEMBER_JOIN') return '成员入场';
+    if (noticeType === 'CLIENT_EXECUTION_ERROR') return '响应失败';
     if (noticeType === 'MULTI_AT_ITEM_FAILED') return '响应未完成';
     return '系统通知';
 };
@@ -1053,6 +1157,12 @@ watch(roomId, (newId) => {
         loadDebateStatus();
         initWebSocket();
     }
+});
+
+watch(selectedArbitratorId, (nextArbitratorId) => {
+    if (!nextArbitratorId) return;
+    selectedProIds.value = selectedProIds.value.filter(id => id !== nextArbitratorId);
+    selectedConIds.value = selectedConIds.value.filter(id => id !== nextArbitratorId);
 });
 </script>
 

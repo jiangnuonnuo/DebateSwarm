@@ -7,10 +7,12 @@ import com.dasi.infrastructure.persistent.dao.IAiAgentDao;
 import com.dasi.infrastructure.persistent.dao.IAiClientDao;
 import com.dasi.infrastructure.persistent.dao.IAiMcpDao;
 import com.dasi.infrastructure.persistent.dao.IAiModelDao;
+import com.dasi.infrastructure.persistent.dao.IAiRepoDao;
 import com.dasi.infrastructure.persistent.po.AiAgent;
 import com.dasi.infrastructure.persistent.po.AiClient;
 import com.dasi.infrastructure.persistent.po.AiMcp;
 import com.dasi.infrastructure.persistent.po.AiModel;
+import com.dasi.infrastructure.persistent.po.AiRepo;
 import com.dasi.types.annotation.Cacheable;
 import com.dasi.types.enumeration.CacheType;
 import jakarta.annotation.Resource;
@@ -20,7 +22,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.dasi.types.constant.RedisConstant.*;
 
@@ -41,6 +47,9 @@ public class QueryRepository implements IQueryRepository {
     private IAiModelDao aiModelDao;
 
     @Resource
+    private IAiRepoDao aiRepoDao;
+
+    @Resource
     private UserContext userContext;
 
     @Resource(name = "postgresqlTemplate")
@@ -58,12 +67,38 @@ public class QueryRepository implements IQueryRepository {
 
         Long userId = userContext.getUserId();
 
-        List<AiAgent> aiAgentList = aiAgentDao.queryWorkAgentByUserId(userId);
-        if (aiAgentList == null || aiAgentList.isEmpty()) {
+        List<AiAgent> ownedAgentList = aiAgentDao.queryWorkAgentByUserId(userId);
+        List<AiRepo> repoList = aiRepoDao.listByUserId(userId);
+        Set<String> selfAgentIdSet = repoList == null ? Set.of() : repoList.stream()
+                .filter(Objects::nonNull)
+                .filter(repo -> "self".equalsIgnoreCase(repo.getRepoType()))
+                .map(AiRepo::getAgentId)
+                .filter(Objects::nonNull)
+                .filter(id -> !id.isBlank())
+                .collect(Collectors.toSet());
+        List<AiAgent> repoAgentList = selfAgentIdSet.isEmpty() ? List.of() : aiAgentDao.queryAgentByAgentIds(new ArrayList<>(selfAgentIdSet));
+
+        LinkedHashMap<String, AiAgent> mergedMap = new LinkedHashMap<>();
+        if (ownedAgentList != null) {
+            for (AiAgent aiAgent : ownedAgentList) {
+                if (aiAgent != null && aiAgent.getAgentId() != null && !aiAgent.getAgentId().isBlank()) {
+                    mergedMap.put(aiAgent.getAgentId(), aiAgent);
+                }
+            }
+        }
+        if (repoAgentList != null) {
+            for (AiAgent aiAgent : repoAgentList) {
+                if (aiAgent != null && aiAgent.getAgentId() != null && !aiAgent.getAgentId().isBlank()) {
+                    mergedMap.putIfAbsent(aiAgent.getAgentId(), aiAgent);
+                }
+            }
+        }
+
+        if (mergedMap.isEmpty()) {
             return new ArrayList<>();
         }
 
-        return aiAgentList.stream()
+        return mergedMap.values().stream()
                 .filter(a -> a != null && Integer.valueOf(1).equals(a.getAgentStatus()))
                 .map(aiAgent -> QueryWorkAgentVO.builder()
                         .agentId(aiAgent.getAgentId())

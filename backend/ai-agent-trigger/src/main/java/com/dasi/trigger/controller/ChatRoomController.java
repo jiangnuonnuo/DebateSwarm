@@ -303,6 +303,9 @@ public class ChatRoomController implements IChatRoomService {
                 .lastRoundSummary(convertRoundSummary(statusVO.getLastRoundSummary()))
                 .proMembers(convertMembers(statusVO.getProMembers()))
                 .conMembers(convertMembers(statusVO.getConMembers()))
+                .canDeclareWinner(statusVO.getCanDeclareWinner())
+                .canStartNextRound(statusVO.getCanStartNextRound())
+                .canStopDebate(statusVO.getCanStopDebate())
                 .build();
     }
 
