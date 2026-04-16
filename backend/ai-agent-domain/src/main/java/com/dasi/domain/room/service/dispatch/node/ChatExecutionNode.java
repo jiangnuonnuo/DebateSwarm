@@ -7,6 +7,7 @@ import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.ClientExecutionRequestVO;
+import com.dasi.domain.room.model.valobj.ClientReplyResultVO;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.service.IRoomChatService;
@@ -23,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import static com.dasi.domain.ai.model.enumeration.AiArmoryType.ARMORY_CHAT;
 import static com.dasi.domain.ai.model.enumeration.AiType.CLIENT;
@@ -51,7 +53,7 @@ public class ChatExecutionNode extends AbstractDispatchNode {
     @Override
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
         if (!dispatchContext.hasAnyDecision()) {
-            log.info("【调度决策】ChatExecutionNode：本轮无命中决策");
+            log.debug("【CHAT_EXECUTE_SKIP】roomId={}, reason=NO_DECISION", strategyEntity.getRoomId());
             return router(strategyEntity, dispatchContext);
         }
 
@@ -60,70 +62,7 @@ public class ChatExecutionNode extends AbstractDispatchNode {
             return router(strategyEntity, dispatchContext);
         }
 
-        DispatchDecisionVO decision = dispatchContext.getDecision();
-        String roomId = strategyEntity.getRoomId();
-        String speakerId = decision.getSpeakerId();
-
-        DebateSessionEntity activeSession = null;
-        if (decision.getSessionId() != null && !decision.getSessionId().isBlank()) {
-            activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
-            if (activeSession == null
-                    || !Objects.equals(activeSession.getSessionId(), decision.getSessionId())
-                    || !Objects.equals(activeSession.getCurrentRound(), decision.getRoundNumber())
-                    || !Objects.equals(activeSession.getVersion(), decision.getSessionVersion())) {
-                log.info("【STALE_CALLBACK_DROPPED】执行前丢弃过期调度 roomId={}, speakerId={}, sessionId={}, currentSessionId={}, traceId={}",
-                        roomId,
-                        speakerId,
-                        decision.getSessionId(),
-                        activeSession == null ? null : activeSession.getSessionId(),
-                        decision.getDispatchTraceId());
-                return router(strategyEntity, dispatchContext);
-            }
-
-            decision = ensureDebateTrace(decision, activeSession);
-            if (!ensurePendingDispatchGuard(roomId, activeSession, decision)) {
-                log.info("【STALE_CALLBACK_DROPPED】调度护栏已变化，放弃执行 roomId={}, speakerId={}, traceId={}",
-                        roomId, speakerId, decision.getDispatchTraceId());
-                return router(strategyEntity, dispatchContext);
-            }
-
-            if (decision.getReasoning() != null && !decision.getReasoning().isBlank()) {
-                roomChatService.publishSystemNotice(
-                        roomId,
-                        "HOST_INTRO",
-                        decision.getReasoning(),
-                        buildHostIntroExtData(activeSession, decision)
-                );
-            }
-        }
-
-        // 1. 资源检查与动态装配 (确保目标 Client 已加载)
-        String beanName = CLIENT.getBeanName(speakerId);
-        if (!applicationContext.containsBean(beanName)) {
-            log.info("【CHAT_EXECUTE】容器中不存在 Bean {}，触发装配策略", beanName);
-            aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(speakerId));
-        }
-        if (!applicationContext.containsBean(beanName)) {
-            log.warn("【CHAT_EXECUTE】装配后仍未找到 Bean roomId={}, speakerId={}, beanName={}", roomId, speakerId, beanName);
-        }
-
-        // 2. 构造执行请求
-        ClientExecutionRequestVO executionRequest = ClientExecutionRequestVO.builder()
-                .roomId(roomId)
-                .clientId(speakerId)
-                .sessionId(activeSession == null ? decision.getSessionId() : activeSession.getSessionId())
-                .roundNumber(activeSession == null ? decision.getRoundNumber() : activeSession.getCurrentRound())
-                .sessionVersion(activeSession == null ? decision.getSessionVersion() : activeSession.getVersion())
-                .dispatchTraceId(decision.getDispatchTraceId())
-                .decisionSource(decision.getDecisionSource())
-                .reasoning(decision.getReasoning())
-                .build();
-
-        // 3. 执行下行指令
-        log.info("【CHAT_EXECUTE】执行辩手发言 roomId={}, speakerId={}, traceId={}, source={}",
-                roomId, speakerId, decision.getDispatchTraceId(), decision.getDecisionSource());
-        roomChatService.clientChat(executionRequest);
-
+        executeSingleDecision(strategyEntity, dispatchContext, dispatchContext.getDecision());
         return router(strategyEntity, dispatchContext);
     }
 
@@ -261,9 +200,124 @@ public class ChatExecutionNode extends AbstractDispatchNode {
                     .build());
         }
 
-        log.info("【MULTI_AT_EXECUTE】批量触发自由聊天 @ 响应 roomId={}, batchTraceId={}, speakerIds={}",
-                roomId, batchTraceId, speakerIds);
+        log.info("【MULTI_AT_EXECUTE】批量触发 @ 响应 roomId={}, phase={}, batchTraceId={}, speakerIds={}",
+                roomId, dispatchContext.getDebatePhase(), batchTraceId, speakerIds);
         multiMentionExecutionService.executeBatch(requests);
+    }
+
+    private void executeSingleDecision(DispatchStrategyEntity strategyEntity,
+                                       DispatchContext dispatchContext,
+                                       DispatchDecisionVO decision) {
+        if (decision == null || decision.getSpeakerId() == null || decision.getSpeakerId().isBlank()) {
+            return;
+        }
+        if (isMentionDecision(decision)) {
+            executeMentionSingle(strategyEntity, decision);
+            return;
+        }
+        executeDebateTracked(strategyEntity, decision);
+    }
+
+    private boolean isMentionDecision(DispatchDecisionVO decision) {
+        String source = decision.getDecisionSource();
+        return source != null && source.startsWith("AT_MENTION");
+    }
+
+    private void executeMentionSingle(DispatchStrategyEntity strategyEntity, DispatchDecisionVO decision) {
+        String roomId = strategyEntity.getRoomId();
+        String speakerId = decision.getSpeakerId();
+        ensureClientLoaded(roomId, speakerId);
+
+        ClientExecutionRequestVO request = ClientExecutionRequestVO.builder()
+                .roomId(roomId)
+                .clientId(speakerId)
+                .decisionSource(decision.getDecisionSource())
+                .reasoning(decision.getReasoning())
+                .batchTraceId("singleat_" + roomId + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                .orderIndex(decision.getOrderIndex() == null ? 0 : decision.getOrderIndex())
+                .requestedAtMemberIds(strategyEntity.getAtMemberIds() == null ? List.of() : new ArrayList<>(strategyEntity.getAtMemberIds()))
+                .build();
+
+        ClientReplyResultVO result = roomChatService.generateClientReply(request);
+        roomChatService.publishClientReplyResult(result);
+        log.info("【AT_MENTION_EXECUTE】roomId={}, clientId={}, source={}",
+                roomId, speakerId, decision.getDecisionSource());
+    }
+
+    private void executeDebateTracked(DispatchStrategyEntity strategyEntity, DispatchDecisionVO originDecision) {
+        String roomId = strategyEntity.getRoomId();
+        DebateSessionEntity activeSession = resolveActiveSession(roomId, originDecision);
+        if (activeSession == null) {
+            log.info("【STALE_CALLBACK_DROPPED】执行前丢弃过期调度 roomId={}, speakerId={}, sessionId={}",
+                    roomId, originDecision.getSpeakerId(), originDecision.getSessionId());
+            return;
+        }
+
+        DispatchDecisionVO decision = ensureDebateTrace(originDecision, activeSession);
+        if (!ensurePendingDispatchGuard(roomId, activeSession, decision)) {
+            log.info("【STALE_CALLBACK_DROPPED】调度护栏已变化，放弃执行 roomId={}, speakerId={}, traceId={}",
+                    roomId, decision.getSpeakerId(), decision.getDispatchTraceId());
+            return;
+        }
+        publishHostIntroIfNeeded(roomId, activeSession, decision);
+        ensureClientLoaded(roomId, decision.getSpeakerId());
+        roomChatService.clientChat(buildDebateExecutionRequest(roomId, activeSession, decision));
+        log.info("【CHAT_EXECUTE】执行辩手发言 roomId={}, speakerId={}, traceId={}, source={}",
+                roomId, decision.getSpeakerId(), decision.getDispatchTraceId(), decision.getDecisionSource());
+    }
+
+    private DebateSessionEntity resolveActiveSession(String roomId, DispatchDecisionVO decision) {
+        if (decision.getSessionId() == null || decision.getSessionId().isBlank()) {
+            return null;
+        }
+        DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(roomId);
+        if (activeSession == null) {
+            return null;
+        }
+        if (!Objects.equals(activeSession.getSessionId(), decision.getSessionId())) {
+            return null;
+        }
+        if (!Objects.equals(activeSession.getCurrentRound(), decision.getRoundNumber())) {
+            return null;
+        }
+        return Objects.equals(activeSession.getVersion(), decision.getSessionVersion()) ? activeSession : null;
+    }
+
+    private void publishHostIntroIfNeeded(String roomId, DebateSessionEntity activeSession, DispatchDecisionVO decision) {
+        if (decision.getReasoning() == null || decision.getReasoning().isBlank()) {
+            return;
+        }
+        roomChatService.publishSystemNotice(
+                roomId,
+                "HOST_INTRO",
+                decision.getReasoning(),
+                buildHostIntroExtData(activeSession, decision)
+        );
+    }
+
+    private ClientExecutionRequestVO buildDebateExecutionRequest(String roomId,
+                                                                 DebateSessionEntity activeSession,
+                                                                 DispatchDecisionVO decision) {
+        return ClientExecutionRequestVO.builder()
+                .roomId(roomId)
+                .clientId(decision.getSpeakerId())
+                .sessionId(activeSession.getSessionId())
+                .roundNumber(activeSession.getCurrentRound())
+                .sessionVersion(activeSession.getVersion())
+                .dispatchTraceId(decision.getDispatchTraceId())
+                .decisionSource(decision.getDecisionSource())
+                .reasoning(decision.getReasoning())
+                .build();
+    }
+
+    private void ensureClientLoaded(String roomId, String speakerId) {
+        String beanName = CLIENT.getBeanName(speakerId);
+        if (!applicationContext.containsBean(beanName)) {
+            aiDispatchService.dispatchArmoryStrategy(ARMORY_CHAT.getType(), Collections.singleton(speakerId));
+        }
+        if (!applicationContext.containsBean(beanName)) {
+            log.warn("【CHAT_EXECUTE】装配后仍未找到 Bean roomId={}, speakerId={}, beanName={}", roomId, speakerId, beanName);
+        }
     }
 
 }

@@ -1,7 +1,9 @@
 package com.dasi.domain.room.service.dispatch;
 
+import com.dasi.domain.room.model.entity.AiChatRoomMemberEntity;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
+import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -17,8 +19,23 @@ import java.util.Map;
 @Data
 public class DispatchContext {
 
+    public static final String PHASE_FREE_CHAT = "FREE_CHAT";
+    public static final String PHASE_RUNNING = "RUNNING";
+    public static final String PHASE_ROUND_END_WAIT_WINNER = "ROUND_END_WAIT_WINNER";
+    public static final String PHASE_INTERMISSION = "INTERMISSION";
+    public static final String PHASE_FINISHED = "FINISHED";
+
     /** 活跃的辩论会话 (缓存避免重复查询) */
     private DebateSessionEntity debateSession;
+
+    /** 房间辩论运行态快照 */
+    private RoomDebateStateVO roomDebateState;
+
+    /** 当前调度阶段（由根节点统一判定） */
+    private String debatePhase = PHASE_FREE_CHAT;
+
+    /** 本次消息中合法且按输入顺序去重后的 @ CLIENT 候选 */
+    private List<AiChatRoomMemberEntity> mentionCandidates = new ArrayList<>();
 
     /** 最终决策结果 */
     private DispatchDecisionVO decision;
@@ -69,5 +86,21 @@ public class DispatchContext {
     @SuppressWarnings("unchecked")
     public <T> T getMetadata(String key) {
         return (T) metadata.get(key);
+    }
+
+    public boolean isDebateRunningPhase() {
+        return PHASE_RUNNING.equals(debatePhase);
+    }
+
+    public boolean isRoundEndWaitWinnerPhase() {
+        return PHASE_ROUND_END_WAIT_WINNER.equals(debatePhase);
+    }
+
+    public boolean isIntermissionPhase() {
+        return PHASE_INTERMISSION.equals(debatePhase);
+    }
+
+    public boolean hasMentionCandidates() {
+        return mentionCandidates != null && !mentionCandidates.isEmpty();
     }
 }

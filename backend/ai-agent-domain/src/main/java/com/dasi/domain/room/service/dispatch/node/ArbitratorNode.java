@@ -1,12 +1,10 @@
 package com.dasi.domain.room.service.dispatch.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
-import com.dasi.domain.room.apapter.repository.IChatRoomRepository;
 import com.dasi.domain.room.model.entity.DebateSessionEntity;
 import com.dasi.domain.room.model.entity.DispatchStrategyEntity;
 import com.dasi.domain.room.model.valobj.DispatchDecisionVO;
 import com.dasi.domain.room.model.valobj.DebateStatus;
-import com.dasi.domain.room.model.valobj.RoomDebateStateVO;
 import com.dasi.domain.room.model.valobj.WebSocketEvent;
 import com.dasi.domain.room.service.dispatch.DispatchContext;
 import com.dasi.domain.room.service.debate.IDebateService;
@@ -30,67 +28,37 @@ public class ArbitratorNode extends AbstractDispatchNode {
     private ChatExecutionNode chatExecutionNode;
 
     @Resource
-    private IChatRoomRepository chatRoomRepository;
-
-    @Resource
     private IDebateService debateService;
 
     @Override
     protected String doApply(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) throws Exception {
-        // 如果已经有决策 (如来自 @指定)，直接路由
         if (dispatchContext.hasAnyDecision()) {
-            if (dispatchContext.getDecision() != null) {
-                log.info("【ARBITRATOR_BYPASS】roomId={}, eventType={}, reason=PRE_DECIDED, source={}, speakerId={}",
-                        strategyEntity.getRoomId(),
-                        strategyEntity.getEventType(),
-                        dispatchContext.getDecision().getDecisionSource(),
-                        dispatchContext.getDecision().getSpeakerId());
-            } else {
-                log.info("【ARBITRATOR_BYPASS】roomId={}, eventType={}, reason=PRE_DECIDED_BATCH, size={}",
-                        strategyEntity.getRoomId(),
-                        strategyEntity.getEventType(),
-                        dispatchContext.getDecisions() == null ? 0 : dispatchContext.getDecisions().size());
-            }
+            log.debug("【ARBITRATOR_BYPASS】roomId={}, eventType={}, reason=PRE_DECIDED",
+                    strategyEntity.getRoomId(), strategyEntity.getEventType());
             return router(strategyEntity, dispatchContext);
         }
 
-        // 1. 查询活跃辩论会话 (利用 IChatRoomRepository 的缓存)
-        DebateSessionEntity activeSession = chatRoomRepository.queryActiveDebateSession(strategyEntity.getRoomId());
+        DebateSessionEntity activeSession = dispatchContext.getDebateSession();
         if (activeSession == null) {
-            // 非辩论模式，继续路由
             return router(strategyEntity, dispatchContext);
         }
 
-        // 2. 存入上下文供后续阶段使用
-        dispatchContext.setDebateSession(activeSession);
-        log.info("【调度决策】ArbitratorNode 识别到辩论模式：sessionId={}", activeSession.getSessionId());
+        if (isUserMessage(strategyEntity)) {
+            blockDebatePlainUserMessage(strategyEntity, dispatchContext);
+            return router(strategyEntity, dispatchContext);
+        }
 
-        boolean isUserMsg = WebSocketEvent.EventType.USER_MSG.equals(strategyEntity.getEventType());
-        if (DebateStatus.ROUND_END.equals(activeSession.getStatus())) {
-            chatRoomRepository.initRoomStateIfAbsent(strategyEntity.getRoomId());
-            RoomDebateStateVO roomState = chatRoomRepository.queryRoomDebateState(strategyEntity.getRoomId());
-            boolean waitingForWinner = roomState == null || roomState.waitingForWinner();
-
-            // 轮间窗口（已宣判、待下一轮）：允许 @ 命中；未@普通消息直接阻断，不进入辩论推进逻辑。
-            if (isUserMsg && !waitingForWinner) {
-                log.info("【DEBATE_INTERMISSION_PLAIN_BLOCKED】轮间普通消息不触发自动回复 roomId={}, senderId={}, atMemberIds={}",
-                        strategyEntity.getRoomId(), strategyEntity.getSenderId(), strategyEntity.getAtMemberIds());
-                dispatchContext.setTerminateChain(true);
-                return router(strategyEntity, dispatchContext);
-            }
-
-            // ROUND_END 阶段不处理辩论推进事件，避免误把轮间聊天回流写入辩论状态机。
+        if (!canProcessDebateDispatchEvent(strategyEntity, activeSession)) {
             dispatchContext.setTerminateChain(true);
             return router(strategyEntity, dispatchContext);
         }
 
         DispatchDecisionVO decision = debateService.decideNextDispatch(strategyEntity, dispatchContext);
-        if (decision != null) {
-            dispatchContext.setDecision(decision);
-        } else {
+        if (decision == null) {
             dispatchContext.setTerminateChain(true);
+            return router(strategyEntity, dispatchContext);
         }
-
+        dispatchContext.setDecision(decision);
         return router(strategyEntity, dispatchContext);
     }
 
@@ -106,4 +74,32 @@ public class ArbitratorNode extends AbstractDispatchNode {
         return probabilityNode;
     }
 
+    private boolean isUserMessage(DispatchStrategyEntity strategyEntity) {
+        return WebSocketEvent.EventType.USER_MSG.equals(strategyEntity.getEventType());
+    }
+
+    private boolean canProcessDebateDispatchEvent(DispatchStrategyEntity strategyEntity, DebateSessionEntity activeSession) {
+        if (!isDebateDispatchEvent(strategyEntity)) {
+            return false;
+        }
+        return DebateStatus.RUNNING.equals(activeSession.getStatus());
+    }
+
+    private boolean isDebateDispatchEvent(DispatchStrategyEntity strategyEntity) {
+        String eventType = strategyEntity.getEventType();
+        return WebSocketEvent.EventType.CLIENT_MSG_END.equals(eventType)
+                || WebSocketEvent.EventType.CLIENT_MSG_ERROR.equals(eventType)
+                || WebSocketEvent.EventType.DEBATE_DISPATCH_TRIGGER.equals(eventType);
+    }
+
+    private void blockDebatePlainUserMessage(DispatchStrategyEntity strategyEntity, DispatchContext dispatchContext) {
+        dispatchContext.setTerminateChain(true);
+        if (dispatchContext.isIntermissionPhase()) {
+            log.info("【DEBATE_INTERMISSION_PLAIN_BLOCKED】roomId={}, senderId={}, atMemberIds={}",
+                    strategyEntity.getRoomId(), strategyEntity.getSenderId(), strategyEntity.getAtMemberIds());
+            return;
+        }
+        log.info("【DEBATE_RUNNING_PLAIN_BLOCKED】roomId={}, senderId={}",
+                strategyEntity.getRoomId(), strategyEntity.getSenderId());
+    }
 }

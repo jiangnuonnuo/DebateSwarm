@@ -506,27 +506,9 @@ const inviteList = computed(() => (inviteMode.value === 'client' ? availableClie
 const hasActiveDebateSession = computed(() => Boolean(debateStatus.value?.sessionId));
 const isDebateRunning = computed(() => ['RUNNING', 'ROUND_END'].includes(debateStatus.value?.status || ''));
 const waitingForWinner = computed(() => Boolean(debateStatus.value?.waitingForWinner));
-const canDeclareWinner = computed(() => {
-    if (typeof debateStatus.value?.canDeclareWinner === 'boolean') {
-        return debateStatus.value.canDeclareWinner;
-    }
-    return Boolean(debateStatus.value?.status === 'ROUND_END' && waitingForWinner.value);
-});
-const canStartNextRound = computed(() => {
-    if (typeof debateStatus.value?.canStartNextRound === 'boolean') {
-        return debateStatus.value.canStartNextRound;
-    }
-    const winners = debateStatus.value?.roundWinners || {};
-    const currentRound = debateStatus.value?.currentRound || 0;
-    const hasWinner = currentRound > 0 && Boolean(winners[String(currentRound)]);
-    return Boolean(debateStatus.value?.status === 'ROUND_END' && !waitingForWinner.value && hasWinner);
-});
-const canStopDebate = computed(() => {
-    if (typeof debateStatus.value?.canStopDebate === 'boolean') {
-        return debateStatus.value.canStopDebate;
-    }
-    return isDebateRunning.value;
-});
+const canDeclareWinner = computed(() => Boolean(debateStatus.value?.canDeclareWinner));
+const canStartNextRound = computed(() => Boolean(debateStatus.value?.canStartNextRound));
+const canStopDebate = computed(() => Boolean(debateStatus.value?.canStopDebate));
 const canEditArbitrator = computed(() => !hasActiveDebateSession.value);
 const canEditDebateConfig = computed(() => !hasActiveDebateSession.value || canStartNextRound.value);
 const debatePanelVisible = computed(() => Boolean(showDebatePanel.value));
@@ -825,13 +807,7 @@ const loadAvailableAgents = async () => {
 
 const statusCanStartNextRound = (status) => {
     if (!status) return false;
-    if (typeof status.canStartNextRound === 'boolean') {
-        return status.canStartNextRound;
-    }
-    const winners = status.roundWinners || {};
-    const currentRound = status.currentRound || 0;
-    const hasWinner = currentRound > 0 && Boolean(winners[String(currentRound)]);
-    return Boolean(status.status === 'ROUND_END' && !status.waitingForWinner && hasWinner);
+    return Boolean(status.canStartNextRound);
 };
 
 const syncDebateFormFromStatus = (status) => {
