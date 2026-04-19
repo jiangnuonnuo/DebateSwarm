@@ -258,7 +258,9 @@ public class AiController implements IAiApi {
 
         try {
             ChatClient chatClient = applicationContext.getBean(CLIENT.getBeanName(clientId), ChatClient.class);
+            // 取出知识库的数据并且做一个上下文的组装
             List<Message> messageList = augmentService.augmentRagMessage(userMessage, ragTag);
+            // 根据装配的MCP工具做一个组装到client 的操作
             SyncMcpToolCallbackProvider toolCallbackList = augmentService.augmentMcpTool(mcpIdList);
             ChatOptions chatOptions = OpenAiChatOptions.builder()
                     .temperature(temperature)

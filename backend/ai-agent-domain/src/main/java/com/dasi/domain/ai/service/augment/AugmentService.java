@@ -66,19 +66,22 @@ public class AugmentService implements IAugmentService {
 
     @Value("${miniagent.mcp.header.user-id:X-MiniAgent-Mcp-UserId}")
     private String mcpUserIdHeader;
+    // 检索出多少个向量片段
+    private static final Integer count = 5;
 
     @Override
     public List<Message> augmentRagMessage(String userMessage, String ragTag) {
-
+        // 1. 参数校验：如果没有 ragTag，直接返回原始用户消息（不走 RAG）
         if (ragTag == null || ragTag.isEmpty()) {
             return List.of(new UserMessage(userMessage));
         }
         Long userId = userContext.getUserId();
+        // 2. 用户身份校验：没有 userId 也不走 RAG（安全隔离）
         if (userId == null) {
             return List.of(new UserMessage(userMessage));
         }
 
-        // 构建向量检索条件
+        // 构建向量检索条件（知识库标签过滤，用户 ID 过滤 类似mybatisPlus 的写法 ）
         FilterExpressionBuilder filterExpressionBuilder = new FilterExpressionBuilder();
         Filter.Expression expression = filterExpressionBuilder.and(
                 filterExpressionBuilder.eq("knowledge", ragTag),
@@ -89,7 +92,7 @@ public class AugmentService implements IAugmentService {
         SearchRequest searchRequest = SearchRequest.builder()
                 .query(userMessage)
                 .filterExpression(expression)
-                .topK(5)
+                .topK(count)
                 .build();
 
         // 执行向量检索
@@ -101,7 +104,7 @@ public class AugmentService implements IAugmentService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining("\n"));
 
-        // 用户消息 + 系统消息
+        // 用户消息 + 系统消息）
         return List.of(
                 new SystemPromptTemplate(RAG_SYSTEM_PROMPT).createMessage(Map.of("documents", documentString)),
                 new UserMessage(userMessage)
