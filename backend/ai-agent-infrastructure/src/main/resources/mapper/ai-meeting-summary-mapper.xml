@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiMeetingSummaryDao">
+
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiMeetingSummary">
+        <id column="id" property="id"/>
+        <result column="meeting_id" property="meetingId"/>
+        <result column="conclusion" property="conclusion"/>
+        <result column="action_items_json" property="actionItemsJson"/>
+        <result column="next_round_condition" property="nextRoundCondition"/>
+        <result column="concluded_by_role" property="concludedByRole"/>
+        <result column="concluded_at" property="concludedAt"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingSummary">
+        INSERT INTO ai_meeting_summary (
+            meeting_id, conclusion, action_items_json, next_round_condition, concluded_by_role, concluded_at
+        ) VALUES (
+            #{meetingId}, #{conclusion}, #{actionItemsJson}, #{nextRoundCondition}, #{concludedByRole}, #{concludedAt}
+        )
+    </insert>
+
+    <select id="queryByMeetingId" resultMap="dataMap">
+        SELECT id, meeting_id, conclusion, action_items_json, next_round_condition,
+               concluded_by_role, concluded_at, create_time, update_time
+        FROM ai_meeting_summary
+        WHERE meeting_id = #{meetingId}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <update id="updateByMeetingId" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingSummary">
+        UPDATE ai_meeting_summary
+        <set>
+            <if test="conclusion != null">conclusion = #{conclusion},</if>
+            <if test="actionItemsJson != null">action_items_json = #{actionItemsJson},</if>
+            <if test="nextRoundCondition != null">next_round_condition = #{nextRoundCondition},</if>
+            <if test="concludedByRole != null">concluded_by_role = #{concludedByRole},</if>
+            <if test="concludedAt != null">concluded_at = #{concludedAt},</if>
+            update_time = CURRENT_TIMESTAMP
+        </set>
+        WHERE meeting_id = #{meetingId}
+          AND is_deleted = 0
+    </update>
+
+</mapper>
+

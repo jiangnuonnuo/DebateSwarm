@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiMeetingSessionDao">
+
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiMeetingSession">
+        <id column="id" property="id"/>
+        <result column="meeting_id" property="meetingId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="topic" property="topic"/>
+        <result column="goal" property="goal"/>
+        <result column="status" property="status"/>
+        <result column="round_number" property="roundNumber"/>
+        <result column="owner_id" property="ownerId"/>
+        <result column="owner_role" property="ownerRole"/>
+        <result column="pm_id" property="pmId"/>
+        <result column="role_assignments_json" property="roleAssignmentsJson"/>
+        <result column="version" property="version"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingSession">
+        INSERT INTO ai_meeting_session (
+            meeting_id, room_id, topic, goal, status, round_number,
+            owner_id, owner_role, pm_id, role_assignments_json, version
+        ) VALUES (
+            #{meetingId}, #{roomId}, #{topic}, #{goal}, #{status}, #{roundNumber},
+            #{ownerId}, #{ownerRole}, #{pmId}, #{roleAssignmentsJson}, #{version}
+        )
+    </insert>
+
+    <select id="queryByMeetingId" resultMap="dataMap">
+        SELECT id, meeting_id, room_id, topic, goal, status, round_number,
+               owner_id, owner_role, pm_id, role_assignments_json, version, create_time, update_time
+        FROM ai_meeting_session
+        WHERE meeting_id = #{meetingId}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="queryActiveByRoomId" resultMap="dataMap">
+        SELECT id, meeting_id, room_id, topic, goal, status, round_number,
+               owner_id, owner_role, pm_id, role_assignments_json, version, create_time, update_time
+        FROM ai_meeting_session
+        WHERE room_id = #{roomId}
+          AND status IN ('PENDING', 'IN_PROGRESS', 'RETURNED', 'WAIT_DECISION', 'NEXT_ROUND_PENDING')
+          AND is_deleted = 0
+        ORDER BY update_time DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateLifecycleWithLock" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingSession">
+        UPDATE ai_meeting_session
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="roundNumber != null">round_number = #{roundNumber},</if>
+            <if test="pmId != null">pm_id = #{pmId},</if>
+            <if test="roleAssignmentsJson != null">role_assignments_json = #{roleAssignmentsJson},</if>
+            update_time = CURRENT_TIMESTAMP,
+            version = version + 1
+        </set>
+        WHERE meeting_id = #{meetingId}
+          AND version = #{version}
+          AND is_deleted = 0
+    </update>
+
+    <update id="updateMeetingSnapshot" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingSession">
+        UPDATE ai_meeting_session
+        <set>
+            <if test="topic != null">topic = #{topic},</if>
+            <if test="goal != null">goal = #{goal},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="roundNumber != null">round_number = #{roundNumber},</if>
+            <if test="ownerId != null">owner_id = #{ownerId},</if>
+            <if test="ownerRole != null">owner_role = #{ownerRole},</if>
+            <if test="pmId != null">pm_id = #{pmId},</if>
+            <if test="roleAssignmentsJson != null">role_assignments_json = #{roleAssignmentsJson},</if>
+            update_time = CURRENT_TIMESTAMP
+        </set>
+        WHERE meeting_id = #{meetingId}
+          AND is_deleted = 0
+    </update>
+
+</mapper>
+

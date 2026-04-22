@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.persistent.dao.IAiMeetingIssueDao">
+
+    <resultMap id="dataMap" type="com.dasi.infrastructure.persistent.po.AiMeetingIssue">
+        <id column="id" property="id"/>
+        <result column="issue_id" property="issueId"/>
+        <result column="meeting_id" property="meetingId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="reporter_role" property="reporterRole"/>
+        <result column="assignee_role" property="assigneeRole"/>
+        <result column="reason" property="reason"/>
+        <result column="required_fix" property="requiredFix"/>
+        <result column="due_at" property="dueAt"/>
+        <result column="status" property="status"/>
+        <result column="resolved_at" property="resolvedAt"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.dasi.infrastructure.persistent.po.AiMeetingIssue">
+        INSERT INTO ai_meeting_issue (
+            issue_id, meeting_id, room_id, reporter_role, assignee_role,
+            reason, required_fix, due_at, status, resolved_at
+        ) VALUES (
+            #{issueId}, #{meetingId}, #{roomId}, #{reporterRole}, #{assigneeRole},
+            #{reason}, #{requiredFix}, #{dueAt}, #{status}, #{resolvedAt}
+        )
+    </insert>
+
+    <select id="queryByMeetingId" resultMap="dataMap">
+        SELECT id, issue_id, meeting_id, room_id, reporter_role, assignee_role,
+               reason, required_fix, due_at, status, resolved_at, create_time
+        FROM ai_meeting_issue
+        WHERE meeting_id = #{meetingId}
+          AND is_deleted = 0
+        ORDER BY create_time DESC, id DESC
+    </select>
+
+    <update id="resolveOpenIssuesByRole">
+        UPDATE ai_meeting_issue
+        SET status = 'RESOLVED',
+            resolved_at = #{resolvedAt},
+            update_time = CURRENT_TIMESTAMP
+        WHERE meeting_id = #{meetingId}
+          AND assignee_role = #{assigneeRole}
+          AND status = 'OPEN'
+          AND is_deleted = 0
+    </update>
+
+    <update id="resolveAllOpenIssues">
+        UPDATE ai_meeting_issue
+        SET status = 'RESOLVED',
+            resolved_at = #{resolvedAt},
+            update_time = CURRENT_TIMESTAMP
+        WHERE meeting_id = #{meetingId}
+          AND status = 'OPEN'
+          AND is_deleted = 0
+    </update>
+
+</mapper>
+
