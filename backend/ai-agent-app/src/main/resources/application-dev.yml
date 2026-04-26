@@ -120,6 +120,26 @@ miniagent:
     access-key-id: ${OSS_ACCESS_KEY_ID}
     access-key-secret: ${OSS_ACCESS_KEY_SECRET}
 
+  # XHS Publish
+  xhs-publish:
+    asset-base-dir: ${XHS_PUBLISH_ASSET_BASE_DIR:./runtime/xhs-publish/assets}
+    asset-access-base-url: ${XHS_PUBLISH_ASSET_ACCESS_BASE_URL:/miniagent/api/v1/xhs/publish/material/access}
+    snapshot-base-dir: ${XHS_PUBLISH_SNAPSHOT_BASE_DIR:./runtime/xhs-publish/snapshots}
+    asset-retention-hours: ${XHS_PUBLISH_ASSET_RETENTION_HOURS:24}
+    snapshot-retention-hours: ${XHS_PUBLISH_SNAPSHOT_RETENTION_HOURS:24}
+    default-tenant-id: ${XHS_PUBLISH_DEFAULT_TENANT_ID:default}
+    default-account-id: ${XHS_PUBLISH_DEFAULT_ACCOUNT_ID:default}
+    default-account-name: ${XHS_PUBLISH_DEFAULT_ACCOUNT_NAME:default}
+    vector-schema-name: ${XHS_PUBLISH_VECTOR_SCHEMA_NAME:public}
+    vector-table-name: ${XHS_PUBLISH_VECTOR_TABLE_NAME:vector_store_xhs_openai}
+    asset-cleanup-cron: "${XHS_PUBLISH_ASSET_CLEANUP_CRON:0 0 */1 * * ?}"
+    snapshot-cleanup-cron: "${XHS_PUBLISH_SNAPSHOT_CLEANUP_CRON:0 30 */1 * * ?}"
+    mcp-base-url: ${XHS_PUBLISH_MCP_BASE_URL:http://127.0.0.1:18060}
+    mcp-endpoint: ${XHS_PUBLISH_MCP_ENDPOINT:/mcp}
+    mcp-timeout-minutes: ${XHS_PUBLISH_MCP_TIMEOUT_MINUTES:30}
+    mcp-poll-rounds: ${XHS_PUBLISH_MCP_POLL_ROUNDS:2}
+    mcp-poll-interval-millis: ${XHS_PUBLISH_MCP_POLL_INTERVAL_MILLIS:1500}
+
 room:
   chat:
     multi-at:
