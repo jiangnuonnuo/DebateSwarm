@@ -37,6 +37,21 @@ public class XhsPublishController implements IXhsPublishApi {
     }
 
     @Override
+    @PostMapping("/task/context/update")
+    public Result<Void> updateTaskContext(@Valid @RequestBody UpdateXhsPublishTaskContextDTO dto) {
+        log.info("【小红书发布】接收任务上下文更新请求：{}", dto);
+        xhsPublishService.updateTaskContext(dto);
+        return Result.success();
+    }
+
+    @Override
+    @PostMapping("/task/submit")
+    public Result<String> submitTask(@Valid @RequestBody SubmitXhsPublishTaskDTO dto) {
+        log.info("【小红书发布】接收任务提交请求：{}", dto);
+        return Result.success(xhsPublishService.submitTask(dto));
+    }
+
+    @Override
     @PostMapping("/task/page")
     public Result<PageResult<XhsPublishTaskPageVO>> pageTask(@Valid @RequestBody PageXhsPublishTaskDTO dto) {
         log.info("【小红书发布】接收任务分页请求：{}", dto);

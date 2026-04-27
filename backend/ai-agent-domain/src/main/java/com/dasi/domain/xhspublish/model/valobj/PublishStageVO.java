@@ -7,6 +7,9 @@ public enum PublishStageVO {
     image_generating,
     param_building,
     pre_publish_review_pending,
-    publishing
+    publishing,
+    completed,
+    failed_terminal,
+    cancelled_terminal
 
 }

@@ -6,4 +6,6 @@ public interface IPublishTaskStateMachine {
 
     String nextStage(String currentStage, String event);
 
+    String nextAttemptStatus(String currentAttemptStatus, String event);
+
 }

@@ -15,6 +15,10 @@ public interface IXhsPublishService {
 
     String createTask(CreateXhsPublishTaskDTO dto);
 
+    void updateTaskContext(UpdateXhsPublishTaskContextDTO dto);
+
+    String submitTask(SubmitXhsPublishTaskDTO dto);
+
     PageResult<XhsPublishTaskPageVO> pageTask(PageXhsPublishTaskDTO dto);
 
     XhsPublishTaskDetailVO detailTask(String taskId);
