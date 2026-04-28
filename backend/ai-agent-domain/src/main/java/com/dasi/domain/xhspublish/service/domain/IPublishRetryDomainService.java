@@ -1,7 +1,10 @@
 package com.dasi.domain.xhspublish.service.domain;
 
+import com.dasi.domain.xhspublish.service.domain.retry.RetryDecisionContext;
+import com.dasi.domain.xhspublish.service.domain.retry.RetryDecisionResult;
+
 public interface IPublishRetryDomainService {
 
-    boolean canRetry(String retryPolicyJson, Integer currentAttemptNo, String errorCode);
+    RetryDecisionResult evaluate(RetryDecisionContext context);
 
 }

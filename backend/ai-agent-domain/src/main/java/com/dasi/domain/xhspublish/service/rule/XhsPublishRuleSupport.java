@@ -10,7 +10,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class XhsPublishRuleSupport {
 
@@ -44,11 +46,23 @@ public final class XhsPublishRuleSupport {
         return defaultValue;
     }
 
-    public static List<String> readStringList(JSONObject source, String key) {
-        if (source == null || !source.containsKey(key)) {
+    public static List<String> readStringList(JSONObject source, String... keys) {
+        if (source == null || keys == null) {
             return List.of();
         }
-        Object raw = source.get(key);
+        for (String key : keys) {
+            if (!StringUtils.hasText(key) || !source.containsKey(key)) {
+                continue;
+            }
+            List<String> valueList = toStringList(source.get(key));
+            if (!valueList.isEmpty()) {
+                return valueList;
+            }
+        }
+        return List.of();
+    }
+
+    private static List<String> toStringList(Object raw) {
         if (raw instanceof JSONArray jsonArray) {
             return jsonArray.toJavaList(String.class).stream().filter(StringUtils::hasText).map(String::trim).toList();
         }
@@ -102,6 +116,36 @@ public final class XhsPublishRuleSupport {
     }
 
     public static List<String> resolveImages(JSONObject sourceContext, List<XhsPublishContentAssetEntity> assetList) {
+        List<String> selectedAssetIds = readStringList(sourceContext, "selectedAssetIds", "selected_asset_ids");
+        if (!selectedAssetIds.isEmpty()) {
+            if (assetList == null || assetList.isEmpty()) {
+                throw new WorkException("selectedAssetIds 已指定，但当前任务未找到可用素材");
+            }
+            Map<String, XhsPublishContentAssetEntity> assetMap = new LinkedHashMap<>();
+            for (XhsPublishContentAssetEntity asset : assetList) {
+                if (asset == null || !StringUtils.hasText(asset.getAssetId())) {
+                    continue;
+                }
+                if (!StringUtils.hasText(asset.getAssetStatus()) || "deleted".equalsIgnoreCase(asset.getAssetStatus())) {
+                    continue;
+                }
+                assetMap.put(asset.getAssetId(), asset);
+            }
+            List<String> selectedImageList = new ArrayList<>();
+            for (String assetId : selectedAssetIds) {
+                XhsPublishContentAssetEntity asset = assetMap.get(assetId);
+                if (asset == null) {
+                    throw new WorkException("selectedAssetIds 中包含无效素材：" + assetId);
+                }
+                String imageRef = StringUtils.hasText(asset.getStorageRef()) ? asset.getStorageRef() : asset.getOriginUrl();
+                if (!StringUtils.hasText(imageRef)) {
+                    throw new WorkException("selectedAssetIds 中素材缺少可用地址：" + assetId);
+                }
+                selectedImageList.add(imageRef);
+            }
+            return selectedImageList;
+        }
+
         List<String> imageList = new ArrayList<>(readStringList(sourceContext, "images"));
         if (!imageList.isEmpty()) {
             return imageList;

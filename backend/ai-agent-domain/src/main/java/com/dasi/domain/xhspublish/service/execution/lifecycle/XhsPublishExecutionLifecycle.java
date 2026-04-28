@@ -9,12 +9,14 @@ import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
 import com.dasi.domain.xhspublish.service.domain.IPublishTaskStateMachine;
 import com.dasi.domain.xhspublish.service.execution.remote.XhsPublishRemoteResult;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecycle {
 
@@ -29,6 +31,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         XhsPublishTaskEntity task = executionContext.getTask();
         XhsPublishAttemptEntity attempt = executionContext.getAttempt();
 
+        // 生命周期入口：先推进 task/stage，再把 attempt 标记为 running，确保三轴状态一致。
         task.setTaskStatus(taskStateMachine.nextTaskStatus(task.getTaskStatus(), "start_execute"));
         task.setCurrentStage(taskStateMachine.nextStage(task.getCurrentStage(), "start_execute"));
         publishRepository.saveTask(task);
@@ -37,6 +40,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setStage(task.getCurrentStage());
         attempt.setStartTime(startTime);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "start_execute", null, 0L, false);
     }
 
     @Override
@@ -52,6 +56,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setContextJson(JSON.toJSONString(executionContext.getSourceContext()));
         attempt.setPublishRequestJson(publishRequestJson);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "payload_built", null, 0L, false);
     }
 
     @Override
@@ -64,6 +69,8 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
 
         attempt.setStage(task.getCurrentStage());
         publishRepository.saveAttempt(attempt);
+        Long remoteDurationMs = executionContext.getRemoteDurationMs();
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_submitted", null, remoteDurationMs == null ? 0L : remoteDurationMs, false);
     }
 
     @Override
@@ -79,6 +86,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setAttemptStatus(taskStateMachine.nextAttemptStatus(attempt.getAttemptStatus(), "publish_accepted"));
         applyAttemptCompletion(attempt, remoteResult, startTime, 0);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_accepted", remoteResult.getErrorCode(), attempt.getDurationMs(), false);
     }
 
     @Override
@@ -95,6 +103,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setRetryable(0);
         applyAttemptCompletion(attempt, remoteResult, startTime, 0);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_succeeded", remoteResult.getErrorCode(), attempt.getDurationMs(), false);
     }
 
     @Override
@@ -111,6 +120,7 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setRetryable(1);
         applyAttemptCompletion(attempt, remoteResult, startTime, 1);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_failed", remoteResult.getErrorCode(), attempt.getDurationMs(), true);
     }
 
     @Override
@@ -125,11 +135,13 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         publishRepository.saveTask(task);
 
         attempt.setAttemptStatus(taskStateMachine.nextAttemptStatus(attempt.getAttemptStatus(), "publish_failed"));
+        attempt.setStage(task.getCurrentStage());
         attempt.setRetryable(1);
         attempt.setErrorMessage(exception == null ? "发布失败" : exception.getMessage());
         attempt.setPublishResultJson(resultJson);
         applyAttemptFinishTime(attempt, startTime);
         publishRepository.saveAttempt(attempt);
+        logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_exception", "EXECUTION_EXCEPTION", attempt.getDurationMs(), true);
     }
 
     private void applyAttemptCompletion(XhsPublishAttemptEntity attempt,
@@ -154,6 +166,18 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         object.put("status", "failed");
         object.put("error_message", message);
         return JSON.toJSONString(object);
+    }
+
+    private void logEvent(String taskId, String attemptId, String event, String errorCode, Long durationMs, boolean failed) {
+        String safeErrorCode = errorCode == null || errorCode.isBlank() ? "-" : errorCode;
+        long safeDuration = durationMs == null || durationMs < 0 ? 0L : durationMs;
+        if (failed) {
+            log.warn("【小红书发布】event={} taskId={} attemptId={} errorCode={} durationMs={}",
+                    event, taskId, attemptId, safeErrorCode, safeDuration);
+            return;
+        }
+        log.info("【小红书发布】event={} taskId={} attemptId={} errorCode={} durationMs={}",
+                event, taskId, attemptId, safeErrorCode, safeDuration);
     }
 
 }

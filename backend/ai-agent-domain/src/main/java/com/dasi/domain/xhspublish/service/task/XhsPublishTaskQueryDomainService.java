@@ -34,6 +34,7 @@ public class XhsPublishTaskQueryDomainService {
         int pageNum = Math.max(dto.getPageNum(), 1);
         int pageSize = Math.max(dto.getPageSize(), 1);
         int offset = (pageNum - 1) * pageSize;
+        // 列表页只依赖轻量字段，避免把 request/context/result 等大 JSON 带入分页查询。
         List<XhsPublishTaskPageVO> list = publishRepository.pageTask(userId, dto.getKeyword(), dto.getTaskStatus(), dto.getCurrentStage(), offset, pageSize).stream()
                 .map(viewAssembler::toTaskPageVO)
                 .toList();

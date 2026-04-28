@@ -23,6 +23,14 @@
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
     </resultMap>
+
+    <resultMap id="statsMap" type="com.dasi.infrastructure.persistent.po.AiXhsPublishAttemptStats">
+        <result column="attempt_count" property="attemptCount"/>
+        <result column="max_attempt_no" property="maxAttemptNo"/>
+        <result column="total_duration_ms" property="totalDurationMs"/>
+        <result column="total_cost_amount" property="totalCostAmount"/>
+    </resultMap>
+
     <select id="queryByAttemptId" resultMap="dataMap">
         SELECT
                id,
@@ -46,6 +54,40 @@
                update_time
         FROM ai_xhs_publish_attempt
         WHERE attempt_id = #{attemptId}
+    </select>
+
+    <select id="queryLatestByTaskId" resultMap="dataMap">
+        SELECT
+               id,
+               attempt_id,
+               task_id,
+               attempt_no,
+               trigger_type,
+               attempt_status,
+               stage,
+               error_code,
+               error_message,
+               retryable,
+               cost_amount,
+               start_time,
+               end_time,
+               duration_ms,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_attempt
+        WHERE task_id = #{taskId}
+        ORDER BY attempt_no DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="queryStatsByTaskId" resultMap="statsMap">
+        SELECT
+               COUNT(1) AS attempt_count,
+               COALESCE(MAX(attempt_no), 0) AS max_attempt_no,
+               COALESCE(SUM(CASE WHEN duration_ms IS NULL OR duration_ms &lt; 0 THEN 0 ELSE duration_ms END), 0) AS total_duration_ms,
+               COALESCE(SUM(COALESCE(cost_amount, 0)), 0) AS total_cost_amount
+        FROM ai_xhs_publish_attempt
+        WHERE task_id = #{taskId}
     </select>
 
     <select id="listByTaskId" resultMap="dataMap">

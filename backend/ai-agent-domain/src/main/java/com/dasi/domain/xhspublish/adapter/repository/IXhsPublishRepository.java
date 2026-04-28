@@ -18,6 +18,10 @@ public interface IXhsPublishRepository {
 
     XhsPublishAttemptEntity queryAttemptByAttemptId(String attemptId);
 
+    XhsPublishAttemptEntity queryLatestAttemptByTaskId(String taskId);
+
+    XhsPublishAttemptStatsEntity queryAttemptStatsByTaskId(String taskId);
+
     List<XhsPublishAttemptEntity> listAttemptByTaskId(String taskId);
 
     XhsPublishReviewEntity queryReviewByReviewId(String reviewId);

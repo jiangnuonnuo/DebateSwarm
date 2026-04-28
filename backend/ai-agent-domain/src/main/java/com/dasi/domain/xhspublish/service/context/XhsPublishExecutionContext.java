@@ -37,6 +37,8 @@ public class XhsPublishExecutionContext {
 
     private XhsPublishRemoteResult remoteResult;
 
+    private Long remoteDurationMs;
+
     private XhsPublishSnapshotEntity payloadSnapshot;
 
 }

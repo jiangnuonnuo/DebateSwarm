@@ -70,6 +70,16 @@ public class XhsPublishRepository implements IXhsPublishRepository {
     }
 
     @Override
+    public XhsPublishAttemptEntity queryLatestAttemptByTaskId(String taskId) {
+        return XhsPublishRepositoryConverter.copy(aiXhsPublishAttemptDao.queryLatestByTaskId(taskId), XhsPublishAttemptEntity.class);
+    }
+
+    @Override
+    public XhsPublishAttemptStatsEntity queryAttemptStatsByTaskId(String taskId) {
+        return XhsPublishRepositoryConverter.copy(aiXhsPublishAttemptDao.queryStatsByTaskId(taskId), XhsPublishAttemptStatsEntity.class);
+    }
+
+    @Override
     public List<XhsPublishAttemptEntity> listAttemptByTaskId(String taskId) {
         return aiXhsPublishAttemptDao.listByTaskId(taskId).stream()
                 .map(item -> XhsPublishRepositoryConverter.copy(item, XhsPublishAttemptEntity.class))

@@ -17,6 +17,8 @@ public class XhsPublishRemoteResult {
 
     private String errorCode;
 
+    private String errorType;
+
     private String errorMessage;
 
     public boolean isFailed() {

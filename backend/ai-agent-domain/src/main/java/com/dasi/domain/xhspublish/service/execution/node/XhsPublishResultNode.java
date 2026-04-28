@@ -27,6 +27,7 @@ public class XhsPublishResultNode extends AbstractXhsPublishNode {
         }
 
         XhsPublishSnapshotEntity payloadSnapshot = dynamicContext.getPayloadSnapshot();
+        // 结果分流语义：failed -> 保留 payload + 落失败快照；published -> 清理快照；accepted -> 保留等待后续确认。
         if (remoteResult.isFailed()) {
             executionLifecycle.markPublishFailed(dynamicContext, remoteResult, dynamicContext.getStartTime());
             snapshotManager.keep(payloadSnapshot);

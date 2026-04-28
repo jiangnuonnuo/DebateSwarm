@@ -46,22 +46,13 @@
 
     <select id="page" resultMap="dataMap">
         SELECT
-               id,
                task_id,
-               user_id,
                task_name,
                publish_mode,
                publish_type,
                task_status,
                current_stage,
-               binding_id,
-               template_id,
                scheduled_publish_at,
-               request_json,
-               latest_context_json,
-               final_result_json,
-               retry_policy_json,
-               create_time,
                update_time
         FROM ai_xhs_publish_task
         <where>

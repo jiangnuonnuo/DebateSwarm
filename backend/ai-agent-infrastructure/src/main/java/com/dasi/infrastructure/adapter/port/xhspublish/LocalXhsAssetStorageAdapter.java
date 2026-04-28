@@ -53,7 +53,12 @@ public class LocalXhsAssetStorageAdapter implements IXhsAssetStoragePort {
             return;
         }
         try {
-            Files.deleteIfExists(Paths.get(storageRef));
+            Path path = resolvePathWithinBase(storageRef, false);
+            if (path == null) {
+                log.warn("【小红书发布】素材删除被拒绝，路径越界：storageRef={}", storageRef);
+                return;
+            }
+            Files.deleteIfExists(path);
         } catch (IOException e) {
             log.warn("【小红书发布】本地素材删除失败：storageRef={}", storageRef, e);
         }
@@ -64,7 +69,7 @@ public class LocalXhsAssetStorageAdapter implements IXhsAssetStoragePort {
         if (!StringUtils.hasText(storageRef)) {
             throw new WorkException("素材路径不存在");
         }
-        Path path = Paths.get(storageRef).normalize();
+        Path path = resolvePathWithinBase(storageRef, true);
         if (!Files.exists(path)) {
             throw new WorkException("素材文件不存在");
         }
@@ -75,6 +80,22 @@ public class LocalXhsAssetStorageAdapter implements IXhsAssetStoragePort {
         Path basePath = Paths.get(xhsPublishProperties.getAssetBaseDir()).toAbsolutePath().normalize();
         Files.createDirectories(basePath);
         return basePath;
+    }
+
+    private Path resolvePathWithinBase(String storageRef, boolean throwOnOutOfBase) {
+        try {
+            Path basePath = resolveBasePath();
+            Path targetPath = Paths.get(storageRef).toAbsolutePath().normalize();
+            if (!targetPath.startsWith(basePath)) {
+                if (throwOnOutOfBase) {
+                    throw new WorkException("素材路径非法");
+                }
+                return null;
+            }
+            return targetPath;
+        } catch (IOException e) {
+            throw new WorkException("素材路径解析失败");
+        }
     }
 
     private String normalizeBusinessPath(String businessPath) {

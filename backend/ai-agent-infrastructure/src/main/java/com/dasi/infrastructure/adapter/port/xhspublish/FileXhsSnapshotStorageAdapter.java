@@ -44,7 +44,12 @@ public class FileXhsSnapshotStorageAdapter implements IXhsSnapshotStoragePort {
             return;
         }
         try {
-            Files.deleteIfExists(Paths.get(snapshotPath));
+            Path path = resolvePathWithinBase(snapshotPath, false);
+            if (path == null) {
+                log.warn("【小红书发布】快照删除被拒绝，路径越界：snapshotPath={}", snapshotPath);
+                return;
+            }
+            Files.deleteIfExists(path);
         } catch (IOException e) {
             log.warn("【小红书发布】快照删除失败：snapshotPath={}", snapshotPath, e);
         }
@@ -55,6 +60,23 @@ public class FileXhsSnapshotStorageAdapter implements IXhsSnapshotStoragePort {
             return "unknown";
         }
         return raw.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+    }
+
+    private Path resolvePathWithinBase(String snapshotPath, boolean throwOnOutOfBase) {
+        try {
+            Path basePath = Paths.get(xhsPublishProperties.getSnapshotBaseDir()).toAbsolutePath().normalize();
+            Files.createDirectories(basePath);
+            Path targetPath = Paths.get(snapshotPath).toAbsolutePath().normalize();
+            if (!targetPath.startsWith(basePath)) {
+                if (throwOnOutOfBase) {
+                    throw new WorkException("快照路径非法");
+                }
+                return null;
+            }
+            return targetPath;
+        } catch (IOException e) {
+            throw new WorkException("快照路径解析失败");
+        }
     }
 
 }

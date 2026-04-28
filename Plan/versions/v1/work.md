@@ -6,6 +6,7 @@
 
 ## Goal
 - 形成「小红书智能发布」第一版可落地架构基线（V1 Baseline），作为后续接口与开发实现输入。
+- Week1（2026-04-27 ~ 2026-05-03）交付 B 模式主链路最小可运行闭环，并建立可持续更新的协作账本。
 
 ## Product Context
 - User problem:
@@ -71,6 +72,7 @@
 | Agent | Role | Responsibility | Status |
 |---|---|---|---|
 | architect-1 | architect | XHS 智能发布 V1 架构与流程基线设计 | in_progress |
+| backend-001 | backend | XHS V1 B模式 Week1 交付（create/context/material/submit/publish/retry + 主流程单测） | in_progress |
 
 ## Dependencies
 - Agent 运行时基础能力（已存在）：
@@ -88,11 +90,20 @@
 - 若仅依赖 AI 校验而没有规则兜底，仍会出现无效 MCP 调用风险。
 
 ## Active Gaps
-- 接口契约（字段级 Request/Response）尚未评审确认。
-- 状态机事件表已形成，但尚未由后端按代码实现对齐。
-- `createTask -> draft-only`、`context/update`、`submitTask` 三段式接口尚未正式改造。
-- A/B 模式失败码与前端交互文案规范尚未冻结。
-- 定时发布的“后续人工确认入口”尚未进入前端交互设计。
+- Week1 交付尚未完成：
+  - `selectedAssetIds` 精准选图优先级（`selectedAssetIds > images > task assets fallback`）待代码落地。
+  - 重试三重约束（次数/总耗时/预算）待代码落地。
+  - submit/retry 并发幂等保护待代码落地。
+  - 主流程单元测试（状态机/规则链/任务命令/执行结果分流）待补齐。
+- A 模式审核驱动状态机不在 Week1 交付范围，进入 Week2 前置项。
+
+## Week1 Delivery Checklist (backend-001)
+- Day1（2026-04-27）：账本接管与周计划冻结。
+- Day2（2026-04-28）：执行树主路径与生命周期一致性校正。
+- Day3（2026-04-29）：选图优先级与 payload 规则完善。
+- Day4（2026-04-30）：重试约束、并发幂等与路径安全加固。
+- Day5（2026-05-01）：主流程单测与编译回归。
+- Day6-7（2026-05-02 ~ 2026-05-03）：缺陷收敛、联调口径整理、Week2 输入沉淀。
 
 ## Decision Artifacts
 - `Plan/versions/v1/xhs-publish-architecture.md`
@@ -112,3 +123,4 @@
 - Updated: 2026-04-25 22:32 by architect-1 (V1 baseline confirmed by PM)
 - Updated: 2026-04-25 23:30 by architect-1 (DB/schema/validation/task-result strategy refined)
 - Updated: 2026-04-26 00:20 by architect-1 (delivery plan + state machine promoted into Plan as source-of-truth)
+- Updated: 2026-04-27 17:58 by backend-001 (Week1 B-mode implementation sprint started)
