@@ -27,6 +27,13 @@
 - 2026-04-27: Week1 不做数据库重构；若实现遇到硬阻塞，先提交“改动点+收益+回滚”提案后再决策。
 - 2026-04-27: Week1 上下文契约冻结支持 `selectedAssetIds`，选图顺序固定为 `selectedAssetIds > images > task assets fallback`。
 - 2026-04-27: backend-001 作为本周执行责任人，agent 卡片作为后端进度主真相源，每日至少更新 4 次。
+- 2026-04-28: Iteration1 核验通过后进入 Iteration2，重试治理改为责任链决策模型（DecisionContext/Result + 5 Guards）。
+- 2026-04-28: Iteration2 在不增端点前提下执行“分页轻量查询 + attempt聚合统计查询 + 远程失败分类降噪 + 结构化日志”。
+- 2026-04-28: Maven 默认本地仓库路径存在权限限制，项目内回归统一通过 `-s F:/java/code/Agent/.mvn-local-settings.xml` 执行。
+- 2026-04-28: A 模式审核决策已要求驱动 task/attempt 状态迁移，禁止只记录 review 审计而不回写状态。
+- 2026-04-28: createTask 新增模板归属/状态校验，禁止越权引用他人模板；当 `requestJson` 为空对象时回填 `templateConfigJson`。
+- 2026-04-28: 发布成功后已落地个人知识自动沉淀（best-effort）；向量写入失败仅标记知识状态失败，不影响已成功发布主流程。
+- 2026-04-28: `A:image` 策略已接入；A 模式 submit 先进入 `copy_review_pending` 并写入 pending review，`copy_review` 通过后自动恢复执行树。
 
 ## Open Risks
 - 测试期图片走内存存储，服务重启素材丢失风险已知且暂可接受。
@@ -34,6 +41,8 @@
 - 智能择时尚未纳入 V1，B 模式默认直发可能影响发布时间质量。
 - 定时发布在 V1 中不做自动复核，可能出现“任务已受理但帖子状态需人工再查”的运营成本。
 - 不改库约束下，并发幂等与预算控制主要依赖服务层实现，若单测覆盖不足可能在联调暴露边界问题。
+- 单机幂等仅覆盖 JVM 内并发，跨实例重复提交需在 Iteration3 升级分布式幂等。
+- A 模式 `pre_publish_review` 阻断与恢复未完成自动衔接，仍是 V1 完成前主要剩余工作。
 
 ## Stable Constraints
 - 当前阶段仅固化 V1 第一版基线，后续允许在同一版本文档内修订。

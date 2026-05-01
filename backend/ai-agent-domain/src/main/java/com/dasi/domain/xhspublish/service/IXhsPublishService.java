@@ -1,6 +1,7 @@
 package com.dasi.domain.xhspublish.service;
 
 import com.dasi.domain.xhspublish.model.dto.*;
+import com.dasi.domain.xhspublish.model.vo.IntelligentXhsPublishSubmitVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskDetailVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskPageVO;
@@ -34,6 +35,8 @@ public interface IXhsPublishService {
     List<XhsPublishAssetVO> uploadMaterial(UploadXhsPublishMaterialDTO dto, List<MultipartFile> fileList);
 
     void uploadKnowledge(UploadXhsPublishKnowledgeDTO dto, List<MultipartFile> fileList);
+
+    IntelligentXhsPublishSubmitVO submitIntelligentTask(IntelligentXhsPublishSubmitDTO dto, List<MultipartFile> fileList);
 
     Resource accessMaterial(String assetId);
 

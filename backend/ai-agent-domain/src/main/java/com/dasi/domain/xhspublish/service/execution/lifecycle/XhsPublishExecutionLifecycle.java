@@ -8,6 +8,7 @@ import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishRepository;
 import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
 import com.dasi.domain.xhspublish.service.domain.IPublishTaskStateMachine;
 import com.dasi.domain.xhspublish.service.execution.remote.XhsPublishRemoteResult;
+import com.dasi.domain.xhspublish.service.knowledge.XhsPublishKnowledgeIngestionService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,9 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
 
     @Resource
     private IPublishTaskStateMachine taskStateMachine;
+
+    @Resource
+    private XhsPublishKnowledgeIngestionService knowledgeIngestionService;
 
     @Override
     public void markExecutionStarted(XhsPublishExecutionContext executionContext, LocalDateTime startTime) {
@@ -103,6 +107,8 @@ public class XhsPublishExecutionLifecycle implements IXhsPublishExecutionLifecyc
         attempt.setRetryable(0);
         applyAttemptCompletion(attempt, remoteResult, startTime, 0);
         publishRepository.saveAttempt(attempt);
+        // 发布成功后的知识沉淀采用 best-effort，不反向影响已成功的主链路状态。
+        knowledgeIngestionService.ingestPublishSuccess(task, attempt, remoteResult);
         logEvent(task.getTaskId(), attempt.getAttemptId(), "publish_succeeded", remoteResult.getErrorCode(), attempt.getDurationMs(), false);
     }
 

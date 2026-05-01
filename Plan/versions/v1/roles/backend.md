@@ -4,30 +4,33 @@
 - backend-001
 
 ## Current Responsibilities
-- Week1（2026-04-27 ~ 2026-05-03）交付 B 模式主链路最小闭环：
+- Iteration2（2026-05-04 ~ 2026-05-10）交付重试治理、性能与安全加固：
 - `create -> context/update -> material/upload -> submit -> publish -> retry`
-- 对齐状态机与执行树事件路径，确保生命周期回写一致。
-- 在上下文契约中支持 `selectedAssetIds` 精准选图（不改表）。
-- 补齐主流程单测（状态机/规则链/任务命令/执行结果分流）。
+- 重试治理责任链：`ActiveAttemptGuard -> ErrorCodeGuard -> RetryCountGuard -> DurationBudgetGuard -> CostBudgetGuard`
+- 查询性能：分页轻量字段查询 + attempt 聚合统计查询
+- 安全加固：基目录访问约束 + 远程失败分类降噪 + 结构化日志字段约束
+- A 模式补齐：review 决策驱动 task/attempt 状态迁移
 
 ## Status Summary
 - State: in_progress
-- Sprint: Week1 B-mode
+- Sprint: Iteration2 hardening + V1 closeout
 - Evidence policy: 每日最少 4 次更新 backend-001 agent 卡片（开工/中段/回归后/收工）
 
 ## Open Risks
-- 不改库条件下，重试预算与并发幂等实现需依赖服务层约束，需重点覆盖单测与联调。
-- MCP 外部依赖波动可能导致发布状态判定噪声，需通过错误码和日志收敛。
+- 本周未引入分布式锁，跨实例并发防重仍是后续迭代风险。
+- 远端平台错误码语义存在波动，需持续校准 transient/business/validation 映射。
+- A 模式 `copy_review` 阻断/恢复已落地，但 `pre_publish_review` 阻断与恢复自动衔接尚未补齐，是 V1 封板前主要剩余项。
 
 ## Agent Registration
-- backend-001: XHS V1 B模式 Week1 交付
+- backend-001: XHS V1 B模式 Iteration2 交付（重试治理/性能/安全）
 
-## Week1 Frozen Scope
+## Iteration2 Frozen Scope
 - In scope:
-- B 模式图文发布主链路
-- 精准选图优先级与 payload 规则完善
-- 重试约束与并发幂等
-- 主流程单元测试与构建回归
+- 重试治理责任链改造与拒绝原因码标准化
+- 分页轻量查询与 attempt 聚合统计查询
+- 安全加固（路径、远程分类降噪、结构化日志）
+- 主流程单测扩展与编译回归
 - Out of scope:
-- A 模式审核闭环
+- Redis/DB 分布式幂等锁
+- A 模式审核闭环实现
 - 数据库结构重构

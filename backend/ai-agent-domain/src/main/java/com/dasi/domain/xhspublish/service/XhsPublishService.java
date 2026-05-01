@@ -10,10 +10,13 @@ import com.dasi.domain.xhspublish.model.dto.SubmitXhsPublishTaskDTO;
 import com.dasi.domain.xhspublish.model.dto.UpdateXhsPublishTaskContextDTO;
 import com.dasi.domain.xhspublish.model.dto.UploadXhsPublishKnowledgeDTO;
 import com.dasi.domain.xhspublish.model.dto.UploadXhsPublishMaterialDTO;
+import com.dasi.domain.xhspublish.model.dto.IntelligentXhsPublishSubmitDTO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
+import com.dasi.domain.xhspublish.model.vo.IntelligentXhsPublishSubmitVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskDetailVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskPageVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTemplateVO;
+import com.dasi.domain.xhspublish.service.intelligent.XhsPublishIntelligentSubmitDomainService;
 import com.dasi.domain.xhspublish.service.knowledge.XhsPublishKnowledgeDomainService;
 import com.dasi.domain.xhspublish.service.material.XhsPublishMaterialDomainService;
 import com.dasi.domain.xhspublish.service.snapshot.XhsPublishSnapshotDomainService;
@@ -47,6 +50,9 @@ public class XhsPublishService implements IXhsPublishService {
 
     @Resource
     private XhsPublishSnapshotDomainService snapshotDomainService;
+
+    @Resource
+    private XhsPublishIntelligentSubmitDomainService intelligentSubmitDomainService;
 
     @Override
     public String createTask(CreateXhsPublishTaskDTO dto) {
@@ -101,6 +107,11 @@ public class XhsPublishService implements IXhsPublishService {
     @Override
     public void uploadKnowledge(UploadXhsPublishKnowledgeDTO dto, List<MultipartFile> fileList) {
         knowledgeDomainService.uploadKnowledge(dto, fileList);
+    }
+
+    @Override
+    public IntelligentXhsPublishSubmitVO submitIntelligentTask(IntelligentXhsPublishSubmitDTO dto, List<MultipartFile> fileList) {
+        return intelligentSubmitDomainService.submit(dto, fileList);
     }
 
     @Override

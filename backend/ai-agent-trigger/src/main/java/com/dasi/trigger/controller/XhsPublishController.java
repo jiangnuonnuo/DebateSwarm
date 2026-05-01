@@ -2,6 +2,7 @@ package com.dasi.trigger.controller;
 
 import com.dasi.api.IXhsPublishApi;
 import com.dasi.domain.xhspublish.model.dto.*;
+import com.dasi.domain.xhspublish.model.vo.IntelligentXhsPublishSubmitVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskDetailVO;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskPageVO;
@@ -111,6 +112,16 @@ public class XhsPublishController implements IXhsPublishApi {
         log.info("【小红书发布】接收知识上传请求：dto={}, fileCount={}", dto, fileList == null ? 0 : fileList.size());
         xhsPublishService.uploadKnowledge(dto, fileList);
         return Result.success();
+    }
+
+    @Override
+    @PostMapping("/task/intelligent/submit")
+    public Result<IntelligentXhsPublishSubmitVO> submitIntelligentTask(@Valid @ModelAttribute IntelligentXhsPublishSubmitDTO dto,
+                                                                       @RequestPart(value = "fileList", required = false) List<MultipartFile> fileList) {
+        int urlCount = dto.getOriginImageUrls() == null ? 0 : dto.getOriginImageUrls().size();
+        log.info("【小红书发布】接收一键智能发布请求：taskName={}, clientId={}, fileCount={}, urlCount={}",
+                dto.getTaskName(), dto.getClientId(), fileList == null ? 0 : fileList.size(), urlCount);
+        return Result.success(xhsPublishService.submitIntelligentTask(dto, fileList));
     }
 
     @GetMapping("/material/access")

@@ -11,6 +11,7 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
+import io.modelcontextprotocol.json.McpJsonMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,7 +88,7 @@ public class ArmoryMcpNode extends AbstractArmoryNode {
                             .env(stdioConfig.getEnv())
                             .build();
 
-                    StdioClientTransport stdioClient = new StdioClientTransport(serverParameters);
+                    StdioClientTransport stdioClient = new StdioClientTransport(serverParameters, McpJsonMapper.getDefault());
 
                     mcpSyncClient = McpClient
                             .sync(stdioClient)

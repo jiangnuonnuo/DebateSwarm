@@ -23,7 +23,13 @@ public class PublishTaskStateMachineImpl implements IPublishTaskStateMachine {
         if ("publish_failed".equals(event)) {
             return PublishTaskStatusVO.failed.name();
         }
+        if ("validation_rejected".equals(event)) {
+            return PublishTaskStatusVO.failed.name();
+        }
         if ("retry_requested".equals(event)) {
+            return PublishTaskStatusVO.running.name();
+        }
+        if ("copy_review_approved".equals(event) || "pre_publish_review_approved".equals(event)) {
             return PublishTaskStatusVO.running.name();
         }
         return currentStatus == null ? PublishTaskStatusVO.draft.name() : currentStatus;
@@ -40,11 +46,20 @@ public class PublishTaskStateMachineImpl implements IPublishTaskStateMachine {
         if ("copy_review_required".equals(event)) {
             return PublishStageVO.copy_review_pending.name();
         }
+        if ("copy_review_approved".equals(event)) {
+            return PublishStageVO.param_building.name();
+        }
         if ("image_generation_required".equals(event)) {
             return PublishStageVO.image_generating.name();
         }
         if ("pre_publish_review_required".equals(event)) {
             return PublishStageVO.pre_publish_review_pending.name();
+        }
+        if ("pre_publish_review_approved".equals(event)) {
+            return PublishStageVO.publishing.name();
+        }
+        if ("validation_rejected".equals(event)) {
+            return PublishStageVO.failed_terminal.name();
         }
         if ("publish_succeeded".equals(event)) {
             return PublishStageVO.completed.name();

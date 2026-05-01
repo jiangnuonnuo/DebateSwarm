@@ -7,6 +7,7 @@ import com.dasi.domain.xhspublish.model.valobj.PublishStageVO;
 import com.dasi.domain.xhspublish.model.valobj.PublishTaskStatusVO;
 import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
 import com.dasi.domain.xhspublish.service.domain.IPublishTaskStateMachine;
+import com.dasi.domain.xhspublish.service.knowledge.XhsPublishKnowledgeIngestionService;
 import com.dasi.domain.xhspublish.service.execution.remote.XhsPublishRemoteResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,11 +36,15 @@ class XhsPublishExecutionLifecycleTest {
     @Mock
     private IPublishTaskStateMachine taskStateMachine;
 
+    @Mock
+    private XhsPublishKnowledgeIngestionService knowledgeIngestionService;
+
     @BeforeEach
     void setUp() {
         lifecycle = new XhsPublishExecutionLifecycle();
         ReflectionTestUtils.setField(lifecycle, "publishRepository", publishRepository);
         ReflectionTestUtils.setField(lifecycle, "taskStateMachine", taskStateMachine);
+        ReflectionTestUtils.setField(lifecycle, "knowledgeIngestionService", knowledgeIngestionService);
         doNothing().when(publishRepository).saveTask(any());
         doNothing().when(publishRepository).saveAttempt(any());
     }
@@ -64,6 +70,7 @@ class XhsPublishExecutionLifecycleTest {
         assertEquals(1, context.getAttempt().getRetryable());
         verify(publishRepository).saveTask(context.getTask());
         verify(publishRepository).saveAttempt(context.getAttempt());
+        verify(knowledgeIngestionService, never()).ingestPublishSuccess(any(), any(), any());
     }
 
     @Test
@@ -85,6 +92,7 @@ class XhsPublishExecutionLifecycleTest {
         assertEquals(0, context.getAttempt().getRetryable());
         verify(publishRepository).saveTask(context.getTask());
         verify(publishRepository).saveAttempt(context.getAttempt());
+        verify(knowledgeIngestionService).ingestPublishSuccess(context.getTask(), context.getAttempt(), remoteResult);
     }
 
     private XhsPublishExecutionContext context() {
@@ -102,4 +110,3 @@ class XhsPublishExecutionLifecycleTest {
     }
 
 }
-
