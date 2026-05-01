@@ -1,6 +1,6 @@
 package com.dasi.infrastructure.adapter.port.xhspublish;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,10 +23,22 @@ class FileXhsSnapshotStorageAdapterTest {
     @BeforeEach
     void setUp() {
         snapshotStorageAdapter = new FileXhsSnapshotStorageAdapter();
-        XhsPublishProperties properties = new XhsPublishProperties();
         snapshotBaseDir = tempDir.resolve("snapshots");
-        properties.setSnapshotBaseDir(snapshotBaseDir.toString());
-        ReflectionTestUtils.setField(snapshotStorageAdapter, "xhsPublishProperties", properties);
+        IXhsPublishConfigRepository configRepository = new IXhsPublishConfigRepository() {
+            @Override public String getAssetBaseDir() { return null; }
+            @Override public String getAssetAccessBaseUrl() { return null; }
+            @Override public String getSnapshotBaseDir() { return snapshotBaseDir.toString(); }
+            @Override public Integer getAssetRetentionHours() { return null; }
+            @Override public Integer getSnapshotRetentionHours() { return null; }
+            @Override public String getDefaultTenantId() { return null; }
+            @Override public String getDefaultAccountId() { return null; }
+            @Override public String getDefaultAccountName() { return null; }
+            @Override public String getVectorSchemaName() { return null; }
+            @Override public String getVectorTableName() { return null; }
+            @Override public Integer getMcpPollRounds() { return null; }
+            @Override public Integer getMcpPollIntervalMillis() { return null; }
+        };
+        ReflectionTestUtils.setField(snapshotStorageAdapter, "xhsPublishConfigRepository", configRepository);
     }
 
     @Test

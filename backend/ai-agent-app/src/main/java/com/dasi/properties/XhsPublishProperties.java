@@ -1,11 +1,12 @@
-package com.dasi.domain.xhspublish.config;
+package com.dasi.properties;
 
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "miniagent.xhs-publish", ignoreInvalidFields = true)
-public class XhsPublishProperties {
+public class XhsPublishProperties implements IXhsPublishConfigRepository {
 
     private String assetBaseDir;
 

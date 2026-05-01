@@ -1,8 +1,8 @@
 package com.dasi.domain.xhspublish.service.support;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAccountBindingEntity;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishAccountBindingRepository;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -16,7 +16,7 @@ public class XhsPublishBindingSupport {
     private IXhsPublishAccountBindingRepository accountBindingRepository;
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Resource
     private XhsPublishIdSupport idSupport;
@@ -49,9 +49,9 @@ public class XhsPublishBindingSupport {
         XhsPublishAccountBindingEntity entity = XhsPublishAccountBindingEntity.builder()
                 .bindingId(idSupport.nextBindingId())
                 .userId(userId)
-                .accountName(xhsPublishProperties.getDefaultAccountName())
-                .mcpTenantId(xhsPublishProperties.getDefaultTenantId())
-                .mcpAccountId(xhsPublishProperties.getDefaultAccountId())
+                .accountName(xhsPublishConfigRepository.getDefaultAccountName())
+                .mcpTenantId(xhsPublishConfigRepository.getDefaultTenantId())
+                .mcpAccountId(xhsPublishConfigRepository.getDefaultAccountId())
                 .bindStatus(1)
                 .isDefault(1)
                 .lastCheckTime(LocalDateTime.now())

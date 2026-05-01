@@ -1,6 +1,6 @@
 package com.dasi.config;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.properties.XhsPublishProperties;
 import com.dasi.properties.EmbeddingProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.MetadataMode;

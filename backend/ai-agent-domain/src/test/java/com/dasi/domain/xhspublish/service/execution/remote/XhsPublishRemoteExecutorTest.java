@@ -3,7 +3,7 @@ package com.dasi.domain.xhspublish.service.execution.remote;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.dasi.domain.xhspublish.adapter.port.IXhsMcpPort;
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,15 +27,28 @@ class XhsPublishRemoteExecutorTest {
     @Mock
     private IXhsMcpPort xhsMcpPort;
 
+    private IXhsPublishConfigRepository configRepository;
+
     @BeforeEach
     void setUp() {
         remoteExecutor = new XhsPublishRemoteExecutor();
-        XhsPublishProperties properties = new XhsPublishProperties();
-        properties.setMcpPollRounds(1);
-        properties.setMcpPollIntervalMillis(0);
+        configRepository = new IXhsPublishConfigRepository() {
+            @Override public String getAssetBaseDir() { return null; }
+            @Override public String getAssetAccessBaseUrl() { return null; }
+            @Override public String getSnapshotBaseDir() { return null; }
+            @Override public Integer getAssetRetentionHours() { return null; }
+            @Override public Integer getSnapshotRetentionHours() { return null; }
+            @Override public String getDefaultTenantId() { return null; }
+            @Override public String getDefaultAccountId() { return null; }
+            @Override public String getDefaultAccountName() { return null; }
+            @Override public String getVectorSchemaName() { return null; }
+            @Override public String getVectorTableName() { return null; }
+            @Override public Integer getMcpPollRounds() { return 1; }
+            @Override public Integer getMcpPollIntervalMillis() { return 0; }
+        };
 
         ReflectionTestUtils.setField(remoteExecutor, "xhsMcpPort", xhsMcpPort);
-        ReflectionTestUtils.setField(remoteExecutor, "xhsPublishProperties", properties);
+        ReflectionTestUtils.setField(remoteExecutor, "xhsPublishConfigRepository", configRepository);
     }
 
     @Test
@@ -56,6 +69,7 @@ class XhsPublishRemoteExecutorTest {
         assertEquals("failed", resultView.getString("status"));
         assertEquals("TITLE_TOO_LONG", resultView.getString("error_code"));
         assertEquals("validation", resultView.getString("error_type"));
+        assertEquals("backend_mcp", resultView.getString("executor"));
         assertFalse(resultView.containsKey("publish_request_json"));
     }
 

@@ -1,6 +1,6 @@
 package com.dasi.domain.xhspublish.service.execution.snapshot;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAttemptEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishSnapshotEntity;
 import com.dasi.domain.xhspublish.adapter.port.IXhsSnapshotStoragePort;
@@ -28,7 +28,7 @@ public class XhsPublishSnapshotManager implements IXhsPublishSnapshotManager {
     private XhsPublishIdSupport idSupport;
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Override
     public XhsPublishSnapshotEntity savePayloadSnapshot(XhsPublishExecutionContext executionContext, String publishRequestJson) {
@@ -75,7 +75,7 @@ public class XhsPublishSnapshotManager implements IXhsPublishSnapshotManager {
                 .stage(stage)
                 .snapshotPath(snapshotPath)
                 .cleanupStatus("pending")
-                .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishProperties.getSnapshotRetentionHours())))
+                .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishConfigRepository.getSnapshotRetentionHours())))
                 .build();
         publishRepository.saveSnapshot(entity);
         return publishRepository.querySnapshotBySnapshotId(entity.getSnapshotId());

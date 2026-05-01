@@ -21,6 +21,8 @@ public class XhsPublishRemoteResult {
 
     private String errorMessage;
 
+    private String executor;
+
     public boolean isFailed() {
         return "failed".equalsIgnoreCase(status);
     }
@@ -29,6 +31,10 @@ public class XhsPublishRemoteResult {
         return "published".equalsIgnoreCase(status)
                 || "verified".equalsIgnoreCase(status)
                 || "succeeded".equalsIgnoreCase(status);
+    }
+
+    public boolean isTransientFailure() {
+        return isFailed() && "transient".equalsIgnoreCase(errorType);
     }
 
 }

@@ -7,6 +7,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
@@ -39,18 +40,37 @@ public class XhsPublishClientSupport {
     }
 
     public String promptOnce(String clientId, Prompt prompt) {
+        return promptOnce(clientId, prompt, null, "智能生成结果为空", "智能生成失败，请稍后重试");
+    }
+
+    public String promptOnceWithTools(String clientId,
+                                      Prompt prompt,
+                                      SyncMcpToolCallbackProvider toolCallbackProvider,
+                                      String emptyMessage,
+                                      String failureMessage) {
+        return promptOnce(clientId, prompt, toolCallbackProvider, emptyMessage, failureMessage);
+    }
+
+    private String promptOnce(String clientId,
+                              Prompt prompt,
+                              SyncMcpToolCallbackProvider toolCallbackProvider,
+                              String emptyMessage,
+                              String failureMessage) {
         ensureClientAvailable(clientId);
         try {
-            String response = resolveClientBean(clientId).prompt(prompt).call().content();
+            var responseSpec = toolCallbackProvider == null
+                    ? resolveClientBean(clientId).prompt(prompt).call()
+                    : resolveClientBean(clientId).prompt(prompt).toolCallbacks(toolCallbackProvider).call();
+            String response = responseSpec.content();
             if (!StringUtils.hasText(response)) {
-                throw new WorkException("智能生成结果为空");
+                throw new WorkException(emptyMessage);
             }
             return response.trim();
         } catch (WorkException e) {
             throw e;
         } catch (Exception e) {
             log.error("【小红书发布】智能生成失败：clientId={}", clientId, e);
-            throw new WorkException("智能生成失败，请稍后重试");
+            throw new WorkException(failureMessage);
         }
     }
 

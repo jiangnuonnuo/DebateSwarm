@@ -1,6 +1,6 @@
 package com.dasi.infrastructure.adapter.port.xhspublish;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.domain.xhspublish.adapter.port.IXhsSnapshotStoragePort;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;
@@ -20,12 +20,12 @@ import java.time.LocalDate;
 public class FileXhsSnapshotStorageAdapter implements IXhsSnapshotStoragePort {
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Override
     public String save(String taskId, Integer roundNo, String stage, String content) {
         try {
-            Path basePath = Paths.get(xhsPublishProperties.getSnapshotBaseDir()).toAbsolutePath().normalize();
+            Path basePath = Paths.get(xhsPublishConfigRepository.getSnapshotBaseDir()).toAbsolutePath().normalize();
             Path targetDir = basePath.resolve(LocalDate.now().toString()).resolve(safePath(taskId));
             Files.createDirectories(targetDir);
             String fileName = String.format("round_%s_%s.json", roundNo == null ? 0 : roundNo, safePath(stage));
@@ -64,7 +64,7 @@ public class FileXhsSnapshotStorageAdapter implements IXhsSnapshotStoragePort {
 
     private Path resolvePathWithinBase(String snapshotPath, boolean throwOnOutOfBase) {
         try {
-            Path basePath = Paths.get(xhsPublishProperties.getSnapshotBaseDir()).toAbsolutePath().normalize();
+            Path basePath = Paths.get(xhsPublishConfigRepository.getSnapshotBaseDir()).toAbsolutePath().normalize();
             Files.createDirectories(basePath);
             Path targetPath = Paths.get(snapshotPath).toAbsolutePath().normalize();
             if (!targetPath.startsWith(basePath)) {

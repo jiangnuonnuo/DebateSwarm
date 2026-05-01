@@ -2,7 +2,7 @@ package com.dasi.domain.xhspublish.service.execution.remote;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.domain.xhspublish.adapter.port.IXhsMcpPort;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
     private IXhsMcpPort xhsMcpPort;
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Override
     public XhsPublishRemoteResult executeImagePublish(String publishRequestJson) {
@@ -44,6 +44,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
                     .errorCode("REMOTE_CALL_EXCEPTION")
                     .errorType(ERROR_TYPE_TRANSIENT)
                     .errorMessage(sanitizeMessage(e.getMessage()))
+                    .executor("backend_mcp")
                     .build();
         }
     }
@@ -63,7 +64,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
         }
 
         JSONObject latest = submitResult;
-        for (int i = 0; i < defaultInt(xhsPublishProperties.getMcpPollRounds(), 2); i++) {
+        for (int i = 0; i < defaultInt(xhsPublishConfigRepository.getMcpPollRounds(), 2); i++) {
             String statusJson = xhsMcpPort.queryJobStatus(jobId);
             latest = JSON.parseObject(statusJson);
             String status = extractStatus(latest);
@@ -79,7 +80,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
                 }
                 return latest;
             }
-            sleep(defaultInt(xhsPublishProperties.getMcpPollIntervalMillis(), 1500));
+            sleep(defaultInt(xhsPublishConfigRepository.getMcpPollIntervalMillis(), 1500));
         }
         return latest;
     }
@@ -98,6 +99,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
                 .errorCode(errorCode)
                 .errorType(errorType)
                 .errorMessage(errorMessage)
+                .executor("backend_mcp")
                 .build();
     }
 
@@ -195,6 +197,7 @@ public class XhsPublishRemoteExecutor implements IXhsPublishRemoteExecutor {
                                        String errorMessage) {
         JSONObject view = new JSONObject();
         view.put("status", finalStatus);
+        view.put("executor", "backend_mcp");
         if (finalResult == null) {
             if (StringUtils.hasText(errorCode)) {
                 view.put("error_code", errorCode);

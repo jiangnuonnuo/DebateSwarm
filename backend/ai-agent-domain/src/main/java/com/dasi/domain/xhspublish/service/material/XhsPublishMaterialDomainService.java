@@ -1,8 +1,8 @@
 package com.dasi.domain.xhspublish.service.material;
 
 import com.dasi.domain.xhspublish.adapter.port.IXhsAssetStoragePort;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishRepository;
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
 import com.dasi.domain.xhspublish.model.dto.UploadXhsPublishMaterialDTO;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishContentAssetEntity;
 import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
@@ -34,7 +34,7 @@ public class XhsPublishMaterialDomainService {
     private XhsPublishIdSupport idSupport;
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Resource
     private XhsPublishTaskAccessSupport taskAccessSupport;
@@ -66,7 +66,7 @@ public class XhsPublishMaterialDomainService {
                         .accessUrl(buildAssetAccessUrl(assetId))
                         .sortNo(sortNo++)
                         .assetStatus("ready")
-                        .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishProperties.getAssetRetentionHours())))
+                        .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishConfigRepository.getAssetRetentionHours())))
                         .build();
                 publishRepository.saveAsset(entity);
                 result.add(viewAssembler.toAssetVO(publishRepository.queryAssetByAssetId(assetId)));
@@ -91,7 +91,7 @@ public class XhsPublishMaterialDomainService {
                 .accessUrl(dto.getOriginUrl())
                 .sortNo(sortNo)
                 .assetStatus("ready")
-                .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishProperties.getAssetRetentionHours())))
+                .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishConfigRepository.getAssetRetentionHours())))
                 .build();
         publishRepository.saveAsset(entity);
         result.add(viewAssembler.toAssetVO(publishRepository.queryAssetByAssetId(assetId)));
@@ -124,7 +124,7 @@ public class XhsPublishMaterialDomainService {
     }
 
     private String buildAssetAccessUrl(String assetId) {
-        return xhsPublishProperties.getAssetAccessBaseUrl() + "?assetId=" + assetId;
+        return xhsPublishConfigRepository.getAssetAccessBaseUrl() + "?assetId=" + assetId;
     }
 
     private int defaultHours(Integer hours) {

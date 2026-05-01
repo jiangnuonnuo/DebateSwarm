@@ -1,7 +1,7 @@
 package com.dasi.infrastructure.adapter.port.xhspublish;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
 import com.dasi.domain.xhspublish.adapter.port.IXhsVectorStorePort;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -30,7 +30,7 @@ public class XhsVectorStoreAdapter implements IXhsVectorStorePort {
     private JdbcTemplate postgresqlTemplate;
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Override
     public void upsert(String content, Map<String, Object> metadata) {
@@ -40,7 +40,7 @@ public class XhsVectorStoreAdapter implements IXhsVectorStorePort {
 
     @Override
     public void deleteByKnowledgeId(String knowledgeId) {
-        String tableName = xhsPublishProperties.getVectorSchemaName() + "." + xhsPublishProperties.getVectorTableName();
+        String tableName = xhsPublishConfigRepository.getVectorSchemaName() + "." + xhsPublishConfigRepository.getVectorTableName();
         postgresqlTemplate.update("DELETE FROM " + tableName + " WHERE metadata->>'knowledgeId' = ?", knowledgeId);
     }
 

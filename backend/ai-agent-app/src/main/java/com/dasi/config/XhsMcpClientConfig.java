@@ -1,6 +1,6 @@
 package com.dasi.config;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
+import com.dasi.properties.XhsPublishProperties;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;

@@ -1,7 +1,7 @@
 package com.dasi.infrastructure.adapter.port.xhspublish;
 
-import com.dasi.domain.xhspublish.config.XhsPublishProperties;
 import com.dasi.domain.xhspublish.adapter.port.IXhsAssetStoragePort;
+import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import java.util.UUID;
 public class LocalXhsAssetStorageAdapter implements IXhsAssetStoragePort {
 
     @Resource
-    private XhsPublishProperties xhsPublishProperties;
+    private IXhsPublishConfigRepository xhsPublishConfigRepository;
 
     @Override
     public String save(MultipartFile file, String businessPath) {
@@ -77,7 +77,7 @@ public class LocalXhsAssetStorageAdapter implements IXhsAssetStoragePort {
     }
 
     private Path resolveBasePath() throws IOException {
-        Path basePath = Paths.get(xhsPublishProperties.getAssetBaseDir()).toAbsolutePath().normalize();
+        Path basePath = Paths.get(xhsPublishConfigRepository.getAssetBaseDir()).toAbsolutePath().normalize();
         Files.createDirectories(basePath);
         return basePath;
     }
