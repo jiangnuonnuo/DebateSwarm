@@ -14,8 +14,8 @@
 
 ## Current Status
 - State: in_progress
-- Summary: V1主链路继续收口：按DDD口径将XhsPublishProperties保留在app层，通过IXhsPublishConfigRepository解耦domain/infra；同时完成系统一键发布主链路的Agent执行期兜底。
-- Last updated: 2026-05-01 21:54
+- Summary: 主链路代码已补步骤式注释，并重新按执行树/守卫链/规则链口径梳理。
+- Last updated: 2026-05-01 22:30
 
 ## Completed
 - 完成backend-001身份注册与角色索引挂载
@@ -39,6 +39,7 @@
 - A模式copy_review通过后自动恢复执行树
 - Added intelligent submit API/controller/service flow; added generator prompt+parser; added material ordering with selectedAssetIds; hardened MCP transport to streamable HTTP; fixed Stdio MCP compatibility for mcp-core 0.17.0; compiled all backend modules; passed 11 targeted ai-agent-domain tests.
 - 新增IXhsPublishConfigRepository并由app层XhsPublishProperties实现；domain/infra改为依赖配置仓储接口；XhsPublishRemoteNode新增transient失败单次Agent fallback；新增fallback prompt builder/result parser/service；主流程编译通过，定向测试21个通过。
+- 为一键提交、任务命令、执行支持、执行树节点、payload规则链、智能提交守卫链、Agent fallback 补充步骤式注释；重新编译通过。
 
 ## In Progress
 - Iteration 2 Day6-Day7：完成报告与 Iteration 3 输入（分布式幂等 + 模板/知识沉淀）
@@ -79,6 +80,7 @@
 - backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/strategy/AModeImagePublishStrategy.java
 - backend/ai-agent-api/src/main/java/com/dasi/api/IXhsPublishApi.java;backend/ai-agent-trigger/src/main/java/com/dasi/trigger/controller/XhsPublishController.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/model/dto/IntelligentXhsPublishSubmitDTO.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/model/vo/IntelligentXhsPublishSubmitVO.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/intelligent/*;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/generator/*;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/support/XhsPublishClientSupport.java;backend/ai-agent-app/src/main/java/com/dasi/config/XhsMcpClientConfig.java;backend/ai-agent-app/pom.xml;backend/ai-agent-domain/src/main/resources/prompt/xhs/*;backend/ai-agent-domain/src/test/java/com/dasi/domain/xhspublish/service/intelligent/*;backend/ai-agent-domain/src/test/java/com/dasi/domain/xhspublish/service/generator/XhsPublishGeneratorServiceTest.java;backend/ai-agent-app/src/test/java/com/dasi/config/XhsMcpClientConfigTest.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/augment/AugmentService.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/ai/service/armory/node/ArmoryMcpNode.java
 - backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/adapter/repository/IXhsPublishConfigRepository.java;backend/ai-agent-app/src/main/java/com/dasi/properties/XhsPublishProperties.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishRemoteNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/fallback/;backend/ai-agent-domain/src/main/resources/prompt/xhs/fallback-execute-system.txt;backend/ai-agent-domain/src/main/resources/prompt/xhs/fallback-execute-user.txt;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/support/XhsPublishClientSupport.java
+- backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/intelligent/XhsPublishIntelligentSubmitDomainService.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/task/XhsPublishTaskCommandDomainService.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/support/XhsPublishExecutionSupport.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/rule/XhsPublishPayloadRuleChain.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/intelligent/guard/XhsPublishIntelligentSubmitGuardChain.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/strategy/BModeImagePublishStrategy.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishRootNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishGuardNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishPayloadNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishRemoteNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/node/XhsPublishResultNode.java;backend/ai-agent-domain/src/main/java/com/dasi/domain/xhspublish/service/execution/fallback/XhsPublishAgentFallbackService.java
 
 ## Evidence
 - Tests:
@@ -100,6 +102,7 @@
 - mvn -s F:/java/code/Agent/.mvn-local-settings.xml -f backend/pom.xml -pl ai-agent-infrastructure -am test -DskipTests=false -> BUILD SUCCESS（domain 39 + infra 5）
 - PASS: mvn -f backend\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure,ai-agent-app -am -DskipTests compile; PASS: mvn -f backend\pom.xml -pl ai-agent-domain -am "-DskipTests=false" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dtest=XhsPublishIntelligentSubmitDomainServiceTest,XhsPublishIntelligentSubmitGuardChainTest,XhsPublishGeneratorServiceTest" test; NOTE: ai-agent-app surefire config still hard-skips tests, so XhsMcpClientConfigTest compiled but was not executed through module surefire.
 - mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure,ai-agent-app -am -DskipTests compile 通过；mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-infrastructure -am -DskipTests=false -Dsurefire.failIfNoSpecifiedTests=false -Dtest=XhsPublishIntelligentSubmitDomainServiceTest,XhsPublishIntelligentSubmitGuardChainTest,XhsPublishGeneratorServiceTest,XhsPublishRemoteExecutorTest,XhsPublishRemoteNodeTest,LocalXhsAssetStorageAdapterTest,FileXhsSnapshotStorageAdapterTest test 通过（21个测试）
+- mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure,ai-agent-app -am -DskipTests compile 通过
 
 ## Blockers
 -
@@ -119,8 +122,10 @@
 - 输出Iteration2完成报告与Iteration3输入（分布式幂等升级）
 - Wire frontend form to /xhs/publish/task/intelligent/submit, decide whether to relax ai-agent-app surefire skip for config tests, and run real MCP joint verification against the target /mcp service.
 - 下一步直接做一次后端接口真实联调：/xhs/publish/task/intelligent/submit 携带 taskName+clientId+publishRequirement+fileList 真发，优先验证 backend_mcp 主执行，必要时观察 agent_fallback 兜底表现。
+- 下一步继续做真实 /xhs/publish/task/intelligent/submit 联调，并把规则树/责任链设计对外说明沉淀成开发文档。
 
 ## Key Updates
+- 2026-05-01 22:30: 主链路代码已补步骤式注释，并重新按执行树/守卫链/规则链口径梳理。
 - 2026-05-01 21:54: V1主链路继续收口：按DDD口径将XhsPublishProperties保留在app层，通过IXhsPublishConfigRepository解耦domain/infra；同时完成系统一键发布主链路的Agent执行期兜底。
 - 2026-04-30 18:10: Implemented XHS V1 intelligent submit MVP: one-click orchestration, fixed-template generator, guard chain, and streamable MCP transport hardening.
 - 2026-04-28 16:56: 2026-04-28 16:56 收工前同步：账本与代码状态一致，下一步直推pre_publish_review闭环
@@ -128,4 +133,3 @@
 - 2026-04-28 16:51: 2026-04-28 16:51 回归后更新：domain 37 + infra 5 + 四模块编译通过
 - 2026-04-28 16:42: 完成 A 模式审核驱动状态写回 + 性能/安全证据测试补齐（domain 27 + infra 5）。
 - 2026-04-28 16:05: Iteration1完成封板回写；Iteration2测试回归通过（20 tests）并完成跨模块编译。
-- 2026-04-27 18:03: Week1账本已持续更新并保持backend-001为后端进度主真相源

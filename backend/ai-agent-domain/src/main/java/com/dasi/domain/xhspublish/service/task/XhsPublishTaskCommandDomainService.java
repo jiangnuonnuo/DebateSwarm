@@ -74,12 +74,16 @@ public class XhsPublishTaskCommandDomainService {
     private XhsPublishTaskLockSupport taskLockSupport;
 
     public String createTask(CreateXhsPublishTaskDTO dto) {
+        // 步骤 1：校验当前用户、发布模式/类型和 requestJson 契约，确保草稿从一开始就是合法状态。
         Long userId = taskAccessSupport.requireUserId();
         taskAccessSupport.validateModeAndType(dto.getPublishMode(), dto.getPublishType());
         String requestJson = resolveTaskRequestJson(userId, dto);
         validationDomainService.validateTaskRequest(dto.getPublishType(), requestJson);
 
+        // 步骤 2：解析可用发布账号；没有显式 binding 时，按默认账号兜底初始化。
         XhsPublishAccountBindingEntity binding = bindingSupport.resolveBinding(userId, dto.getBindingId());
+
+        // 步骤 3：创建 draft/planning 草稿，requestJson 与 latestContextJson 初始保持一致。
         String taskId = idSupport.nextTaskId();
         XhsPublishTaskEntity task = XhsPublishTaskEntity.builder()
                 .taskId(taskId)
@@ -101,6 +105,7 @@ public class XhsPublishTaskCommandDomainService {
     }
 
     public void updateTaskContext(UpdateXhsPublishTaskContextDTO dto) {
+        // 只允许在 planning/审核等待等可编辑阶段更新上下文，执行中和终态任务禁止覆盖。
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
         if (PublishStageVO.publishing.name().equals(task.getCurrentStage())
                 || PublishStageVO.completed.name().equals(task.getCurrentStage())
@@ -149,18 +154,20 @@ public class XhsPublishTaskCommandDomainService {
     }
 
     private String doSubmitTask(SubmitXhsPublishTaskDTO dto) {
-        // submit 入口负责做并发防重 + 任务状态迁移 + attempt 创建，之后统一交给执行树处理。
+        // 步骤 1：submit 入口负责做并发防重 + 可选上下文覆盖，不让 controller 直接操作任务状态。
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
         if (StringUtils.hasText(dto.getOverrideContextJson())) {
             validationDomainService.validateTaskRequest(task.getPublishType(), dto.getOverrideContextJson());
             task.setLatestContextJson(dto.getOverrideContextJson());
         }
 
+        // 步骤 2：解析发布账号并检查是否已有活跃 attempt，避免同任务并发重复提交。
         XhsPublishAccountBindingEntity binding = bindingSupport.resolveBinding(task.getUserId(),
                 StringUtils.hasText(dto.getBindingId()) ? dto.getBindingId() : task.getBindingId());
         List<XhsPublishAttemptEntity> attemptList = publishRepository.listAttemptByTaskId(task.getTaskId());
         ensureNoActiveAttempt(attemptList);
 
+        // 步骤 3：先推进 task 的状态机，再创建本次 attempt，保证 task/attempt 三轴一致。
         task.setBindingId(binding.getBindingId());
         task.setTaskStatus(taskStateMachine.nextTaskStatus(task.getTaskStatus(), "submit_requested"));
         task.setCurrentStage(taskStateMachine.nextStage(task.getCurrentStage(), "submit_requested"));
@@ -172,17 +179,19 @@ public class XhsPublishTaskCommandDomainService {
         publishRepository.saveAttempt(attempt);
         XhsPublishAttemptEntity persistedAttempt = publishRepository.queryAttemptByAttemptId(attempt.getAttemptId());
 
+        // 步骤 4：A 模式先阻断到审核；B 模式直接进入执行树。
         if (PublishModeVO.A.name().equals(task.getPublishMode())) {
             enterCopyReviewPending(task, persistedAttempt);
             return persistedAttempt.getAttemptId();
         }
 
+        // 步骤 5：统一把 task/attempt/binding/asset 交给执行支持类，后续走策略 + 执行树。
         executionSupport.execute(task, persistedAttempt, binding, publishRepository.listAssetByTaskId(task.getTaskId()));
         return persistedAttempt.getAttemptId();
     }
 
     private void doRetryTask(RetryXhsPublishTaskDTO dto) {
-        // retry 入口只消费「最新 attempt + 聚合统计 + 责任链决策」，避免散落 if-else 判断。
+        // 步骤 1：retry 只消费“最新 attempt + 聚合统计 + 责任链决策”，避免散落 if-else 判断。
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
         XhsPublishAttemptEntity latestAttempt = publishRepository.queryLatestAttemptByTaskId(task.getTaskId());
         if (latestAttempt == null) {
@@ -202,6 +211,7 @@ public class XhsPublishTaskCommandDomainService {
             throw new WorkException(RetryDecisionMessageSupport.toUserMessage(retryDecision));
         }
 
+        // 步骤 2：如有 overrideContextJson，先替换 latestContextJson，再创建新的 retry attempt。
         if (StringUtils.hasText(dto.getOverrideContextJson())) {
             validationDomainService.validateTaskRequest(task.getPublishType(), dto.getOverrideContextJson());
             task.setLatestContextJson(dto.getOverrideContextJson());
@@ -215,6 +225,7 @@ public class XhsPublishTaskCommandDomainService {
         publishRepository.saveAttempt(attempt);
         XhsPublishAttemptEntity persistedAttempt = publishRepository.queryAttemptByAttemptId(attempt.getAttemptId());
 
+        // 步骤 3：retry_requested -> start_execute 后，再复用同一条执行树。
         task.setTaskStatus(taskStateMachine.nextTaskStatus(task.getTaskStatus(), "retry_requested"));
         task.setCurrentStage(taskStateMachine.nextStage(task.getCurrentStage(), "start_execute"));
         publishRepository.saveTask(task);

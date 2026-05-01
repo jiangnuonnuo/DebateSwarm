@@ -22,8 +22,11 @@ public class XhsPublishPayloadNode extends AbstractXhsPublishNode {
 
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
+        // 步骤 3：调用 payload 规则链，把 sourceContext + assetList 收敛成 publishRequestJson。
         String publishRequestJson = payloadBuilder.build(dynamicContext);
         dynamicContext.setPublishRequestJson(publishRequestJson);
+
+        // 步骤 3.1：回写 payload_built 生命周期，并保存 payload 快照，便于后续追踪失败现场。
         executionLifecycle.markPayloadBuilt(dynamicContext, publishRequestJson);
         dynamicContext.setPayloadSnapshot(snapshotManager.savePayloadSnapshot(dynamicContext, publishRequestJson));
         return router(requestParameter, dynamicContext);

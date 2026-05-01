@@ -48,14 +48,18 @@ public class XhsPublishIntelligentSubmitDomainService {
     private IXhsPublishGeneratorService generatorService;
 
     public IntelligentXhsPublishSubmitVO submit(IntelligentXhsPublishSubmitDTO request, List<MultipartFile> fileList) {
+        // 步骤 1：统一收敛文件和 URL 输入，保证后续守卫链和素材登记只处理标准化数据。
         List<MultipartFile> normalizedFiles = normalizeFiles(fileList);
         List<String> normalizedUrls = normalizeUrls(request.getOriginImageUrls());
+
+        // 步骤 2：走最小前置守卫链，只校验 client、需求和图片来源，不在 controller 里散落校验逻辑。
         guardChain.validate(IntelligentSubmitGuardContext.builder()
                 .request(request)
                 .fileList(normalizedFiles)
                 .originImageUrls(normalizedUrls)
                 .build());
 
+        // 步骤 3：先创建 B:image 草稿任务；后续任一步失败都保留草稿，便于人工补救或再次提交。
         String taskId = taskCommandDomainService.createTask(CreateXhsPublishTaskDTO.builder()
                 .taskName(request.getTaskName().trim())
                 .publishMode(PublishModeVO.B.name())
@@ -69,13 +73,20 @@ public class XhsPublishIntelligentSubmitDomainService {
                 taskId, request.getClientId(), normalizedFiles.size(), normalizedUrls.size());
 
         try {
+            // 步骤 4：先登记素材，再把最终选中的 assetId 顺序写回上下文，避免模型自行决定图片。
             List<String> selectedAssetIds = registerMaterials(taskId, normalizedFiles, normalizedUrls);
+
+            // 步骤 5：调用固定模板生成结构化文案参数，只生成 title/content/tags/visibility/is_original。
             GeneratedPublishContext generatedContext = generatorService.generate(request, selectedAssetIds.size());
+
+            // 步骤 6：把“模型生成结果 + 用户显式参数 + 选中素材”收敛为 latestContextJson 真相源。
             String latestContextJson = buildLatestContextJson(request, generatedContext, selectedAssetIds);
             taskCommandDomainService.updateTaskContext(UpdateXhsPublishTaskContextDTO.builder()
                     .taskId(taskId)
                     .latestContextJson(latestContextJson)
                     .build());
+
+            // 步骤 7：统一复用既有 submit 主链，之后进入执行树、远端发布和结果回写。
             String attemptId = taskCommandDomainService.submitTask(SubmitXhsPublishTaskDTO.builder()
                     .taskId(taskId)
                     .triggerType("intelligent_submit")
@@ -91,6 +102,7 @@ public class XhsPublishIntelligentSubmitDomainService {
     }
 
     private List<String> registerMaterials(String taskId, List<MultipartFile> fileList, List<String> originImageUrls) {
+        // 素材顺序固定为：上传文件在前，originUrl 在后；后续 selectedAssetIds 按这个顺序直接发布。
         List<String> selectedAssetIds = new ArrayList<>();
         int sortNo = 1;
         for (MultipartFile file : fileList) {
@@ -131,6 +143,7 @@ public class XhsPublishIntelligentSubmitDomainService {
     private String buildLatestContextJson(IntelligentXhsPublishSubmitDTO request,
                                           GeneratedPublishContext generatedContext,
                                           List<String> selectedAssetIds) {
+        // latestContextJson 是发布执行期的唯一真相源：后端直调和 Agent fallback 都只读这里。
         LinkedHashMap<String, Object> contextMap = new LinkedHashMap<>();
         contextMap.put("title", generatedContext.getTitle());
         contextMap.put("content", generatedContext.getContent());
@@ -152,6 +165,7 @@ public class XhsPublishIntelligentSubmitDomainService {
     }
 
     private String resolveVisibility(IntelligentXhsPublishSubmitDTO request, GeneratedPublishContext generatedContext) {
+        // 覆盖顺序固定：用户显式传值 > 模型生成值 > 默认公开可见。
         if (StringUtils.hasText(request.getVisibility())) {
             return XhsPublishRuleSupport.normalizeVisibility(request.getVisibility());
         }
@@ -162,6 +176,7 @@ public class XhsPublishIntelligentSubmitDomainService {
     }
 
     private boolean resolveIsOriginal(IntelligentXhsPublishSubmitDTO request, GeneratedPublishContext generatedContext) {
+        // 覆盖顺序固定：用户显式传值 > 模型生成值 > 默认 false。
         if (request.getIsOriginal() != null) {
             return request.getIsOriginal();
         }

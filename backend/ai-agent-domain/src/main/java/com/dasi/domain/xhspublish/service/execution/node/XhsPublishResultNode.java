@@ -21,6 +21,7 @@ public class XhsPublishResultNode extends AbstractXhsPublishNode {
 
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
+        // 步骤 5：结果节点只做结果分流，不再回头改 payload 或发起远端调用。
         XhsPublishRemoteResult remoteResult = dynamicContext.getRemoteResult();
         if (remoteResult == null) {
             throw new WorkException("发布执行结果为空");

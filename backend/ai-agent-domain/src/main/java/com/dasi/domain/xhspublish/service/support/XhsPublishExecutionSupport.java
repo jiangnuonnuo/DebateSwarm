@@ -26,6 +26,10 @@ public class XhsPublishExecutionSupport {
                         XhsPublishAttemptEntity attempt,
                         XhsPublishAccountBindingEntity binding,
                         List<XhsPublishContentAssetEntity> assetList) {
+        // 执行支持类只做 3 件事：
+        // 1. 根据 publishMode + publishType 选择执行策略
+        // 2. 解析 latestContextJson/requestJson 为 sourceContext
+        // 3. 把 task/attempt/binding/asset/sourceContext 组装成执行树上下文
         IXhsPublishExecuteStrategy strategy = strategyFactory.getStrategy(task.getPublishMode(), task.getPublishType());
         if (strategy == null) {
             throw new WorkException("当前发布模式/类型尚未接入执行策略");

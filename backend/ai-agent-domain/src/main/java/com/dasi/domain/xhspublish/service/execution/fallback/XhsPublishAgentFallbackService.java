@@ -34,7 +34,10 @@ public class XhsPublishAgentFallbackService implements IXhsPublishAgentFallbackS
     @Override
     public XhsPublishRemoteResult execute(XhsPublishExecutionContext executionContext) {
         try {
+            // 步骤 F1：从 latestContextJson.ext 取发布 client，不重新选择模型、不重新生成文案。
             String clientId = resolveClientId(executionContext);
+
+            // 步骤 F2：构造“只允许执行工具”的兜底 prompt，把 publishRequestJson 原样交给模型。
             Prompt prompt = promptBuilder.build(executionContext);
             String rawResponse = clientSupport.promptOnceWithTools(
                     clientId,
@@ -43,8 +46,11 @@ public class XhsPublishAgentFallbackService implements IXhsPublishAgentFallbackS
                     "Agent 发布兜底结果为空",
                     "Agent 发布兜底失败，请稍后重试"
             );
+
+            // 步骤 F3：把模型最终输出归一成和后端直调一致的 RemoteResult 结构。
             return resultParser.parse(rawResponse);
         } catch (Exception e) {
+            // 步骤 F4：兜底自身失败时，也统一回写成 transient failed，不让执行树再分叉。
             String message = sanitizeMessage(e.getMessage());
             log.warn("【小红书发布】Agent 兜底发布失败：taskId={}, attemptId={}, message={}",
                     executionContext.getTask().getTaskId(),
@@ -68,6 +74,7 @@ public class XhsPublishAgentFallbackService implements IXhsPublishAgentFallbackS
     }
 
     private String resolveClientId(XhsPublishExecutionContext executionContext) {
+        // clientId 固定从 ext 中读取，保证一键提交阶段和执行兜底阶段使用同一个 client。
         JSONObject sourceContext = executionContext.getSourceContext();
         JSONObject ext = sourceContext == null ? null : sourceContext.getJSONObject("ext");
         String clientId = ext == null ? null : ext.getString("clientId");

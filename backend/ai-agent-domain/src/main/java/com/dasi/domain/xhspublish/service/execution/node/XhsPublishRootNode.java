@@ -13,6 +13,10 @@ public class XhsPublishRootNode extends AbstractXhsPublishNode {
 
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
+        // 执行树入口：
+        // 1. 补齐 startTime
+        // 2. 打启动日志
+        // 3. 路由到 GuardNode
         if (dynamicContext.getStartTime() == null) {
             dynamicContext.setStartTime(LocalDateTime.now());
         }

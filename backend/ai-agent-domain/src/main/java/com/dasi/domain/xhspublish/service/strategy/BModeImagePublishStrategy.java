@@ -30,6 +30,7 @@ public class BModeImagePublishStrategy implements IXhsPublishExecuteStrategy {
 
     @Override
     public void execute(XhsPublishExecutionContext executionContext) {
+        // B:image 策略只负责启动执行树，并统一兜住执行树异常；具体步骤交给节点树处理。
         LocalDateTime startTime = LocalDateTime.now();
         executionContext.setStartTime(startTime);
 
