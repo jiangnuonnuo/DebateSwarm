@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -97,6 +98,7 @@ class XhsPublishIntelligentSubmitDomainServiceTest {
         assertEquals(List.of("asset-1"), context.getList("selectedAssetIds", String.class));
         assertEquals("公开可见", context.getString("visibility"));
         assertTrue(context.getBooleanValue("is_original"));
+        assertTrue(context.getJSONObject("ext").getBooleanValue("useMcpDefaultAccount"));
     }
 
     @Test
@@ -205,6 +207,32 @@ class XhsPublishIntelligentSubmitDomainServiceTest {
         assertEquals("仅自己可见", context.getString("visibility"));
         assertTrue(context.getBooleanValue("is_original"));
         assertTrue(context.getString("schedule_at").startsWith("2026-05-01T12:00"));
+    }
+
+    @Test
+    void shouldDisableMcpDefaultAccountFlagWhenBindingIdProvided() {
+        IntelligentXhsPublishSubmitDTO request = IntelligentXhsPublishSubmitDTO.builder()
+                .taskName("显式绑定账号")
+                .clientId("client-6")
+                .bindingId("binding-6")
+                .publishRequirement("使用指定账号发布一篇图文")
+                .originImageUrls(List.of("https://img.example.com/6.png"))
+                .build();
+        when(taskCommandDomainService.createTask(any(CreateXhsPublishTaskDTO.class))).thenReturn("task-6");
+        when(materialDomainService.uploadMaterial(any(UploadXhsPublishMaterialDTO.class), eq(null)))
+                .thenReturn(List.of(asset("asset-6")));
+        when(generatorService.generate(eq(request), eq(1))).thenReturn(GeneratedPublishContext.builder()
+                .title("显式绑定发布")
+                .content("这次用指定账号发。")
+                .build());
+        when(taskCommandDomainService.submitTask(any(SubmitXhsPublishTaskDTO.class))).thenReturn("attempt-6");
+
+        service.submit(request, null);
+
+        ArgumentCaptor<UpdateXhsPublishTaskContextDTO> updateCaptor = ArgumentCaptor.forClass(UpdateXhsPublishTaskContextDTO.class);
+        verify(taskCommandDomainService).updateTaskContext(updateCaptor.capture());
+        JSONObject context = JSON.parseObject(updateCaptor.getValue().getLatestContextJson());
+        assertFalse(context.getJSONObject("ext").getBooleanValue("useMcpDefaultAccount"));
     }
 
     private XhsPublishAssetVO asset(String assetId) {

@@ -7,8 +7,11 @@ import com.dasi.domain.ai.service.armory.ArmoryContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.Set;
 
 import static com.dasi.domain.ai.model.enumeration.AiType.API;
@@ -29,6 +32,10 @@ public class ArmoryApiNode extends AbstractArmoryNode {
             return router(armoryRequestEntity, armoryContext);
         }
 
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(30));
+        factory.setReadTimeout(Duration.ofMinutes(5));
+
         for (AiApiVO aiApiVO : aiApiVOList) {
             // 实例化
             OpenAiApi openAiApi = OpenAiApi.builder()
@@ -36,6 +43,7 @@ public class ArmoryApiNode extends AbstractArmoryNode {
                     .apiKey(aiApiVO.getApiKey())
                     .completionsPath(aiApiVO.getApiCompletionsPath())
                     .embeddingsPath(aiApiVO.getApiEmbeddingsPath())
+                    .restClientBuilder(RestClient.builder().requestFactory(factory))
                     .build();
 
             // 注册 Bean 对象

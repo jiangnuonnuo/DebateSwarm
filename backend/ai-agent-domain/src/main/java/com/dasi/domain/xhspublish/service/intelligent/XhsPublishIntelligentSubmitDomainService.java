@@ -160,6 +160,8 @@ public class XhsPublishIntelligentSubmitDomainService {
         ext.put("submitMode", "intelligent_submit");
         ext.put("clientId", request.getClientId());
         ext.put("publishRequirement", request.getPublishRequirement().trim());
+        // 智能发布未显式指定 bindingId 时，执行期不要强行覆盖 tenant/account，交给 MCP 服务端默认账号处理。
+        ext.put("useMcpDefaultAccount", !StringUtils.hasText(request.getBindingId()));
         contextMap.put("ext", ext);
         return JSON.toJSONString(contextMap);
     }

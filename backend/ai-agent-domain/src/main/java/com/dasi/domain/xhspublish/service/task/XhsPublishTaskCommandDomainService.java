@@ -243,6 +243,10 @@ public class XhsPublishTaskCommandDomainService {
                 .stage(PublishStageVO.planning.name())
                 .contextJson(contextJson)
                 .retryable(1)
+                // 新建 attempt 还未真正执行时，成本从 0 起步，避免 NOT NULL 字段在落库前为空。
+                .costAmount(BigDecimal.ZERO)
+                // 新建 attempt 还未产生远端耗时，持续时间默认记为 0，后续由生命周期节点改写真实值。
+                .durationMs(0L)
                 .build();
     }
 

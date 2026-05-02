@@ -242,7 +242,10 @@ class XhsPublishTaskCommandDomainServiceTest {
         String attemptId = service.submitTask(dto);
 
         assertEquals("attempt-1", attemptId);
-        verify(publishRepository).saveAttempt(any(XhsPublishAttemptEntity.class));
+        ArgumentCaptor<XhsPublishAttemptEntity> attemptCaptor = ArgumentCaptor.forClass(XhsPublishAttemptEntity.class);
+        verify(publishRepository).saveAttempt(attemptCaptor.capture());
+        assertEquals(BigDecimal.ZERO, attemptCaptor.getValue().getCostAmount());
+        assertEquals(0L, attemptCaptor.getValue().getDurationMs());
         verify(executionSupport).execute(eq(task), eq(persistedAttempt), eq(binding), eq(List.of()));
     }
 

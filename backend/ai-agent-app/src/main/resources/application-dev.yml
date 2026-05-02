@@ -113,6 +113,14 @@ miniagent:
     issuer: ${JWT_ISSUER}
     expire-seconds: 72000000000
 
+  # Auth
+  auth:
+    dev-bypass:
+      enabled: ${MINIAGENT_AUTH_DEV_BYPASS_ENABLED:true}
+      user-id: ${MINIAGENT_AUTH_DEV_BYPASS_USER_ID:1}
+      user-name: ${MINIAGENT_AUTH_DEV_BYPASS_USER_NAME:dev-xhs-tester}
+      user-role: ${MINIAGENT_AUTH_DEV_BYPASS_USER_ROLE:user}
+
   # OSS
   oss:
     endpoint: ${OSS_ENDPOINT}

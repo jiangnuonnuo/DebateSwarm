@@ -9,6 +9,7 @@ import com.dasi.infrastructure.adapter.repository.support.XhsPublishRepositoryCo
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -154,6 +155,14 @@ public class XhsPublishRepository implements IXhsPublishRepository {
 
     @Override
     public void saveAttempt(XhsPublishAttemptEntity entity) {
+        // attempt 表的 cost_amount 为非空字段；仓储层统一兜底，避免不同入口遗漏默认值。
+        if (entity.getCostAmount() == null) {
+            entity.setCostAmount(BigDecimal.ZERO);
+        }
+        // attempt 表的 duration_ms 也用于聚合统计；新建时还没执行完成，统一从 0 起步。
+        if (entity.getDurationMs() == null) {
+            entity.setDurationMs(0L);
+        }
         if (entity.getId() == null) {
             aiXhsPublishAttemptDao.insert(XhsPublishRepositoryConverter.copy(entity, AiXhsPublishAttempt.class));
             return;
