@@ -6,7 +6,6 @@ import com.dasi.domain.ai.model.enumeration.AiArmoryType;
 import com.dasi.domain.ai.service.armory.ArmoryContext;
 import com.dasi.domain.ai.service.armory.ArmoryStrategyFactory;
 import com.dasi.domain.ai.service.armory.IArmoryStrategy;
-import com.dasi.domain.xhspublish.service.IXhsPublishGeneratorService;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishIntelligentSubmitCommandEntity;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;

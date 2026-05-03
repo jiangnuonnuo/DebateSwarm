@@ -2,7 +2,7 @@ package com.dasi.domain.xhspublish.service.bmode.intelligent.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.dasi.domain.xhspublish.service.bmode.context.BPublishIntelligentContext;
-import com.dasi.domain.xhspublish.service.IXhsPublishGeneratorService;
+import com.dasi.domain.xhspublish.service.generator.IXhsPublishGeneratorService;
 import com.dasi.domain.xhspublish.service.generator.GeneratedPublishContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;

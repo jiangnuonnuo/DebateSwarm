@@ -1,10 +1,13 @@
 package com.dasi.domain.xhspublish.service.task;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishRepository;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishTemplateRepository;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAccountBindingEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAttemptEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAttemptStatsEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishContentAssetEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishCreateTaskCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishReviewEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishReviewCommandEntity;
@@ -27,7 +30,6 @@ import com.dasi.domain.xhspublish.service.domain.IPublishValidationDomainService
 import com.dasi.domain.xhspublish.service.domain.retry.RetryDecisionContext;
 import com.dasi.domain.xhspublish.service.domain.retry.RetryDecisionResult;
 import com.dasi.domain.xhspublish.service.support.XhsPublishBindingSupport;
-import com.dasi.domain.xhspublish.service.support.XhsPublishExecutionSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishIdSupport;
 import com.dasi.domain.xhspublish.service.support.RetryDecisionMessageSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskAccessSupport;
@@ -70,9 +72,6 @@ public class XhsPublishTaskCommandDomainService {
 
     @Resource
     private XhsPublishTaskAccessSupport taskAccessSupport;
-
-    @Resource
-    private XhsPublishExecutionSupport executionSupport;
 
     @Resource
     private XhsPublishTaskLockSupport taskLockSupport;
@@ -197,8 +196,8 @@ public class XhsPublishTaskCommandDomainService {
             return persistedAttempt.getAttemptId();
         }
 
-        // 步骤 5：统一把 task/attempt/binding/asset 交给执行支持类，后续走策略 + 执行树。
-        executionSupport.execute(task, persistedAttempt, binding, publishRepository.listAssetByTaskId(task.getTaskId()));
+        // 步骤 5：命令服务直接启动执行策略和执行树，避免再包一层没有业务含义的 execution support。
+        executeTask(task, persistedAttempt, binding);
         return persistedAttempt.getAttemptId();
     }
 
@@ -247,7 +246,7 @@ public class XhsPublishTaskCommandDomainService {
         task.setCurrentStage(taskStateMachine.nextStage(task.getCurrentStage(), "start_execute"));
         publishRepository.saveTask(task);
 
-        executionSupport.execute(task, persistedAttempt, binding, publishRepository.listAssetByTaskId(task.getTaskId()));
+        executeTask(task, persistedAttempt, binding);
     }
 
     private XhsPublishAttemptEntity newAttempt(XhsPublishTaskEntity task, int attemptNo, String triggerType, String contextJson) {
@@ -339,7 +338,7 @@ public class XhsPublishTaskCommandDomainService {
             publishRepository.saveAttempt(attempt);
             if (ReviewStageVO.copy_review.name().equals(reviewStage)) {
                 XhsPublishAccountBindingEntity binding = bindingSupport.resolveBinding(task.getUserId(), task.getBindingId());
-                executionSupport.execute(task, attempt, binding, publishRepository.listAssetByTaskId(task.getTaskId()));
+                executeTask(task, attempt, binding);
             }
             return;
         }
@@ -443,6 +442,24 @@ public class XhsPublishTaskCommandDomainService {
         if (executionContext.getAttempt() == null || !StringUtils.hasText(executionContext.getAttempt().getAttemptId())) {
             throw new WorkException("重试执行未生成 attemptId");
         }
+    }
+
+    private void executeTask(XhsPublishTaskEntity task,
+                             XhsPublishAttemptEntity attempt,
+                             XhsPublishAccountBindingEntity binding) {
+        IXhsPublishExecuteStrategy strategy = requireExecuteStrategy(task);
+        String sourceJson = StringUtils.hasText(task.getLatestContextJson()) ? task.getLatestContextJson() : task.getRequestJson();
+        JSONObject sourceContext = JSON.parseObject(sourceJson);
+        List<XhsPublishContentAssetEntity> assetList = publishRepository.listAssetByTaskId(task.getTaskId());
+
+        XhsPublishExecutionContext executionContext = XhsPublishExecutionContext.builder()
+                .task(task)
+                .attempt(attempt)
+                .binding(binding)
+                .assetList(assetList)
+                .sourceContext(sourceContext)
+                .build();
+        strategy.execute(executionContext);
     }
 
     private IXhsPublishExecuteStrategy requireExecuteStrategy(XhsPublishTaskEntity task) {

@@ -21,7 +21,13 @@ import com.dasi.domain.xhspublish.model.entity.XhsPublishTaskPageQueryEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplatePageQueryEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplateSaveCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishUpdateContextCommandEntity;
-import com.dasi.domain.xhspublish.service.IXhsPublishService;
+import com.dasi.domain.xhspublish.service.intelligent.XhsPublishIntelligentSubmitDomainService;
+import com.dasi.domain.xhspublish.service.knowledge.XhsPublishKnowledgeDomainService;
+import com.dasi.domain.xhspublish.service.material.XhsPublishMaterialDomainService;
+import com.dasi.domain.xhspublish.service.snapshot.XhsPublishSnapshotDomainService;
+import com.dasi.domain.xhspublish.service.task.XhsPublishTaskCommandDomainService;
+import com.dasi.domain.xhspublish.service.task.XhsPublishTaskQueryDomainService;
+import com.dasi.domain.xhspublish.service.template.XhsPublishTemplateDomainService;
 import com.dasi.types.exception.WorkException;
 import com.dasi.types.result.PageResult;
 import com.dasi.types.result.Result;
@@ -47,7 +53,25 @@ import java.util.List;
 public class XhsPublishController implements IXhsPublishApi {
 
     @Resource
-    private IXhsPublishService xhsPublishService;
+    private XhsPublishTaskCommandDomainService taskCommandDomainService;
+
+    @Resource
+    private XhsPublishTaskQueryDomainService taskQueryDomainService;
+
+    @Resource
+    private XhsPublishTemplateDomainService templateDomainService;
+
+    @Resource
+    private XhsPublishMaterialDomainService materialDomainService;
+
+    @Resource
+    private XhsPublishKnowledgeDomainService knowledgeDomainService;
+
+    @Resource
+    private XhsPublishSnapshotDomainService snapshotDomainService;
+
+    @Resource
+    private XhsPublishIntelligentSubmitDomainService intelligentSubmitDomainService;
 
     @Override
     @PostMapping("/task/create")
@@ -63,7 +87,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .requestJson(dto.getRequestJson())
                 .retryPolicyJson(dto.getRetryPolicyJson())
                 .build();
-        String taskId = xhsPublishService.createTask(command);
+        String taskId = taskCommandDomainService.createTask(command);
         return Result.success(taskId);
     }
 
@@ -75,7 +99,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .taskId(dto.getTaskId())
                 .latestContextJson(dto.getLatestContextJson())
                 .build();
-        xhsPublishService.updateTaskContext(command);
+        taskCommandDomainService.updateTaskContext(command);
         return Result.success();
     }
 
@@ -89,7 +113,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .overrideContextJson(dto.getOverrideContextJson())
                 .triggerType(dto.getTriggerType())
                 .build();
-        String attemptId = xhsPublishService.submitTask(command);
+        String attemptId = taskCommandDomainService.submitTask(command);
         return Result.success(attemptId);
     }
 
@@ -104,7 +128,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .taskStatus(dto.getTaskStatus())
                 .currentStage(dto.getCurrentStage())
                 .build();
-        PageResult<XhsPublishTaskEntity> pageResult = xhsPublishService.pageTask(query);
+        PageResult<XhsPublishTaskEntity> pageResult = taskQueryDomainService.pageTask(query);
         List<XhsPublishTaskPageResponseDTO> responseList = pageResult.getList().stream()
                 .map(entity -> XhsPublishTaskPageResponseDTO.builder()
                         .taskId(entity.getTaskId())
@@ -131,7 +155,7 @@ public class XhsPublishController implements IXhsPublishApi {
     @PostMapping("/task/detail")
     public Result<XhsPublishTaskDetailResponseDTO> detailTask(@NotBlank @RequestParam String taskId) {
         log.info("【小红书发布】接收任务详情请求：taskId={}", taskId);
-        XhsPublishTaskAggregate aggregate = xhsPublishService.detailTask(taskId);
+        XhsPublishTaskAggregate aggregate = taskQueryDomainService.detailTask(taskId);
         XhsPublishTaskEntity task = aggregate.getTask();
         XhsPublishTaskDetailResponseDTO response = XhsPublishTaskDetailResponseDTO.builder()
                 .taskId(task.getTaskId())
@@ -202,7 +226,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .reviewPayloadJson(dto.getReviewPayloadJson())
                 .decisionJson(dto.getDecisionJson())
                 .build();
-        xhsPublishService.reviewTask(command);
+        taskCommandDomainService.reviewTask(command);
         return Result.success();
     }
 
@@ -215,7 +239,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .overrideContextJson(dto.getOverrideContextJson())
                 .triggerType(dto.getTriggerType())
                 .build();
-        xhsPublishService.retryTask(command);
+        taskCommandDomainService.retryTask(command);
         return Result.success();
     }
 
@@ -231,7 +255,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .templateStatus(dto.getTemplateStatus())
                 .isDefault(dto.getIsDefault())
                 .build();
-        xhsPublishService.saveTemplate(command);
+        templateDomainService.saveTemplate(command);
         return Result.success();
     }
 
@@ -244,7 +268,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .pageSize(dto.getPageSize())
                 .keyword(dto.getKeyword())
                 .build();
-        PageResult<XhsPublishTemplateEntity> pageResult = xhsPublishService.pageTemplate(query);
+        PageResult<XhsPublishTemplateEntity> pageResult = templateDomainService.pageTemplate(query);
         List<XhsPublishTemplateResponseDTO> responseList = pageResult.getList().stream()
                 .map(entity -> XhsPublishTemplateResponseDTO.builder()
                         .templateId(entity.getTemplateId())
@@ -284,7 +308,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .originUrl(dto.getOriginUrl())
                 .sortNo(dto.getSortNo())
                 .build();
-        List<XhsPublishContentAssetEntity> assetList = xhsPublishService.uploadMaterial(command, safeFileList);
+        List<XhsPublishContentAssetEntity> assetList = materialDomainService.uploadMaterial(command, safeFileList);
         List<XhsPublishAssetResponseDTO> response = assetList.stream()
                 .map(entity -> XhsPublishAssetResponseDTO.builder()
                         .assetId(entity.getAssetId())
@@ -316,7 +340,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .sourceRef(dto.getSourceRef())
                 .summary(dto.getSummary())
                 .build();
-        xhsPublishService.uploadKnowledge(command, safeFileList);
+        knowledgeDomainService.uploadKnowledge(command, safeFileList);
         return Result.success();
     }
 
@@ -343,7 +367,7 @@ public class XhsPublishController implements IXhsPublishApi {
                 .scheduledPublishAt(dto.getScheduledPublishAt())
                 .originImageUrls(dto.getOriginImageUrls())
                 .build();
-        XhsPublishIntelligentSubmitResultEntity result = xhsPublishService.submitIntelligentTask(command, safeFileList);
+        XhsPublishIntelligentSubmitResultEntity result = intelligentSubmitDomainService.submit(command, safeFileList);
         IntelligentXhsPublishSubmitResponseDTO response = IntelligentXhsPublishSubmitResponseDTO.builder()
                 .taskId(result.getTaskId())
                 .attemptId(result.getAttemptId())
@@ -353,7 +377,7 @@ public class XhsPublishController implements IXhsPublishApi {
 
     @GetMapping("/material/access")
     public ResponseEntity<org.springframework.core.io.Resource> accessMaterial(@NotBlank @RequestParam String assetId) {
-        org.springframework.core.io.Resource resource = xhsPublishService.accessMaterial(assetId);
+        org.springframework.core.io.Resource resource = materialDomainService.accessMaterial(assetId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, "no-cache")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

@@ -1,7 +1,6 @@
-package com.dasi.domain.xhspublish.service;
+package com.dasi.domain.xhspublish.service.generator;
 
 import com.dasi.domain.xhspublish.model.entity.XhsPublishIntelligentSubmitCommandEntity;
-import com.dasi.domain.xhspublish.service.generator.GeneratedPublishContext;
 
 public interface IXhsPublishGeneratorService {
 
