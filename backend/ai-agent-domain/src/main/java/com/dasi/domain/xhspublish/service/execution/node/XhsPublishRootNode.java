@@ -2,6 +2,7 @@ package com.dasi.domain.xhspublish.service.execution.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -10,6 +11,9 @@ import java.time.LocalDateTime;
 @Slf4j
 @Service("xhsPublishRootNode")
 public class XhsPublishRootNode extends AbstractXhsPublishNode {
+
+    @Resource
+    private XhsPublishGuardNode guardNode;
 
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
@@ -28,7 +32,7 @@ public class XhsPublishRootNode extends AbstractXhsPublishNode {
 
     @Override
     public StrategyHandler<XhsPublishExecutionContext, XhsPublishExecutionContext, String> get(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) {
-        return getBean("xhsPublishGuardNode");
+        return guardNode;
     }
 
 }

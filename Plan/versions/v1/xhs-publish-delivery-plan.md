@@ -27,12 +27,16 @@
 - Plan 是决策主账本。
 - backend/docs 是技术实现镜像。
 - 数据库一次建全，字段轻量。
+- `domain` 不允许承接 controller DTO / response VO。
+- B 发布链路统一采用 `xfg-wrench`：
+  - `AbstractMultiThreadStrategyRouter`
+  - `StrategyHandler`
 - 运行流程不用大而全 service，必须采用：
   - 状态机
-  - 规则链
-  - 策略工厂
+  - 节点树
+  - Facade Service
   - Port / Repository 分离
-  - 守卫链 / Payload 构建器 / 远程执行器 / 生命周期记录器 分层
+  - Support Service 能力下沉
 
 ## Domain Adapter Boundary
 - `adapter/repository`
@@ -58,23 +62,36 @@
 
 ## Execution Tree Baseline
 - 参考现有 AI 领域 `rootNode -> router -> nextNode` 的执行树方式。
-- XHS 发布主链路当前基线：
-  - `BModeImagePublishStrategy`
-    - 只保留入口和异常兜底
-  - `XhsPublishRootNode`
-  - `XhsPublishGuardNode`
-  - `XhsPublishPayloadNode`
-  - `XhsPublishRemoteNode`
-  - `XhsPublishResultNode`
-- 节点职责：
-  - `RootNode`：初始化执行上下文与开始时间
-  - `GuardNode`：执行前守卫链 + 状态机起跑
-  - `PayloadNode`：规则链组装 payload + 发布前快照
-  - `RemoteNode`：调用 MCP 远程执行器
-  - `ResultNode`：结果分流、生命周期回写、快照清理/保留
-- 两类链路同时保留：
-  - 责任链：守卫链、payload 规则链
-  - 树/节点链：发布执行树
+- XHS B 发布当前统一为两棵树：
+  - 智能预处理树
+    - `BPublishIntelligentRootNode`
+    - `BPublishClientCheckNode`
+    - `BPublishInputNormalizeNode`
+    - `BPublishDraftCreateNode`
+    - `BPublishMaterialRegisterNode`
+    - `BPublishCopyGenerateNode`
+    - `BPublishContentNormalizeNode`
+    - `BPublishContextPersistNode`
+    - `BPublishSubmitDelegateNode`
+  - 正式发布树
+    - `BPublishExecuteRootNode`
+    - `BPublishTaskLoadNode`
+    - `BPublishBindingResolveNode`
+    - `BPublishPreflightValidateNode`
+    - `BPublishAttemptCreateNode`
+    - `BPublishPayloadAssembleNode`
+    - `BPublishMcpSubmitNode`
+    - `BPublishMcpResultRouteNode`
+    - `BPublishAcceptedPersistNode`
+    - `BPublishSuccessPersistNode`
+    - `BPublishFailurePersistNode`
+    - `BPublishSnapshotFinalizeNode`
+- `BModeImagePublishStrategy`
+  - 只保留“根据 key 启动 B 正式发布树”职责。
+- 已退场实现：
+  - 自定义 `for` 循环守卫链
+  - 一字段一规则类的 payload 规则拆法
+  - 智能提交单独 guard 链
 
 ## Critical Corrections
 
@@ -154,11 +171,10 @@
 
 ## Backend Responsibility
 - 统一维护任务状态机。
-- 统一维护发布参数规则链。
-- 统一通过策略工厂选择执行策略。
+- 统一通过 `xfg-wrench` 节点树流转 B 发布。
 - 策略类只做入口选择，不再直接承担：
   - 参数组装
-  - MCP 轮询
+  - MCP 调用
   - 快照保存
   - 状态回写
 - 发布执行细节由执行树节点承担。
@@ -169,17 +185,21 @@
 - Repository 不写业务规则。
 - Infrastructure 不直接决定状态流转。
 - `XhsPublishService` 只保留门面职责，不再堆积全部业务实现。
-- 领域能力服务按业务能力拆分：
-  - `task.command`
-  - `task.query`
-  - `template`
-  - `material`
-  - `knowledge`
-  - `snapshot`
-- 通用支撑能力下沉到 `service/support`：
-  - 访问校验
-  - 执行调度
-  - 视图装配
+- `api` 定义 request/response DTO：
+  - `com.dasi.api.dto.request.xhspublish.*`
+  - `com.dasi.api.dto.response.xhspublish.*`
+- `trigger` 负责 DTO 与领域命令实体装配：
+  - `XhsPublishApiAssembler`
+- `domain` 只认识聚合、实体、值对象、命令实体。
+- B 发布流转节点统一下沉到 `service/bmode/*`。
+- 可复用能力当前保持为独立 service/support 类，不再继续堆进门面 service。
+- `infrastructure` 中 XHS 相关持久化目录统一为：
+  - `adapter/repository/xhspublish`
+  - `adapter/port/xhspublish`
+  - `dao/xhspublish`
+  - `dao/po/xhspublish`
+- XHS MyBatis XML 统一迁到：
+  - `ai-agent-app/src/main/resources/mybatis/mapper/xhspublish`
 
 ## Frontend Responsibility
 - 维护结构化表单，不直接编辑内部 JSON。
@@ -214,6 +234,15 @@
   - `task/create`
   - `task/context/update`
   - `task/submit`
+- 已保留外部 URL 不变，同时将 controller DTO 全量移出 domain：
+  - `api/dto/request/xhspublish/*`
+  - `api/dto/response/xhspublish/*`
+- 已将 domain 内部入参统一改为命令/查询实体：
+  - `XhsPublishCreateTaskCommandEntity`
+  - `XhsPublishUpdateContextCommandEntity`
+  - `XhsPublishSubmitTaskCommandEntity`
+  - `XhsPublishRetryCommandEntity`
+  - `XhsPublishIntelligentSubmitCommandEntity`
 - 已将 `port/repository` 收口到领域 `adapter` 语义：
   - `domain/xhspublish/adapter/port`
   - `domain/xhspublish/adapter/repository`
@@ -221,9 +250,14 @@
   - `IXhsPublishRepository`
   - 统一封装 `task/attempt/review/asset/snapshot` 基础 CRUD
 - 已删除主流程中的表式仓储接口，避免 domain 层继续按表驱动扩散
-- 已落地执行树基础骨架：
-  - `Root -> Guard -> Payload -> Remote -> Result`
-- 已将 `XhsPublishService` 从“大总管”拆为门面服务，具体逻辑下沉到按能力划分的领域服务中
+- 已落地 B 模式两棵 `xfg-wrench` 节点树：
+  - 智能预处理树
+  - 正式发布树
+- 已将 `XhsPublishService` 收口为门面实现，并归位到 `service/impl`
+- 已完成 XHS `dao/po/xml` 目录迁移，删除旧 `persistent/*` 中的重复 XHS 文件
+- 编译验证：
+  - `mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure,ai-agent-app -am -DskipTests compile`
+  - `mvn -f backend\\pom.xml -pl ai-agent-domain -am -DskipTests clean test-compile`
 
 ## Decision Artifacts
 - Delivery decision doc:

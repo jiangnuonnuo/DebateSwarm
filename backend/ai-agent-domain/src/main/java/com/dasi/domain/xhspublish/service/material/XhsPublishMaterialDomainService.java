@@ -3,12 +3,10 @@ package com.dasi.domain.xhspublish.service.material;
 import com.dasi.domain.xhspublish.adapter.port.IXhsAssetStoragePort;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishConfigRepository;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishRepository;
-import com.dasi.domain.xhspublish.model.dto.UploadXhsPublishMaterialDTO;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishMaterialUploadCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishContentAssetEntity;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
 import com.dasi.domain.xhspublish.service.support.XhsPublishIdSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskAccessSupport;
-import com.dasi.domain.xhspublish.service.support.XhsPublishViewAssembler;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -39,15 +37,12 @@ public class XhsPublishMaterialDomainService {
     @Resource
     private XhsPublishTaskAccessSupport taskAccessSupport;
 
-    @Resource
-    private XhsPublishViewAssembler viewAssembler;
-
     @Transactional(rollbackFor = Exception.class)
-    public List<XhsPublishAssetVO> uploadMaterial(UploadXhsPublishMaterialDTO dto, List<MultipartFile> fileList) {
+    public List<XhsPublishContentAssetEntity> uploadMaterial(XhsPublishMaterialUploadCommandEntity dto, List<MultipartFile> fileList) {
         Long userId = taskAccessSupport.requireUserId();
         taskAccessSupport.queryOwnedTask(dto.getTaskId());
 
-        List<XhsPublishAssetVO> result = new ArrayList<>();
+        List<XhsPublishContentAssetEntity> result = new ArrayList<>();
         int sortNo = dto.getSortNo() == null ? 1 : dto.getSortNo();
 
         if (fileList != null && !fileList.isEmpty()) {
@@ -69,7 +64,7 @@ public class XhsPublishMaterialDomainService {
                         .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishConfigRepository.getAssetRetentionHours())))
                         .build();
                 publishRepository.saveAsset(entity);
-                result.add(viewAssembler.toAssetVO(publishRepository.queryAssetByAssetId(assetId)));
+                result.add(publishRepository.queryAssetByAssetId(assetId));
             }
             return result;
         }
@@ -94,7 +89,7 @@ public class XhsPublishMaterialDomainService {
                 .expireTime(LocalDateTime.now().plusHours(defaultHours(xhsPublishConfigRepository.getAssetRetentionHours())))
                 .build();
         publishRepository.saveAsset(entity);
-        result.add(viewAssembler.toAssetVO(publishRepository.queryAssetByAssetId(assetId)));
+        result.add(publishRepository.queryAssetByAssetId(assetId));
         return result;
     }
 

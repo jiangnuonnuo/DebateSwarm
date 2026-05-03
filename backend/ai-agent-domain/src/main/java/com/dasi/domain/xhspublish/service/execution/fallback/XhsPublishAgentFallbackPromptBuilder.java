@@ -2,14 +2,13 @@ package com.dasi.domain.xhspublish.service.execution.fallback;
 
 import com.alibaba.fastjson2.JSON;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishContentAssetEntity;
-import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -23,15 +22,19 @@ public class XhsPublishAgentFallbackPromptBuilder {
     private final String systemPrompt = loadPrompt("prompt/xhs/fallback-execute-system.txt");
     private final String userPromptTemplate = loadPrompt("prompt/xhs/fallback-execute-user.txt");
 
-    public Prompt build(XhsPublishExecutionContext executionContext) {
+    public Prompt build(String taskId,
+                        String attemptId,
+                        String publishRequestJson,
+                        Object sourceContext,
+                        List<XhsPublishContentAssetEntity> assetList) {
         return new Prompt(List.of(
                 new SystemMessage(systemPrompt),
                 new UserMessage(userPromptTemplate.formatted(
-                        executionContext.getTask().getTaskId(),
-                        executionContext.getAttempt().getAttemptId(),
-                        executionContext.getPublishRequestJson(),
-                        JSON.toJSONString(executionContext.getSourceContext()),
-                        JSON.toJSONString(buildAssetSummary(executionContext.getAssetList()))
+                        taskId,
+                        attemptId,
+                        publishRequestJson,
+                        JSON.toJSONString(sourceContext),
+                        JSON.toJSONString(buildAssetSummary(assetList))
                 ))
         ));
     }

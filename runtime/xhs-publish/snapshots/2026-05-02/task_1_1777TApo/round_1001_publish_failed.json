@@ -1,0 +1,1 @@
+{"status":"failed","executor":"agent_fallback","error_code":"account_not_found","error_type":"validation","error_message":"invalid tenant/account selection: account not found for tenant=\"default\" account=\"default\""}

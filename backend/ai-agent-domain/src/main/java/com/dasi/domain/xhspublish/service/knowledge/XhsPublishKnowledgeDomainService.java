@@ -2,7 +2,7 @@ package com.dasi.domain.xhspublish.service.knowledge;
 
 import com.dasi.domain.xhspublish.adapter.port.IXhsVectorStorePort;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishKnowledgeDocRepository;
-import com.dasi.domain.xhspublish.model.dto.UploadXhsPublishKnowledgeDTO;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishKnowledgeUploadCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishKnowledgeDocEntity;
 import com.dasi.domain.xhspublish.service.support.XhsPublishIdSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskAccessSupport;
@@ -39,7 +39,7 @@ public class XhsPublishKnowledgeDomainService {
     private TokenTextSplitter tokenTextSplitter;
 
     @Transactional(rollbackFor = Exception.class)
-    public void uploadKnowledge(UploadXhsPublishKnowledgeDTO dto, List<MultipartFile> fileList) {
+    public void uploadKnowledge(XhsPublishKnowledgeUploadCommandEntity dto, List<MultipartFile> fileList) {
         Long userId = taskAccessSupport.requireUserId();
         if ("shared".equalsIgnoreCase(dto.getKnowledgeScope()) && !"admin".equalsIgnoreCase(taskAccessSupport.requireUserRole())) {
             throw new WorkException("共享知识库仅管理员可写");
@@ -93,7 +93,7 @@ public class XhsPublishKnowledgeDomainService {
         }
     }
 
-    private Map<String, Object> buildKnowledgeMetadata(UploadXhsPublishKnowledgeDTO dto, String knowledgeId, Long userId) {
+    private Map<String, Object> buildKnowledgeMetadata(XhsPublishKnowledgeUploadCommandEntity dto, String knowledgeId, Long userId) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("bizDomain", "xhs_publish");
         metadata.put("knowledgeId", knowledgeId);

@@ -130,6 +130,12 @@
 - `Plan/versions/v1/xhs-publish-architecture.md`
 - `Plan/versions/v1/xhs-publish-delivery-plan.md`
 - `Plan/versions/v1/xhs-publish-state-machine.md`
+- 2026-05-03 架构补充决策：
+  - B 发布主链路统一到 `xfg-wrench` 双树
+  - controller DTO / response DTO 全量迁出 domain
+  - XHS `dao/po/xml` 迁移到新目录，旧 `persistent/*` 中重复文件退场
+  - B 发布节点树进一步收口为“节点自持逻辑、support 退场”，避免 `support.execute(context)` 重新演化为大 service
+  - Agent fallback 改为显式参数契约，不再直接透传整包执行上下文
 
 ## Technical Mirrors
 - `backend/docs/xhs-publish-v1.md`
@@ -150,3 +156,5 @@
 - Updated: 2026-04-28 16:42 by backend-001 (Iteration2 evidence refreshed, A-mode review-driven state writeback landed)
 - Updated: 2026-04-28 16:51 by backend-001 (Template reuse + publish success knowledge ingestion landed, evidence refreshed to domain37/infra5)
 - Updated: 2026-04-28 16:55 by backend-001 (A:image strategy + copy_review pending/resume landed, evidence refreshed to domain39/infra5)
+- Updated: 2026-05-03 10:39 by architect-1 (B 发布架构重构完成，双树/DTO 边界/新 dao-po-xml 目录已落地并通过 compile + clean test-compile)
+- Updated: 2026-05-03 16:37 by architect-1 (B 发布节点逻辑回收到节点本身，旧 support 退场，主工程重新 compile 通过)

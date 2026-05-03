@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.dao.xhspublish.IAiXhsPublishAttemptDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAttempt">
+        <id column="id" property="id"/>
+        <result column="attempt_id" property="attemptId"/>
+        <result column="task_id" property="taskId"/>
+        <result column="attempt_no" property="attemptNo"/>
+        <result column="trigger_type" property="triggerType"/>
+        <result column="attempt_status" property="attemptStatus"/>
+        <result column="stage" property="stage"/>
+        <result column="context_json" property="contextJson"/>
+        <result column="publish_request_json" property="publishRequestJson"/>
+        <result column="publish_result_json" property="publishResultJson"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="retryable" property="retryable"/>
+        <result column="cost_amount" property="costAmount"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="duration_ms" property="durationMs"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <resultMap id="statsMap" type="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAttemptStats">
+        <result column="attempt_count" property="attemptCount"/>
+        <result column="max_attempt_no" property="maxAttemptNo"/>
+        <result column="total_duration_ms" property="totalDurationMs"/>
+        <result column="total_cost_amount" property="totalCostAmount"/>
+    </resultMap>
+
+    <select id="queryByAttemptId" resultMap="dataMap">
+        SELECT
+               id,
+               attempt_id,
+               task_id,
+               attempt_no,
+               trigger_type,
+               attempt_status,
+               stage,
+               context_json,
+               publish_request_json,
+               publish_result_json,
+               error_code,
+               error_message,
+               retryable,
+               cost_amount,
+               start_time,
+               end_time,
+               duration_ms,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_attempt
+        WHERE attempt_id = #{attemptId}
+    </select>
+
+    <select id="queryLatestByTaskId" resultMap="dataMap">
+        SELECT
+               id,
+               attempt_id,
+               task_id,
+               attempt_no,
+               trigger_type,
+               attempt_status,
+               stage,
+               error_code,
+               error_message,
+               retryable,
+               cost_amount,
+               start_time,
+               end_time,
+               duration_ms,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_attempt
+        WHERE task_id = #{taskId}
+        ORDER BY attempt_no DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="queryStatsByTaskId" resultMap="statsMap">
+        SELECT
+               COUNT(1) AS attempt_count,
+               COALESCE(MAX(attempt_no), 0) AS max_attempt_no,
+               COALESCE(SUM(CASE WHEN duration_ms IS NULL OR duration_ms &lt; 0 THEN 0 ELSE duration_ms END), 0) AS total_duration_ms,
+               COALESCE(SUM(COALESCE(cost_amount, 0)), 0) AS total_cost_amount
+        FROM ai_xhs_publish_attempt
+        WHERE task_id = #{taskId}
+    </select>
+
+    <select id="listByTaskId" resultMap="dataMap">
+        SELECT
+               id,
+               attempt_id,
+               task_id,
+               attempt_no,
+               trigger_type,
+               attempt_status,
+               stage,
+               context_json,
+               publish_request_json,
+               publish_result_json,
+               error_code,
+               error_message,
+               retryable,
+               cost_amount,
+               start_time,
+               end_time,
+               duration_ms,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_attempt
+        WHERE task_id = #{taskId}
+        ORDER BY attempt_no DESC, id DESC
+    </select>
+    <insert id="insert" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAttempt">
+        INSERT INTO ai_xhs_publish_attempt (
+                             attempt_id,
+                             task_id,
+                             attempt_no,
+                             trigger_type,
+                             attempt_status,
+                             stage,
+                             context_json,
+                             publish_request_json,
+                             publish_result_json,
+                             error_code,
+                             error_message,
+                             retryable,
+                             cost_amount,
+                             start_time,
+                             end_time,
+                             duration_ms)
+        VALUES (
+                #{attemptId},
+                #{taskId},
+                #{attemptNo},
+                #{triggerType},
+                #{attemptStatus},
+                #{stage},
+                #{contextJson},
+                #{publishRequestJson},
+                #{publishResultJson},
+                #{errorCode},
+                #{errorMessage},
+                #{retryable},
+                #{costAmount},
+                #{startTime},
+                #{endTime},
+                #{durationMs})
+    </insert>
+
+    <update id="update" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAttempt">
+        UPDATE ai_xhs_publish_attempt
+        <set>
+            <if test="attemptId != null">attempt_id = #{attemptId},</if>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="attemptNo != null">attempt_no = #{attemptNo},</if>
+            <if test="triggerType != null">trigger_type = #{triggerType},</if>
+            <if test="attemptStatus != null">attempt_status = #{attemptStatus},</if>
+            <if test="stage != null">stage = #{stage},</if>
+            <if test="contextJson != null">context_json = #{contextJson},</if>
+            <if test="publishRequestJson != null">publish_request_json = #{publishRequestJson},</if>
+            <if test="publishResultJson != null">publish_result_json = #{publishResultJson},</if>
+            <if test="errorCode != null">error_code = #{errorCode},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="retryable != null">retryable = #{retryable},</if>
+            <if test="costAmount != null">cost_amount = #{costAmount},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="durationMs != null">duration_ms = #{durationMs},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>
+

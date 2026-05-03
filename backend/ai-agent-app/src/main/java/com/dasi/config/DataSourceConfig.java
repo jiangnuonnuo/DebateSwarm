@@ -77,9 +77,14 @@ public class DataSourceConfig {
 
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         factoryBean.setConfigLocation(resolver.getResource("classpath:mybatis-config.xml"));
-        Resource[] mappers = resolver.getResources("classpath*:mapper/**/*.xml");
-        if (mappers.length > 0) {
-            factoryBean.setMapperLocations(mappers);
+        Resource[] legacyMappers = resolver.getResources("classpath*:mapper/**/*.xml");
+        Resource[] structuredMappers = resolver.getResources("classpath*:mybatis/mapper/**/*.xml");
+        if (legacyMappers.length > 0 || structuredMappers.length > 0) {
+            Resource[] allMappers = java.util.stream.Stream.concat(
+                            java.util.Arrays.stream(legacyMappers),
+                            java.util.Arrays.stream(structuredMappers))
+                    .toArray(Resource[]::new);
+            factoryBean.setMapperLocations(allMappers);
         }
 
         return factoryBean.getObject();

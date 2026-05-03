@@ -1,11 +1,7 @@
 package com.dasi.api;
 
-import com.dasi.domain.xhspublish.model.dto.*;
-import com.dasi.domain.xhspublish.model.vo.IntelligentXhsPublishSubmitVO;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishAssetVO;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskDetailVO;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishTaskPageVO;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishTemplateVO;
+import com.dasi.api.dto.request.xhspublish.*;
+import com.dasi.api.dto.response.xhspublish.*;
 import com.dasi.types.result.PageResult;
 import com.dasi.types.result.Result;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,28 +10,28 @@ import java.util.List;
 
 public interface IXhsPublishApi {
 
-    Result<String> createTask(CreateXhsPublishTaskDTO dto);
+    Result<String> createTask(CreateXhsPublishTaskRequestDTO dto);
 
-    Result<Void> updateTaskContext(UpdateXhsPublishTaskContextDTO dto);
+    Result<Void> updateTaskContext(UpdateXhsPublishTaskContextRequestDTO dto);
 
-    Result<String> submitTask(SubmitXhsPublishTaskDTO dto);
+    Result<String> submitTask(SubmitXhsPublishTaskRequestDTO dto);
 
-    Result<PageResult<XhsPublishTaskPageVO>> pageTask(PageXhsPublishTaskDTO dto);
+    Result<PageResult<XhsPublishTaskPageResponseDTO>> pageTask(PageXhsPublishTaskRequestDTO dto);
 
-    Result<XhsPublishTaskDetailVO> detailTask(String taskId);
+    Result<XhsPublishTaskDetailResponseDTO> detailTask(String taskId);
 
-    Result<Void> reviewTask(ReviewXhsPublishTaskDTO dto);
+    Result<Void> reviewTask(ReviewXhsPublishTaskRequestDTO dto);
 
-    Result<Void> retryTask(RetryXhsPublishTaskDTO dto);
+    Result<Void> retryTask(RetryXhsPublishTaskRequestDTO dto);
 
-    Result<Void> saveTemplate(SaveXhsPublishTemplateDTO dto);
+    Result<Void> saveTemplate(SaveXhsPublishTemplateRequestDTO dto);
 
-    Result<PageResult<XhsPublishTemplateVO>> pageTemplate(PageXhsPublishTemplateDTO dto);
+    Result<PageResult<XhsPublishTemplateResponseDTO>> pageTemplate(PageXhsPublishTemplateRequestDTO dto);
 
-    Result<List<XhsPublishAssetVO>> uploadMaterial(UploadXhsPublishMaterialDTO dto, List<MultipartFile> fileList);
+    Result<List<XhsPublishAssetResponseDTO>> uploadMaterial(UploadXhsPublishMaterialRequestDTO dto, List<MultipartFile> fileList);
 
-    Result<Void> uploadKnowledge(UploadXhsPublishKnowledgeDTO dto, List<MultipartFile> fileList);
+    Result<Void> uploadKnowledge(UploadXhsPublishKnowledgeRequestDTO dto, List<MultipartFile> fileList);
 
-    Result<IntelligentXhsPublishSubmitVO> submitIntelligentTask(IntelligentXhsPublishSubmitDTO dto, List<MultipartFile> fileList);
+    Result<IntelligentXhsPublishSubmitResponseDTO> submitIntelligentTask(IntelligentXhsPublishSubmitRequestDTO dto, List<MultipartFile> fileList);
 
 }

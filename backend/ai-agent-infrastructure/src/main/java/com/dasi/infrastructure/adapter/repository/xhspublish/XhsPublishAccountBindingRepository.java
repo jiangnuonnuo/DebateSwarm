@@ -2,9 +2,9 @@ package com.dasi.infrastructure.adapter.repository.xhspublish;
 
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAccountBindingEntity;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishAccountBindingRepository;
-import com.dasi.infrastructure.persistent.dao.IAiXhsPublishAccountBindingDao;
-import com.dasi.infrastructure.persistent.po.AiXhsPublishAccountBinding;
 import com.dasi.infrastructure.adapter.repository.support.XhsPublishRepositoryConverter;
+import com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAccountBinding;
+import com.dasi.infrastructure.dao.xhspublish.IAiXhsPublishAccountBindingDao;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 

@@ -20,6 +20,9 @@ public class XhsPublishPayloadNode extends AbstractXhsPublishNode {
     @Resource
     private IXhsPublishSnapshotManager snapshotManager;
 
+    @Resource
+    private XhsPublishRemoteNode remoteNode;
+
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
         // 步骤 3：调用 payload 规则链，把 sourceContext + assetList 收敛成 publishRequestJson。
@@ -34,7 +37,7 @@ public class XhsPublishPayloadNode extends AbstractXhsPublishNode {
 
     @Override
     public StrategyHandler<XhsPublishExecutionContext, XhsPublishExecutionContext, String> get(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) {
-        return getBean("xhsPublishRemoteNode");
+        return remoteNode;
     }
 
 }

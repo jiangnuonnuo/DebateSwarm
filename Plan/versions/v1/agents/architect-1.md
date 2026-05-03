@@ -14,8 +14,8 @@
 
 ## Current Status
 - State: in_progress
-- Summary: 已完成 XHS 发布 V1 的交付方案、状态机事件表、主聚合仓储收口、领域 adapter 边界修正，以及执行树基础骨架，当前后端可在此基础上继续填充业务逻辑实现。
-- Last updated: 2026-04-27 16:18
+- Summary: 已完成 XHS B 发布重构主框架落地，并进一步将 B 正式树/智能树的关键节点改为“节点自持逻辑、support 退场”，避免再次演化为大 service + 大上下文透传。
+- Last updated: 2026-05-03 16:37
 
 ## Completed
 - 初始化 `Plan/versions/v1` 管理结构并注册 architect-1 身份。
@@ -34,9 +34,31 @@
 - 已将 `domain/xhspublish/port|repository` 收口到 `domain/xhspublish/adapter/port|repository`。
 - 已参考 AI 领域 `rootNode -> router -> nextNode` 方式，为 XHS 发布落地执行树基础骨架。
 - 已将 `XhsPublishService` 拆为门面服务，并按 `task/template/material/knowledge/snapshot` 能力下沉到独立领域服务。
+- 已将 controller-facing DTO / Response 全量迁出 domain，统一放入 `ai-agent-api`。
+- 已将 B 发布统一重构为 `xfg-wrench` 双树：
+  - 智能预处理树
+  - 正式发布树
+- 已删除旧的 XHS 自定义守卫链、字段级 payload 规则链和 domain DTO/VO。
+- 已将 B 正式发布树的关键节点职责回收到节点本身：
+  - `TaskLoad`
+  - `BindingResolve`
+  - `PreflightValidate`
+  - `AttemptCreate`
+  - `PayloadAssemble`
+  - `McpSubmit`
+- 已将智能预处理树的关键节点职责回收到节点本身：
+  - `InputNormalize`
+  - `DraftCreate`
+  - `MaterialRegister`
+  - `ContentNormalize`
+- 已删除 `BPublishExecuteSupport / BPublishPayloadSupport / BPublishRemoteSupport / BPublishIntelligentSupport`，避免“树外再套一层大 support service”。
+- 已将 Agent fallback 契约改为显式参数传递，不再直接吞整包 `XhsPublishExecutionContext`。
+- 已将 `XhsPublishService` 归位到 `service/impl`。
+- 已将 XHS 的 `dao/po/xml` 迁移到新目录，并删除旧 `persistent/*` 中重复文件。
+- 已完成 `clean test-compile` 验证，确认主代码与现存测试骨架一致。
 
 ## In Progress
-- 输出下一轮接口契约与任务流转改造清单，等待 PM / 后端继续确认。
+- 等待 PM / 后端按新骨架继续补业务实现与节点级单测。
 
 ## Changed Files
 - F:\java\code\Agent\Plan\demands\demand-001.md
@@ -50,8 +72,11 @@
 ## Evidence
 - Tests:
   - `mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure -am -DskipTests compile`
+  - `mvn -f backend\\pom.xml -pl ai-agent-domain,ai-agent-api,ai-agent-trigger,ai-agent-infrastructure,ai-agent-app -am -DskipTests compile`
+  - `mvn -f backend\\pom.xml -pl ai-agent-domain -am -DskipTests clean test-compile`
 - Build:
-  - BUILD SUCCESS（2026-04-27 16:12 +08:00）
+  - BUILD SUCCESS（2026-05-03 10:38 +08:00）
+  - CLEAN TEST-COMPILE SUCCESS（2026-05-03 10:39 +08:00）
 - Manual verification:
   - 已人工核对 Plan 文件写入结果
   - 已人工核对领域 adapter 包边界与执行树骨架
@@ -85,3 +110,8 @@
 - 2026-04-27 15:55: 将主流程仓储收口为 `IXhsPublishRepository`，并补齐 `create/context-update/submit` 三段式接口骨架。
 - 2026-04-27 16:18: 将 `xhspublish` 的 `port/repository` 调整为领域 `adapter` 语义，并引入执行树节点骨架（Root/Guard/Payload/Remote/Result）。
 - 2026-04-27 16:26: 将 `XhsPublishService` 大类按能力边界拆分，保留统一门面接口，领域逻辑迁移到独立能力服务。
+- 2026-05-03 10:10: 将 controller DTO / response DTO 迁出 domain，trigger 通过 assembler 与命令实体解耦。
+- 2026-05-03 10:25: 将 B 发布统一收敛到 xfg-wrench 双树，移除旧 guard/rule 混搭实现。
+- 2026-05-03 10:38: 完成 XHS `dao/po/xml` 新目录迁移并删除旧 `persistent/*` 重复文件，主工程编译通过。
+- 2026-05-03 10:39: 清理失效旧测试后完成 `clean test-compile`，确认架构重构后的基本稳定性。
+- 2026-05-03 16:37: 将 B 发布主链节点逻辑从 `*Support.execute(context)` 回收到节点自身，Agent fallback 改为显式参数契约，主工程再次编译通过。

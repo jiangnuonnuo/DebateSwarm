@@ -26,6 +26,9 @@ public class XhsPublishRemoteNode extends AbstractXhsPublishNode {
     @Resource
     private IXhsPublishAgentFallbackService agentFallbackService;
 
+    @Resource
+    private XhsPublishResultNode resultNode;
+
     @Override
     protected String doApply(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) throws Exception {
         // 步骤 4：远端节点先把 task/attempt 标记为 publish_submitted，再执行真正的外部发布。
@@ -44,7 +47,7 @@ public class XhsPublishRemoteNode extends AbstractXhsPublishNode {
 
     @Override
     public StrategyHandler<XhsPublishExecutionContext, XhsPublishExecutionContext, String> get(XhsPublishExecutionContext requestParameter, XhsPublishExecutionContext dynamicContext) {
-        return getBean("xhsPublishResultNode");
+        return resultNode;
     }
 
     XhsPublishRemoteResult executeRemoteWithFallback(XhsPublishExecutionContext executionContext) {
@@ -59,7 +62,13 @@ public class XhsPublishRemoteNode extends AbstractXhsPublishNode {
                 executionContext.getTask().getTaskId(),
                 executionContext.getAttempt().getAttemptId(),
                 primaryResult.getErrorCode());
-        return agentFallbackService.execute(executionContext);
+        return agentFallbackService.execute(
+                resolveClientId(executionContext),
+                executionContext.getPublishRequestJson(),
+                executionContext.getTask().getTaskId(),
+                executionContext.getAttempt().getAttemptId(),
+                executionContext.getSourceContext(),
+                executionContext.getAssetList());
     }
 
     boolean shouldAgentFallback(XhsPublishRemoteResult remoteResult, XhsPublishExecutionContext executionContext) {

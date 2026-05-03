@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.dao.xhspublish.IAiXhsPublishKnowledgeDocDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishKnowledgeDoc">
+        <id column="id" property="id"/>
+        <result column="knowledge_id" property="knowledgeId"/>
+        <result column="user_id" property="userId"/>
+        <result column="knowledge_scope" property="knowledgeScope"/>
+        <result column="knowledge_type" property="knowledgeType"/>
+        <result column="title" property="title"/>
+        <result column="rag_tag" property="ragTag"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_ref" property="sourceRef"/>
+        <result column="summary" property="summary"/>
+        <result column="doc_status" property="docStatus"/>
+        <result column="vector_status" property="vectorStatus"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+    <select id="queryByKnowledgeId" resultMap="dataMap">
+        SELECT
+               id,
+               knowledge_id,
+               user_id,
+               knowledge_scope,
+               knowledge_type,
+               title,
+               rag_tag,
+               source_type,
+               source_ref,
+               summary,
+               doc_status,
+               vector_status,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_knowledge_doc
+        WHERE knowledge_id = #{knowledgeId}
+    </select>
+
+    <select id="page" resultMap="dataMap">
+        SELECT
+               id,
+               knowledge_id,
+               user_id,
+               knowledge_scope,
+               knowledge_type,
+               title,
+               rag_tag,
+               source_type,
+               source_ref,
+               summary,
+               doc_status,
+               vector_status,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_knowledge_doc
+        <where>
+            AND user_id = #{userId}
+            <if test="knowledgeScope != null and knowledgeScope != ''">
+                AND knowledge_scope = #{knowledgeScope}
+            </if>
+        </where>
+        ORDER BY update_time DESC, id DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <select id="count" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM ai_xhs_publish_knowledge_doc
+        <where>
+            AND user_id = #{userId}
+            <if test="knowledgeScope != null and knowledgeScope != ''">
+                AND knowledge_scope = #{knowledgeScope}
+            </if>
+        </where>
+    </select>
+    <insert id="insert" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishKnowledgeDoc">
+        INSERT INTO ai_xhs_publish_knowledge_doc (
+                             knowledge_id,
+                             user_id,
+                             knowledge_scope,
+                             knowledge_type,
+                             title,
+                             rag_tag,
+                             source_type,
+                             source_ref,
+                             summary,
+                             doc_status,
+                             vector_status)
+        VALUES (
+                #{knowledgeId},
+                #{userId},
+                #{knowledgeScope},
+                #{knowledgeType},
+                #{title},
+                #{ragTag},
+                #{sourceType},
+                #{sourceRef},
+                #{summary},
+                #{docStatus},
+                #{vectorStatus})
+    </insert>
+
+    <update id="update" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishKnowledgeDoc">
+        UPDATE ai_xhs_publish_knowledge_doc
+        <set>
+            <if test="knowledgeId != null">knowledge_id = #{knowledgeId},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="knowledgeScope != null">knowledge_scope = #{knowledgeScope},</if>
+            <if test="knowledgeType != null">knowledge_type = #{knowledgeType},</if>
+            <if test="title != null">title = #{title},</if>
+            <if test="ragTag != null">rag_tag = #{ragTag},</if>
+            <if test="sourceType != null">source_type = #{sourceType},</if>
+            <if test="sourceRef != null">source_ref = #{sourceRef},</if>
+            <if test="summary != null">summary = #{summary},</if>
+            <if test="docStatus != null">doc_status = #{docStatus},</if>
+            <if test="vectorStatus != null">vector_status = #{vectorStatus},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>
+

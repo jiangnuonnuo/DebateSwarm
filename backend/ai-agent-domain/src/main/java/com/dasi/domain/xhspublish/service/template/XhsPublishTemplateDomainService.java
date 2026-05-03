@@ -1,13 +1,11 @@
 package com.dasi.domain.xhspublish.service.template;
 
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishTemplateRepository;
-import com.dasi.domain.xhspublish.model.dto.PageXhsPublishTemplateDTO;
-import com.dasi.domain.xhspublish.model.dto.SaveXhsPublishTemplateDTO;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplatePageQueryEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplateSaveCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplateEntity;
-import com.dasi.domain.xhspublish.model.vo.XhsPublishTemplateVO;
 import com.dasi.domain.xhspublish.service.support.XhsPublishIdSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskAccessSupport;
-import com.dasi.domain.xhspublish.service.support.XhsPublishViewAssembler;
 import com.dasi.types.exception.WorkException;
 import com.dasi.types.result.PageResult;
 import jakarta.annotation.Resource;
@@ -29,11 +27,8 @@ public class XhsPublishTemplateDomainService {
     @Resource
     private XhsPublishIdSupport idSupport;
 
-    @Resource
-    private XhsPublishViewAssembler viewAssembler;
-
     @Transactional(rollbackFor = Exception.class)
-    public void saveTemplate(SaveXhsPublishTemplateDTO dto) {
+    public void saveTemplate(XhsPublishTemplateSaveCommandEntity dto) {
         Long userId = taskAccessSupport.requireUserId();
         if (StringUtils.hasText(dto.getTemplateId())) {
             XhsPublishTemplateEntity existing = templateRepository.queryByTemplateId(dto.getTemplateId());
@@ -61,17 +56,15 @@ public class XhsPublishTemplateDomainService {
         templateRepository.insert(entity);
     }
 
-    public PageResult<XhsPublishTemplateVO> pageTemplate(PageXhsPublishTemplateDTO dto) {
+    public PageResult<XhsPublishTemplateEntity> pageTemplate(XhsPublishTemplatePageQueryEntity dto) {
         Long userId = taskAccessSupport.requireUserId();
         int pageNum = Math.max(dto.getPageNum(), 1);
         int pageSize = Math.max(dto.getPageSize(), 1);
         int offset = (pageNum - 1) * pageSize;
-        var list = templateRepository.page(userId, dto.getKeyword(), offset, pageSize).stream()
-                .map(viewAssembler::toTemplateVO)
-                .toList();
+        var list = templateRepository.page(userId, dto.getKeyword(), offset, pageSize);
         Integer total = templateRepository.count(userId, dto.getKeyword());
         int pageSum = (total + pageSize - 1) / pageSize;
-        return PageResult.<XhsPublishTemplateVO>builder()
+        return PageResult.<XhsPublishTemplateEntity>builder()
                 .list(list)
                 .total(total)
                 .pageNum(pageNum)

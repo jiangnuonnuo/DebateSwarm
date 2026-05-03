@@ -21,7 +21,19 @@ import java.util.List;
 @AllArgsConstructor
 public class XhsPublishExecutionContext {
 
+    private String taskId;
+
+    private String bindingId;
+
+    private String overrideContextJson;
+
+    private String triggerType;
+
+    private boolean retryMode;
+
     private XhsPublishTaskEntity task;
+
+    private XhsPublishAttemptEntity latestAttempt;
 
     private XhsPublishAttemptEntity attempt;
 
@@ -40,5 +52,7 @@ public class XhsPublishExecutionContext {
     private Long remoteDurationMs;
 
     private XhsPublishSnapshotEntity payloadSnapshot;
+
+    private String resultBranch;
 
 }

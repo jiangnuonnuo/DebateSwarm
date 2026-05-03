@@ -2,9 +2,9 @@ package com.dasi.infrastructure.adapter.repository.xhspublish;
 
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplateEntity;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishTemplateRepository;
-import com.dasi.infrastructure.persistent.dao.IAiXhsPublishTemplateDao;
-import com.dasi.infrastructure.persistent.po.AiXhsPublishTemplate;
 import com.dasi.infrastructure.adapter.repository.support.XhsPublishRepositoryConverter;
+import com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishTemplate;
+import com.dasi.infrastructure.dao.xhspublish.IAiXhsPublishTemplateDao;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 

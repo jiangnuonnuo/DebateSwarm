@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dasi.infrastructure.dao.xhspublish.IAiXhsPublishAccountBindingDao">
+    <resultMap id="dataMap" type="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAccountBinding">
+        <id column="id" property="id"/>
+        <result column="binding_id" property="bindingId"/>
+        <result column="user_id" property="userId"/>
+        <result column="account_name" property="accountName"/>
+        <result column="mcp_tenant_id" property="mcpTenantId"/>
+        <result column="mcp_account_id" property="mcpAccountId"/>
+        <result column="bind_status" property="bindStatus"/>
+        <result column="is_default" property="isDefault"/>
+        <result column="last_check_time" property="lastCheckTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+    <select id="queryByBindingId" resultMap="dataMap">
+        SELECT
+               id,
+               binding_id,
+               user_id,
+               account_name,
+               mcp_tenant_id,
+               mcp_account_id,
+               bind_status,
+               is_default,
+               last_check_time,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_account_binding
+        WHERE binding_id = #{bindingId}
+    </select>
+
+    <select id="queryDefaultByUserId" resultMap="dataMap">
+        SELECT
+               id,
+               binding_id,
+               user_id,
+               account_name,
+               mcp_tenant_id,
+               mcp_account_id,
+               bind_status,
+               is_default,
+               last_check_time,
+               create_time,
+               update_time
+        FROM ai_xhs_publish_account_binding
+        WHERE user_id = #{userId}
+          AND is_default = 1
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+    <insert id="insert" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAccountBinding">
+        INSERT INTO ai_xhs_publish_account_binding (
+                             binding_id,
+                             user_id,
+                             account_name,
+                             mcp_tenant_id,
+                             mcp_account_id,
+                             bind_status,
+                             is_default,
+                             last_check_time)
+        VALUES (
+                #{bindingId},
+                #{userId},
+                #{accountName},
+                #{mcpTenantId},
+                #{mcpAccountId},
+                #{bindStatus},
+                #{isDefault},
+                #{lastCheckTime})
+    </insert>
+
+    <update id="update" parameterType="com.dasi.infrastructure.dao.po.xhspublish.AiXhsPublishAccountBinding">
+        UPDATE ai_xhs_publish_account_binding
+        <set>
+            <if test="bindingId != null">binding_id = #{bindingId},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="accountName != null">account_name = #{accountName},</if>
+            <if test="mcpTenantId != null">mcp_tenant_id = #{mcpTenantId},</if>
+            <if test="mcpAccountId != null">mcp_account_id = #{mcpAccountId},</if>
+            <if test="bindStatus != null">bind_status = #{bindStatus},</if>
+            <if test="isDefault != null">is_default = #{isDefault},</if>
+            <if test="lastCheckTime != null">last_check_time = #{lastCheckTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>
+

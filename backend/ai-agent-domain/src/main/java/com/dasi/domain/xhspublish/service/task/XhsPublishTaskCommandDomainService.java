@@ -2,23 +2,25 @@ package com.dasi.domain.xhspublish.service.task;
 
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishRepository;
 import com.dasi.domain.xhspublish.adapter.repository.IXhsPublishTemplateRepository;
-import com.dasi.domain.xhspublish.model.dto.CreateXhsPublishTaskDTO;
-import com.dasi.domain.xhspublish.model.dto.ReviewXhsPublishTaskDTO;
-import com.dasi.domain.xhspublish.model.dto.RetryXhsPublishTaskDTO;
-import com.dasi.domain.xhspublish.model.dto.SubmitXhsPublishTaskDTO;
-import com.dasi.domain.xhspublish.model.dto.UpdateXhsPublishTaskContextDTO;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAccountBindingEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAttemptEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishAttemptStatsEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishCreateTaskCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishReviewEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishReviewCommandEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishRetryCommandEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishSubmitTaskCommandEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTaskEntity;
 import com.dasi.domain.xhspublish.model.entity.XhsPublishTemplateEntity;
+import com.dasi.domain.xhspublish.model.entity.XhsPublishUpdateContextCommandEntity;
 import com.dasi.domain.xhspublish.model.valobj.PublishAttemptStatusVO;
 import com.dasi.domain.xhspublish.model.valobj.PublishModeVO;
 import com.dasi.domain.xhspublish.model.valobj.PublishStageVO;
 import com.dasi.domain.xhspublish.model.valobj.PublishTaskStatusVO;
+import com.dasi.domain.xhspublish.model.valobj.PublishTypeVO;
 import com.dasi.domain.xhspublish.model.valobj.ReviewStageVO;
 import com.dasi.domain.xhspublish.model.valobj.ReviewStatusVO;
+import com.dasi.domain.xhspublish.service.context.XhsPublishExecutionContext;
 import com.dasi.domain.xhspublish.service.domain.IPublishRetryDomainService;
 import com.dasi.domain.xhspublish.service.domain.IPublishTaskStateMachine;
 import com.dasi.domain.xhspublish.service.domain.IPublishValidationDomainService;
@@ -30,6 +32,8 @@ import com.dasi.domain.xhspublish.service.support.XhsPublishIdSupport;
 import com.dasi.domain.xhspublish.service.support.RetryDecisionMessageSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskAccessSupport;
 import com.dasi.domain.xhspublish.service.support.XhsPublishTaskLockSupport;
+import com.dasi.domain.xhspublish.service.strategy.IXhsPublishExecuteStrategy;
+import com.dasi.domain.xhspublish.service.strategy.XhsPublishExecuteStrategyFactory;
 import com.dasi.types.exception.WorkException;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -73,7 +77,10 @@ public class XhsPublishTaskCommandDomainService {
     @Resource
     private XhsPublishTaskLockSupport taskLockSupport;
 
-    public String createTask(CreateXhsPublishTaskDTO dto) {
+    @Resource
+    private XhsPublishExecuteStrategyFactory executeStrategyFactory;
+
+    public String createTask(XhsPublishCreateTaskCommandEntity dto) {
         // 步骤 1：校验当前用户、发布模式/类型和 requestJson 契约，确保草稿从一开始就是合法状态。
         Long userId = taskAccessSupport.requireUserId();
         taskAccessSupport.validateModeAndType(dto.getPublishMode(), dto.getPublishType());
@@ -104,7 +111,7 @@ public class XhsPublishTaskCommandDomainService {
         return taskId;
     }
 
-    public void updateTaskContext(UpdateXhsPublishTaskContextDTO dto) {
+    public void updateTaskContext(XhsPublishUpdateContextCommandEntity dto) {
         // 只允许在 planning/审核等待等可编辑阶段更新上下文，执行中和终态任务禁止覆盖。
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
         if (PublishStageVO.publishing.name().equals(task.getCurrentStage())
@@ -117,12 +124,12 @@ public class XhsPublishTaskCommandDomainService {
         publishRepository.saveTask(task);
     }
 
-    public String submitTask(SubmitXhsPublishTaskDTO dto) {
+    public String submitTask(XhsPublishSubmitTaskCommandEntity dto) {
         return taskLockSupport.withTaskLock(dto.getTaskId(), () -> doSubmitTask(dto));
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void reviewTask(ReviewXhsPublishTaskDTO dto) {
+    public void reviewTask(XhsPublishReviewCommandEntity dto) {
         taskLockSupport.withTaskLock(dto.getTaskId(), () -> {
             XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
             String attemptId = resolveAttemptId(task.getTaskId(), dto.getAttemptId());
@@ -149,13 +156,17 @@ public class XhsPublishTaskCommandDomainService {
         });
     }
 
-    public void retryTask(RetryXhsPublishTaskDTO dto) {
+    public void retryTask(XhsPublishRetryCommandEntity dto) {
         taskLockSupport.withTaskLock(dto.getTaskId(), () -> doRetryTask(dto));
     }
 
-    private String doSubmitTask(SubmitXhsPublishTaskDTO dto) {
-        // 步骤 1：submit 入口负责做并发防重 + 可选上下文覆盖，不让 controller 直接操作任务状态。
+    private String doSubmitTask(XhsPublishSubmitTaskCommandEntity dto) {
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
+        if (isBImageTask(task)) {
+            return submitByBTree(task, dto);
+        }
+
+        // 步骤 1：submit 入口负责做并发防重 + 可选上下文覆盖，不让 controller 直接操作任务状态。
         if (StringUtils.hasText(dto.getOverrideContextJson())) {
             validationDomainService.validateTaskRequest(task.getPublishType(), dto.getOverrideContextJson());
             task.setLatestContextJson(dto.getOverrideContextJson());
@@ -190,9 +201,14 @@ public class XhsPublishTaskCommandDomainService {
         return persistedAttempt.getAttemptId();
     }
 
-    private void doRetryTask(RetryXhsPublishTaskDTO dto) {
-        // 步骤 1：retry 只消费“最新 attempt + 聚合统计 + 责任链决策”，避免散落 if-else 判断。
+    private void doRetryTask(XhsPublishRetryCommandEntity dto) {
         XhsPublishTaskEntity task = taskAccessSupport.queryOwnedTask(dto.getTaskId());
+        if (isBImageTask(task)) {
+            retryByBTree(task, dto);
+            return;
+        }
+
+        // 步骤 1：retry 只消费“最新 attempt + 聚合统计 + 责任链决策”，避免散落 if-else 判断。
         XhsPublishAttemptEntity latestAttempt = publishRepository.queryLatestAttemptByTaskId(task.getTaskId());
         if (latestAttempt == null) {
             throw new WorkException("当前任务暂无可重试的执行记录");
@@ -367,7 +383,7 @@ public class XhsPublishTaskCommandDomainService {
         return "attempt_resumed";
     }
 
-    private String resolveTaskRequestJson(Long userId, CreateXhsPublishTaskDTO dto) {
+    private String resolveTaskRequestJson(Long userId, XhsPublishCreateTaskCommandEntity dto) {
         if (!StringUtils.hasText(dto.getTemplateId())) {
             return dto.getRequestJson();
         }
@@ -390,6 +406,50 @@ public class XhsPublishTaskCommandDomainService {
 
     private boolean isEmptyJsonObject(String json) {
         return "{}".equals(StringUtils.trimWhitespace(json));
+    }
+
+    private boolean isBImageTask(XhsPublishTaskEntity task) {
+        return task != null
+                && PublishModeVO.B.name().equals(task.getPublishMode())
+                && PublishTypeVO.image.name().equalsIgnoreCase(task.getPublishType());
+    }
+
+    private String submitByBTree(XhsPublishTaskEntity task, XhsPublishSubmitTaskCommandEntity dto) {
+        IXhsPublishExecuteStrategy strategy = requireExecuteStrategy(task);
+        XhsPublishExecutionContext executionContext = XhsPublishExecutionContext.builder()
+                .taskId(task.getTaskId())
+                .bindingId(dto.getBindingId())
+                .overrideContextJson(dto.getOverrideContextJson())
+                .triggerType(dto.getTriggerType())
+                .retryMode(false)
+                .build();
+        strategy.execute(executionContext);
+        if (executionContext.getAttempt() == null || !StringUtils.hasText(executionContext.getAttempt().getAttemptId())) {
+            throw new WorkException("发布执行未生成 attemptId");
+        }
+        return executionContext.getAttempt().getAttemptId();
+    }
+
+    private void retryByBTree(XhsPublishTaskEntity task, XhsPublishRetryCommandEntity dto) {
+        IXhsPublishExecuteStrategy strategy = requireExecuteStrategy(task);
+        XhsPublishExecutionContext executionContext = XhsPublishExecutionContext.builder()
+                .taskId(task.getTaskId())
+                .overrideContextJson(dto.getOverrideContextJson())
+                .triggerType(dto.getTriggerType())
+                .retryMode(true)
+                .build();
+        strategy.execute(executionContext);
+        if (executionContext.getAttempt() == null || !StringUtils.hasText(executionContext.getAttempt().getAttemptId())) {
+            throw new WorkException("重试执行未生成 attemptId");
+        }
+    }
+
+    private IXhsPublishExecuteStrategy requireExecuteStrategy(XhsPublishTaskEntity task) {
+        IXhsPublishExecuteStrategy strategy = executeStrategyFactory.getStrategy(task.getPublishMode(), task.getPublishType());
+        if (strategy == null) {
+            throw new WorkException("当前发布模式/类型尚未接入执行策略");
+        }
+        return strategy;
     }
 
     private void enterCopyReviewPending(XhsPublishTaskEntity task, XhsPublishAttemptEntity attempt) {
