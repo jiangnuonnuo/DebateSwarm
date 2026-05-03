@@ -77,7 +77,8 @@ public class XhsPublishTaskCommandDomainService {
     @Resource
     private XhsPublishTaskLockSupport taskLockSupport;
 
-    @Resource
+    // 明确绑定小红书发布工厂，避免与 AI 域的 executeStrategyFactory 按字段名注入冲突。
+    @Resource(name = "xhsPublishExecuteStrategyFactory")
     private XhsPublishExecuteStrategyFactory executeStrategyFactory;
 
     public String createTask(XhsPublishCreateTaskCommandEntity dto) {
