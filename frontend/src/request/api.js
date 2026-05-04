@@ -151,6 +151,11 @@ const WORKSPACE_AGENT_UPDATE_MCP_PATH = `${WORKSPACE_BASE_PATH}/agent/update/mcp
 const WORKSPACE_AGENT_UPDATE_USERPROMPT_PATH = `${WORKSPACE_BASE_PATH}/agent/update/userprompt`;
 const WORKSPACE_AGENT_UPDATE_SYSTEMPROMPT_PATH = `${WORKSPACE_BASE_PATH}/agent/update/systemprompt`;
 
+const XHS_PUBLISH_BASE_PATH = '/api/v1/xhs/publish';
+const XHS_INTELLIGENT_SUBMIT_PATH = `${XHS_PUBLISH_BASE_PATH}/task/intelligent/submit`;
+const XHS_TASK_PAGE_PATH = `${XHS_PUBLISH_BASE_PATH}/task/page`;
+const XHS_TASK_DETAIL_PATH = `${XHS_PUBLISH_BASE_PATH}/task/detail`;
+
 const unsupportedApi = (name) => Promise.reject(new Error(`${name} 暂未开放`));
 const isBlank = (value) => typeof value === 'string' && value.trim() === '';
 const isUnset = (value) => value === null || value === undefined || isBlank(value);
@@ -682,6 +687,25 @@ export const uploadRagGit = async ({ repoUrl, username, password }) => {
         password
     });
 };
+
+// -------------------- XHS Publish --------------------
+export const submitXhsIntelligentTask = async (formData) => http.post(XHS_INTELLIGENT_SUBMIT_PATH, formData);
+
+export const pageXhsTasks = async (payload = {}) =>
+    http.post(XHS_TASK_PAGE_PATH, {
+        pageNum: normalizePositiveInt(payload.pageNum, 1),
+        pageSize: normalizePageSize(payload.pageSize),
+        keyword: (payload.keyword || '').trim(),
+        taskStatus: (payload.taskStatus || '').trim(),
+        currentStage: (payload.currentStage || '').trim()
+    });
+
+export const detailXhsTask = async (taskId, options = {}) =>
+    http.post(
+        XHS_TASK_DETAIL_PATH,
+        null,
+        buildParamsConfig({ taskId: (taskId || '').trim() }, options)
+    );
 
 // Auth
 export const login = async ({ username, password }) =>

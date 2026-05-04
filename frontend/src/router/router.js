@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Chat from '../components/Chat.vue';
 import Work from '../components/Work.vue';
+import XhsPublish from '../components/XhsPublish.vue';
 import Welcome from '../components/Welcome.vue';
 import Studio from '../components/Studio.vue';
 import Plaza from '../components/Plaza.vue';
@@ -44,6 +45,11 @@ const routes = [
         path: '/work',
         name: 'work',
         component: Work
+    },
+    {
+        path: '/xhs/publish',
+        name: 'xhs-publish',
+        component: XhsPublish
     },
     {
         path: '/studio',

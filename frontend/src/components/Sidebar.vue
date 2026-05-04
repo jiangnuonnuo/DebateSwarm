@@ -97,6 +97,7 @@ const agentSessions = computed(() => agentStore.sessions);
 const currentAgentSessionId = computed(() => agentStore.currentSessionId);
 const isAgentRoute = computed(() => route.path.startsWith('/work'));
 const isChatRoute = computed(() => route.path.startsWith('/chat'));
+const isXhsPublishRoute = computed(() => route.path.startsWith('/xhs/publish'));
 const isWelcomeRoute = computed(() => route.path.startsWith('/welcome'));
 const isStudioRoute = computed(() => route.path.startsWith('/studio'));
 const isPlazaRoute = computed(() => route.path.startsWith('/plaza'));
@@ -1077,6 +1078,22 @@ const loadProfileResources = async () => {
             class="mb-[12px] mt-[8px] flex flex-1 flex-col gap-[6px] overflow-y-auto pr-[4px] [scrollbar-gutter:stable_both-edges] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
             <div class="flex flex-col gap-[2px]">
+                <button
+                    class="group flex h-[52px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-[18px] font-bold transition-all duration-200"
+                    :class="isXhsPublishRoute ? sidebarNavItemActiveClass : sidebarNavItemBaseClass"
+                    type="button"
+                    @click="goRoute('/xhs/publish')"
+                >
+                    <span class="grid h-[18px] w-[18px] shrink-0 place-items-center opacity-95" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 19c2.5-4.8 6.7-10.2 12-14" />
+                            <path d="M6.5 13.5c1.8.2 3.4.8 4.8 1.8" />
+                            <path d="M4 20c2.1-.2 3.8-.1 5.3.5" />
+                            <path d="M15.5 4.5c.3 1.7 1 3.1 2 4.3" />
+                        </svg>
+                    </span>
+                    <span>小红书发布</span>
+                </button>
                 <button
                     class="group flex h-[52px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-[18px] font-bold transition-all duration-200"
                     :class="isStudioRoute ? sidebarNavItemActiveClass : sidebarNavItemBaseClass"
